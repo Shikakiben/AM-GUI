@@ -1,69 +1,238 @@
-/* Boutons de catégorie (hors Tout/Catégories) */
-.category-bar .apps-mode-btn {
-  flex: 1 1 calc((100% - 6 * 16px) / 7); /* 7 par ligne, 16px d'espace */
+/* Overlay flou/assombri pour menu catégories */
+.dropdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  z-index: 150;
+  transition: opacity .18s;
+  opacity: 1;
+}
+.dropdown-overlay[hidden] {
+  display: none !important;
+  opacity: 0;
+}
+/* Correction forcée de l'espacement entre la barre d'onglets secondaire et le bouton catégorie sélectionnée */
+/*
+ * Espacement naturel entre la barre d'onglets secondaire et le bouton catégorie sélectionnée :
+ * - La barre secondaire a une marge inférieure réduite
+ * - Le selectedCategoryBar a une marge supérieure réduite
+ */
+/* Barre affichant la catégorie sélectionnée au-dessus des tuiles */
+#selectedCategoryBar {
+  text-align: center;
+  margin-bottom: 28px;
+  margin-top: 0;
+  padding-left: 0;
+}
+
+#selectedCategoryBar .category-btn {
+  max-width: 280px;
+  margin: 0 auto;
+  display: block;
+  background: #fff !important;
+  pointer-events: none;
+  cursor: default;
+}
+
+.category-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+.cat-icon {
+  font-size: 1.25em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+}
+  background: var(--card, #f5f5f5);
+  border: 1px solid #e0e0e0;
+  width: 100%;
+  text-align: center;
+  padding: 8px 28px;
+  font-size: 1.08rem;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background .15s, box-shadow .15s;
+  min-height: 28px;
+  max-width: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  outline: none;
+  margin: 0;
+  display: block;
+}
+.category-btn:hover, .category-btn.active {
+  background: #e6f0fa;
+  color: #1976d2;
+  box-shadow: 0 2px 8px rgba(25,118,210,0.08);
+}
+/* Dropdown menu pour les catégories */
+.dropdown-categories {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 300px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 44px;
+  padding-right: 50px;
+  box-sizing: border-box;
+}
+.dropdown-toggle {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  flex: 1 1 auto;
+}
+.category-btn:hover, .category-btn.active {
+  background: var(--card, #f5f5f5);
+}
+.dropdown-menu-categories {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 950px;
+  max-width: 98vw;
+  min-width: 400px;
+  min-height: 180px;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 25px 15px;
+  align-items: stretch;
+  background: none;
+  border: none;
+  border-radius: 16px;
+  box-shadow: none;
+  padding: 32px 32px 28px 32px;
+  z-index: 200;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+}
+.dropdown-menu-categories[hidden] {
+  display: none !important;
+}
+.dropdown-menu-categories button {
+  background: var(--card, #f5f5f5);
+  border: 1px solid #e0e0e0;
+  width: 100%;
   min-width: 0;
   max-width: none;
-  margin-bottom: 12px;
-  margin-right: 16px;
-  text-align: center;
   box-sizing: border-box;
+  font-size: 0.98rem;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background .15s, box-shadow .15s;
+  min-height: 28px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  outline: none;
+  margin: 0;
+  grid-column: span 1;
+  display: block;
+  font-size: 1.08rem;
+  padding: 12px 28px;
 }
-.category-bar .apps-mode-btn:last-child {
-  margin-right: 0;
+.dropdown-menu-categories button:hover, .dropdown-menu-categories button.active {
+  background: #e6f0fa;
+  color: #1976d2;
+  box-shadow: 0 2px 8px rgba(25,118,210,0.08);
 }
-.category-bar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0;
-  margin-bottom: 12px;
-}
-.apps-mode-btn {
-  min-width: 120px;
-  max-width: 180px;
-  text-align: center;
-  box-sizing: border-box;
-}
-#appsModeBar {
+/* Ligne secondaire d'onglets sous la barre principale */
+.tabs-row-secondary {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 24px;
-  margin: 24px 0 18px 0;
+  margin-top: 30px;
+  margin-bottom: 0;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
 }
-/* Boutons du mode Applications (Tout / Catégories) */
-.apps-mode-btn {
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: transparent;
-  border: 1px solid rgba(120,120,120,0.13);
+.tabs-secondary {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.tab-secondary {
+  font-size: 15px;
+  padding: 0 8px;
+  border: none;
+  background: none;
   color: var(--muted);
-  cursor: pointer;
+  border-radius: 0;
   font-weight: 600;
-  font-size: 17px;
-  line-height: 1;
-  transition: background .18s, color .18s, border .18s;
-  outline: none;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  margin: 0 4px;
+  box-shadow: none;
+  cursor: pointer;
+  transition: color .18s;
 }
-.apps-mode-btn.active {
+
+.tab-secondary:hover:not(:active):not(.active) {
+  background: none;
   color: var(--fg);
-  border-color: #bbb;
+  border: none;
+  font-size: 18px;
+  padding: 0 8px;
+}
+
+.tab:hover:not(:active):not(.active) {
   background: var(--card);
-  box-shadow: 0 0 0 1.5px rgba(40,40,40,0.10);
+  color: var(--fg);
+  border-color: var(--border);
+}
+.tab-secondary:active, .tab-secondary:focus {
+  outline: none;
+  font-size: 18px;
+  padding: 0 8px;
+  border: none;
+  background: none;
+  color: var(--fg);
+  border-radius: 0;
+  font-weight: 600;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  margin: 0 4px;
+  box-sizing: border-box;
+  box-shadow: none;
+}
+.tab-secondary.active {
+  background: none;
+  color: var(--fg);
+  border: none;
 }
 #apps {
   overflow-y: auto;
   min-height: 400px;
   position: relative;
-  padding: 24px 48px 0 48px;
+  padding: 8px 38px 0 48px;
+
 }
 /* Tableau pour choix multiples longs */
 .multi-choice-table {
   width: 100%;
   max-width: 520px;
-  /* margin supprimée, padding seul pour l’aération */
-  border-collapse: separate;
-  border-spacing: 12px 10px;
+   min-width: 340px;
+   max-width: 1200px;
+   width: 100%;
+   box-sizing: border-box;
+   left: 50%;
+   transform: translateX(-50%);
+   /* S'aligne et s'adapte à la largeur de .content */
 }
 .multi-choice-table td {
   text-align: center;
@@ -181,18 +350,18 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 /* Réduire légèrement la marge gauche des boutons fenêtre quand précédés du bloc actions */
 .global-actions + .window-buttons { margin-left:6px; }
 .btn-settings { /* aligner strictement avec autres boutons */
-  padding:8px 12px; 
-  line-height:1; 
-  display:flex; align-items:center; justify-content:center;
-  min-width:44px; /* comme #modeMenuBtn */
-  height:30px; /* hauteur effective des autres (8+8 + ~14px font) */
-  box-sizing:border-box;
-  transition:background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
-}
-.btn-settings .gear-icon { font-size:20px; line-height:1; display:block; transition: transform .55s cubic-bezier(.4,.2,.2,1); }
-.btn-settings:hover { box-shadow:0 2px 4px rgba(0,0,0,.12), 0 4px 10px rgba(0,0,0,.08); }
-.btn-settings:hover .gear-icon { transform:rotate(90deg); }
-@media (prefers-reduced-motion: reduce){
+  padding: 12px 18px;
+  font-size: 1.08rem;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: 16px;
+  transition: background .15s, box-shadow .15s;
+  min-height: 38px;
+  max-width: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  outline: none;
+  margin: 0;
+  display: block;
   .btn-settings .gear-icon { transition:none; }
   .btn-settings:hover .gear-icon { transform:none; }
 }
@@ -246,9 +415,9 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 
 
 /* Sous-barre d'actions */
-.sub-bar { position:fixed; top:var(--header-h); left:0; right:0; z-index:115; background:var(--bg); backdrop-filter:saturate(1.2) blur(6px); border-bottom:none; padding:4px 16px 8px; }
-.tabs-row { display:flex; align-items:center; justify-content:center; gap:20px; }
-.tabs-row .tabs { flex:1; display:flex; justify-content:center; gap:10px; padding:4px 0 0; margin:0; }
+.sub-bar { position:fixed; top:var(--header-h); left:0; right:0; z-index:115; background:var(--bg); backdrop-filter:saturate(1.2) blur(6px); border-bottom:none; padding:4px 16px 0; }
+.tabs-row { display:flex; align-items:center; justify-content:center; gap:0; }
+.tabs-row .tabs { flex:1; display:flex; justify-content:center; gap:0; padding:4px 0 0; margin:0; }
 /* Rétablir la position de base du bloc view-mode-switch */
 .tabs-row .view-mode-switch { position:relative; }
 
@@ -641,7 +810,14 @@ body.details-mode #appDetails { opacity:1; transform:translateY(0); }
 .updates-panel .updates-run { margin-bottom:8px; }
 .update-result { margin-top:14px; }
 .update-final-message { font-size:13px; font-weight:500; color:var(--primary); }
-.updated-icons { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+.updated-icons {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
 
 .updated-item { display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--border); padding:6px 8px; border-radius:8px; }
 .updated-item img { width:40px; height:40px; border-radius:8px; object-fit:cover; }
@@ -660,7 +836,7 @@ body.details-mode #appDetails { opacity:1; transform:translateY(0); }
 #updatesPanel .console-wrapper { text-align:left; }
 
 /* Spinner de mise à jour */
-.update-spinner { display:flex; align-items:center; gap:10px; margin-top:14px; font-size:13px; color: var(--muted); }
+.update-spinner { display:flex; align-items:center; gap:18px; margin-top:14px; font-size:13px; color: var(--muted); }
 .update-spinner .spinner-label { font-size:12px; opacity:.85; }
 /* Forcer le masquage s'il y a l'attribut hidden (prévient un éventuel override) */
 .update-spinner[hidden] { display: none !important; }

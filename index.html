@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>App Manager</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="refresh-spinner-fix.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%233584e4'/%3E%3C/svg%3E">
   <meta name="color-scheme" content="light dark" />
   <!-- Mise à jour CSP: autoriser les requêtes (fetch) vers portable-linux-apps.github.io pour récupérer les descriptions -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' appicon: https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://portable-linux-apps.github.io;">
 </head>
 <body>
+  <div class="dropdown-overlay" id="categoriesDropdownOverlay" hidden></div>
+  <div class="dropdown-menu-categories" id="categoriesDropdownMenu" role="menu" aria-labelledby="categoriesDropdownBtn" hidden></div>
   <header class="app-header" data-tauri-drag-region>
     <div class="brand">
   <img class="brand-icon" src="app-icon.png" alt="App Manager Icon" aria-hidden="true">
@@ -69,13 +70,13 @@
   <div class="sub-bar" role="toolbar" aria-label="Navigation des onglets">
     <div class="tabs-row">
       <nav class="tabs" role="tablist" aria-label="Catégories">
-  <button class="tab active" role="tab" aria-selected="true" data-category="all" data-i18n="tabs.all">Applications</button>
+        <button class="tab active" role="tab" aria-selected="true" data-category="all" data-i18n="tabs.all">Applications</button>
         <button class="tab" role="tab" aria-selected="false" data-category="installed"><span data-i18n="tabs.installed">Installées</span> <span id="installedCount" class="badge">0</span></button>
         <button class="tab" role="tab" aria-selected="false" data-category="updates" data-i18n="tabs.updates">Mises à jour</button>
         <button class="tab" role="tab" aria-selected="false" data-category="advanced" data-i18n="tabs.advanced">Mode avancé</button>
       </nav>
       <div class="view-mode-switch" role="group" aria-label="Mode d'affichage">
-    <button id="refreshBtn" class="btn btn-outline btn-refresh" title="Rafraîchir la liste" aria-label="Rafraîchir" data-i18n-title="refresh.title" data-i18n-aria-label="refresh.aria"><span class="icon" aria-hidden="true">↻</span></button>
+        <button id="refreshBtn" class="btn btn-outline btn-refresh" title="Rafraîchir la liste" aria-label="Rafraîchir" data-i18n-title="refresh.title" data-i18n-aria-label="refresh.aria"><span class="icon" aria-hidden="true">↻</span></button>
         <button id="modeMenuBtn" class="btn btn-outline" aria-haspopup="true" aria-expanded="false" aria-controls="modeMenu" title="Changer de mode d'affichage" data-i18n-title="modeMenu.title">▦</button>
         <div id="modeMenu" class="mode-menu" role="menu" hidden>
           <button class="mode-option" data-mode="grid" role="menuitem" aria-pressed="true" data-i18n="modeMenu.grid">▦ Grille</button>
@@ -83,6 +84,11 @@
           <button class="mode-option" data-mode="icons" role="menuitem" aria-pressed="false" data-i18n="modeMenu.icons">◻︎ Icônes</button>
           <button class="mode-option" data-mode="cards" role="menuitem" aria-pressed="false" data-i18n="modeMenu.cards">🂠 Cartes</button>
         </div>
+      </div>
+    </div>
+    <div class="tabs-row-secondary">
+      <div class="dropdown-categories">
+  <button class="tab-secondary dropdown-toggle" id="categoriesDropdownBtn" aria-haspopup="true" aria-expanded="false"><span data-i18n="tabs.categories">Catégories</span> <span class="cat-arrow">▼</span></button>
       </div>
     </div>
   </div>
@@ -127,8 +133,9 @@
 
     <p class="docs-link"><a href="https://github.com/ivan-hc/AM" target="_blank" rel="noopener"><span data-i18n="advanced.docs">Documentation complète & guides →</span> AM (GitHub)</a></p>
       </section>
-  <div id="appsModeBar" class="apps-mode-bar"></div>
-  <div id="categoryBar" class="category-bar" style="margin-bottom:12px;"></div>
+
+  
+  <div id="selectedCategoryBar" style="text-align:center;"></div>
   <div id="apps" class="app-list" aria-live="polite" aria-busy="true"></div>
       <section id="appDetails" class="app-details" hidden>
     <button id="backToListBtn" class="btn btn-outline back-btn" data-i18n="details.back">← Retour</button>

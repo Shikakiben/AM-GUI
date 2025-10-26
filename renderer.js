@@ -640,30 +640,117 @@ let lightboxState = { images: [], index: 0, originApp: null };
 // Cache descriptions (réinstallé)
 // --- Test catégorie dynamique ---
 window.addEventListener('DOMContentLoaded', async () => {
-  const appsModeBar = document.getElementById('appsModeBar');
-  function updateAppsModeBarVisibility() {
-    // Afficher seulement pour l’onglet "all" (Applications)
-    if (state.activeCategory === 'all') {
-      appsModeBar.style.display = '';
-      catBar.style.display = '';
-    } else {
-  appsModeBar.style.display = 'none';
-  catBar.style.display = 'none';
-  catBar.innerHTML = '';
-  // Désactiver le bouton Catégories si on quitte l’onglet Applications
-  btnCat.classList.remove('active');
+  // Dropdown menu catégories : ouverture/fermeture
+  const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
+  const categoriesDropdownMenu = document.getElementById('categoriesDropdownMenu'); // maintenant global, juste après <body>
+  const categoriesDropdownOverlay = document.getElementById('categoriesDropdownOverlay');
+  const dropdownCategories = document.querySelector('.dropdown-categories');
+  // Toujours forcer le contenu du bouton Catégories (texte + flèche)
+  function setCategoriesDropdownBtnLabel() {
+    if (categoriesDropdownBtn) {
+      // Utilise la traduction dynamique, mais ajoute toujours la flèche
+      const label = t('tabs.categories');
+      categoriesDropdownBtn.innerHTML = `<span data-i18n="tabs.categories">${label}</span> <span class="cat-arrow">▼</span>`;
     }
   }
-  const catBar = document.getElementById('categoryBar');
+  // Appliquer le label au chargement
+  setCategoriesDropdownBtnLabel();
+
+  // S'assurer que la flèche reste après une traduction dynamique
+  // (patch la fonction applyTranslations pour réappliquer la flèche)
+  const origApplyTranslations = applyTranslations;
+  window.applyTranslations = function() {
+    origApplyTranslations();
+    setCategoriesDropdownBtnLabel();
+  };
+  function closeCategoriesDropdown() {
+    categoriesDropdownMenu.hidden = true;
+    categoriesDropdownBtn.setAttribute('aria-expanded', 'false');
+    categoriesDropdownBtn.classList.remove('active');
+    if (categoriesDropdownOverlay) categoriesDropdownOverlay.hidden = true;
+  }
+  function openCategoriesDropdown() {
+    // Affiche le menu déroulant, largeur gérée par le CSS (100% de .content)
+    categoriesDropdownMenu.hidden = false;
+    categoriesDropdownBtn.setAttribute('aria-expanded', 'true');
+    categoriesDropdownBtn.classList.add('active');
+    if (categoriesDropdownOverlay) categoriesDropdownOverlay.hidden = false;
+  }
+  // Fonction factorisée pour créer un bouton de catégorie
+  function createCategoryButton(name, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'category-btn';
+    // Mapping d'icônes génériques par catégorie
+    const iconMap = {
+      "android": "🤖",
+      "appimages": "📦",
+      "audio": "🎵",
+      "comic": "📚",
+      "command-line": "💻",
+      "communication": "💬",
+      "disk": "🖴",
+      "education": "🎓",
+      "file-manager": "🗂️",
+      "finance": "💰",
+      "game": "🎮",
+      "gnome": "👣",
+      "graphic": "🎨",
+      "internet": "🌐",
+      "kde": "🖥️",
+      "office": "🗎",
+      "password": "🔑",
+      "steam": "🕹️",
+      "system-monitor": "📊",
+      "video": "🎬",
+      "web-app": "🕸️",
+      "web-browser": "🌍",
+      "wine": "🍷",
+      "autre": "❓"
+    };
+    const key = name.trim().toLowerCase();
+    const icon = iconMap[key] || "📦";
+    btn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${name.charAt(0).toUpperCase() + name.slice(1)}</span>`;
+    btn.onclick = onClick;
+    return btn;
+  }
+  if (categoriesDropdownBtn && categoriesDropdownMenu) {
+    categoriesDropdownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (categoriesDropdownMenu.hidden) openCategoriesDropdown();
+      else closeCategoriesDropdown();
+    });
+    // Fermer au clic extérieur ou sur l'overlay
+    if (categoriesDropdownOverlay) {
+      categoriesDropdownOverlay.addEventListener('click', () => closeCategoriesDropdown());
+    }
+    document.addEventListener('click', (e) => {
+      if (!categoriesDropdownMenu.hidden && !categoriesDropdownMenu.contains(e.target) && e.target !== categoriesDropdownBtn) {
+        closeCategoriesDropdown();
+      }
+    });
+    // Fermer au changement d’onglet principal
+    document.querySelectorAll('.tab[data-category]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        closeCategoriesDropdown();
+      });
+    });
+  }
+  function updateAppsModeBarVisibility() {
+    // Affiche ou masque la barre de catégorie sélectionnée uniquement
+    const selectedCategoryBar = document.getElementById('selectedCategoryBar');
+    if (!selectedCategoryBar) return;
+    if (state.activeCategory === 'all') {
+      selectedCategoryBar.style.display = '';
+    } else {
+      selectedCategoryBar.style.display = 'none';
+    }
+  }
   // Bouton "Tout"
-  // Bouton "Catégories"
+  // Logique Catégories migrée sur l'onglet secondaire
   let categoriesCache = null;
-  const btnCat = document.createElement('button');
-  btnCat.textContent = 'Catégories';
-  btnCat.className = 'apps-mode-btn';
   async function loadCategories() {
     if (categoriesCache) return categoriesCache;
-    // Essayer de lire le cache local d'abord
     try {
       const cacheRes = await window.electronAPI.getCategoriesCache();
       if (cacheRes.ok && Array.isArray(cacheRes.categories) && cacheRes.categories.length > 0) {
@@ -671,7 +758,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         return categoriesCache;
       }
     } catch(e) {}
-    // Sinon, fallback sur le fetch réseau
     try {
       const res = await window.electronAPI.fetchAllCategories();
       if (!res.ok || !Array.isArray(res.categories)) throw new Error(res.error || 'Erreur catégories');
@@ -682,77 +768,112 @@ window.addEventListener('DOMContentLoaded', async () => {
       return [];
     }
   }
-  // Charger les catégories au démarrage
   loadCategories();
-  btnCat.onclick = async () => {
-    // Fermer la vue détaillée si ouverte
-    if (appDetailsSection) appDetailsSection.hidden = true;
-    document.body.classList.remove('details-mode');
-    if (appsDiv) appsDiv.hidden = false;
-    state.currentDetailsApp = null;
-  btnCat.classList.add('active');
-  // plus de btnAll à désactiver
-  catBar.innerHTML = '';
-    setAppList([]); // Vide la liste tant qu'aucune catégorie n'est sélectionnée
-    const categories = await loadCategories();
-    // Générer les boutons de catégorie
-    categories.forEach(({ name, apps }) => {
-      const btn = document.createElement('button');
-      btn.textContent = name;
-      btn.className = 'apps-mode-btn';
-      btn.onclick = () => {
-        // Fermer la vue détaillée si ouverte
-        if (appDetailsSection) appDetailsSection.hidden = true;
-        document.body.classList.remove('details-mode');
-        if (appsDiv) appsDiv.hidden = false;
-        state.currentDetailsApp = null;
-        Array.from(catBar.children).forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const filteredApps = Array.isArray(apps) ? apps.filter(a => typeof a === 'string' && a.length > 0) : [];
-        // Pour chaque app, injecter la description si dispo
-        const detailedApps = filteredApps.map(appName => {
-          const found = Array.isArray(state.allApps) ? state.allApps.find(x => x && x.name === appName) : null;
-          return found ? { ...found } : { name: appName };
+  // Attacher la logique sur l'onglet secondaire
+  // (Nettoyé : plus d'ajout de flèche JS sur .tab-secondary)
+  const tabSecondary = document.querySelector('.tab-secondary');
+  if (tabSecondary) {
+    tabSecondary.addEventListener('click', async () => {
+      document.querySelectorAll('.tab-secondary').forEach(t => t.classList.remove('active'));
+      tabSecondary.classList.add('active');
+      if (appDetailsSection) appDetailsSection.hidden = true;
+      document.body.classList.remove('details-mode');
+      if (appsDiv) appsDiv.hidden = false;
+      state.currentDetailsApp = null;
+      const categoriesDropdownMenu = document.getElementById('categoriesDropdownMenu');
+      if (!categoriesDropdownMenu) return;
+      categoriesDropdownMenu.innerHTML = '';
+      const categories = await loadCategories();
+      // Générer les entrées de catégorie sous forme de boutons stylés
+      categories.forEach(({ name, apps }) => {
+        const btn = createCategoryButton(name, () => {
+          closeCategoriesDropdown();
+          if (appDetailsSection) appDetailsSection.hidden = true;
+          document.body.classList.remove('details-mode');
+          if (appsDiv) appsDiv.hidden = false;
+          state.currentDetailsApp = null;
+          const selectedCategoryBar = document.getElementById('selectedCategoryBar');
+          if (selectedCategoryBar) {
+            selectedCategoryBar.innerHTML = '';
+            selectedCategoryBar.appendChild(btn.cloneNode(true));
+          }
+          const filteredApps = Array.isArray(apps) ? apps.filter(a => typeof a === 'string' && a.length > 0) : [];
+          const detailedApps = filteredApps.map(appName => {
+            const found = Array.isArray(state.allApps) ? state.allApps.find(x => x && x.name === appName) : null;
+            return found ? { ...found } : { name: appName };
+          });
+          setAppList(detailedApps);
+          showToast(`Catégorie "${name}" : ${filteredApps.length} apps`);
         });
-        setAppList(detailedApps);
-        showToast(`Catégorie \"${name}\" : ${filteredApps.length} apps`);
-      };
-      catBar.appendChild(btn);
+        categoriesDropdownMenu.appendChild(btn);
+      });
+      // Bouton "Autre" affiché immédiatement, désactivé/spinner
+      const btnOther = createCategoryButton('Autre', () => {});
+      btnOther.disabled = true;
+      btnOther.innerHTML += ' <span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">⏳</span>';
+      categoriesDropdownMenu.appendChild(btnOther);
+      // Calcul asynchrone des apps non catégorisées
+      setTimeout(() => {
+        const allCategorizedNames = new Set();
+        categories.forEach(cat => {
+          if (Array.isArray(cat.apps)) {
+            cat.apps.forEach(name => allCategorizedNames.add(name));
+          }
+        });
+        const uncategorizedApps = Array.isArray(state.allApps)
+          ? state.allApps.filter(app => app && !allCategorizedNames.has(app.name))
+          : [];
+        // Remplacer le handler et l'état du bouton
+        btnOther.disabled = uncategorizedApps.length === 0;
+        btnOther.querySelector('.cat-spinner')?.remove();
+        btnOther.onclick = () => {
+          closeCategoriesDropdown();
+          if (appDetailsSection) appDetailsSection.hidden = true;
+          document.body.classList.remove('details-mode');
+          if (appsDiv) appsDiv.hidden = false;
+          state.currentDetailsApp = null;
+          const selectedCategoryBar = document.getElementById('selectedCategoryBar');
+          if (selectedCategoryBar) {
+            selectedCategoryBar.innerHTML = '';
+            selectedCategoryBar.appendChild(btnOther.cloneNode(true));
+          }
+          setAppList(uncategorizedApps);
+          showToast(`Autres applications : ${uncategorizedApps.length}`);
+        };
+      }, 0);
     });
-
-    // Bouton "Autre" pour les apps non catégorisées
-    // 1. Récupérer tous les noms d'apps catégorisées
-    const allCategorizedNames = new Set();
-    categories.forEach(cat => {
-      if (Array.isArray(cat.apps)) {
-        cat.apps.forEach(name => allCategorizedNames.add(name));
-      }
-    });
-    // 2. Filtrer les apps non catégorisées
-    const uncategorizedApps = Array.isArray(state.allApps)
-      ? state.allApps.filter(app => app && !allCategorizedNames.has(app.name))
-      : [];
-    if (uncategorizedApps.length > 0) {
-      const btnOther = document.createElement('button');
-      btnOther.textContent = 'Autre';
-      btnOther.className = 'apps-mode-btn';
-      btnOther.onclick = () => {
-        if (appDetailsSection) appDetailsSection.hidden = true;
-        document.body.classList.remove('details-mode');
-        if (appsDiv) appsDiv.hidden = false;
-        state.currentDetailsApp = null;
-        Array.from(catBar.children).forEach(b => b.classList.remove('active'));
-        btnOther.classList.add('active');
-        setAppList(uncategorizedApps);
-        showToast(`Autres applications : ${uncategorizedApps.length}`);
-      };
-      catBar.appendChild(btnOther);
-    }
-  };
-  appsModeBar.appendChild(btnCat);
+  }
   // Par défaut, affiche tout via l'onglet Applications
   const tabApplications = document.querySelector('.tab[data-category="all"]');
   if (tabApplications) tabApplications.click();
+  // Affiche ou masque le bouton Catégorie selon l'onglet actif
+  function updateDropdownCategoriesVisibility() {
+    const activeTab = document.querySelector('.tab.active');
+    if (!dropdownCategories) return;
+    if (activeTab && activeTab.dataset.category === 'all') {
+      dropdownCategories.style.display = '';
+    } else {
+      dropdownCategories.style.display = 'none';
+      if (categoriesDropdownMenu) categoriesDropdownMenu.hidden = true;
+      if (categoriesDropdownBtn) {
+        categoriesDropdownBtn.setAttribute('aria-expanded', 'false');
+        categoriesDropdownBtn.classList.remove('active');
+      }
+    }
+  }
+  // Sur chaque changement d'onglet principal, mettre à jour la visibilité
+  document.querySelectorAll('.tab[data-category]').forEach(tab => {
+    tab.addEventListener('click', () => setTimeout(updateDropdownCategoriesVisibility, 0));
+  });
+  // Initialiser la visibilité au chargement
+  updateDropdownCategoriesVisibility();
+
+  // Sécurité : s'assurer que le bouton n'est jamais bloqué en mode "active" si le menu est caché
+  document.addEventListener('mousemove', () => {
+    if (categoriesDropdownMenu && categoriesDropdownBtn && categoriesDropdownMenu.hidden && categoriesDropdownBtn.classList.contains('active')) {
+      categoriesDropdownBtn.classList.remove('active');
+    }
+  });
 
   // (Suppression du masquage automatique de catBar sur changement d’onglet)
   updateAppsModeBarVisibility();
@@ -761,12 +882,19 @@ window.addEventListener('DOMContentLoaded', async () => {
   tabs.forEach(tab => {
     tab.addEventListener('click', async () => {
       setTimeout(updateAppsModeBarVisibility, 0);
+      // Désactive l'onglet secondaire 'Categories' si on quitte Applications
+      if (tab.getAttribute('data-category') !== 'all') {
+        document.querySelectorAll('.tab-secondary').forEach(t => t.classList.remove('active'));
+      }
       // Si on clique sur l'onglet Applications, afficher toutes les apps
       if (tab.dataset.category === 'all') {
         if (appDetailsSection) appDetailsSection.hidden = true;
         document.body.classList.remove('details-mode');
         if (appsDiv) appsDiv.hidden = false;
         state.currentDetailsApp = null;
+        // Masque le nom de la catégorie sélectionnée
+        const selectedCategoryBar = document.getElementById('selectedCategoryBar');
+        if (selectedCategoryBar) selectedCategoryBar.innerHTML = '';
         // Affiche toutes les apps
         if (!Array.isArray(state.allApps) || state.allApps.length === 0) {
           setAppList([]);
@@ -779,9 +907,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         } else {
           showToast('Aucune application trouvée.');
         }
-        // Désactive le bouton Catégories
-        btnCat.classList.remove('active');
-        catBar.innerHTML = '';
+        // (plus de bouton Catégories à désactiver)
+  // (plus de bouton Catégories à désactiver)
       }
     });
   });
@@ -790,6 +917,7 @@ const descriptionCache = new Map();
 // --- Gestion multilingue ---
 const translations = {
   fr: {
+    'tabs.categories': 'Catégories',
     'toast.cancelRequested': 'Annulation demandée…',
     'settings.gpuTitle': 'Accélération GPU',
     'settings.gpuLabel': "Désactiver l'accélération GPU (pour corriger les bugs graphiques)",
@@ -903,6 +1031,7 @@ const translations = {
     'confirm.ok': 'Valider',
   },
   en: {
+    'tabs.categories': 'Categories',
     'toast.cancelRequested': 'Cancel requested…',
     'settings.gpuTitle': 'GPU acceleration',
     'settings.gpuLabel': 'Disable GPU acceleration (to fix graphics bugs)',
@@ -1016,6 +1145,7 @@ const translations = {
     'confirm.ok': 'OK',
   },
   it: {
+    'tabs.categories': 'Categorie',
     'toast.cancelRequested': 'Annullamento richiesto…',
     'settings.gpuTitle': 'Accelerazione GPU',
     'settings.gpuLabel': 
@@ -1207,6 +1337,12 @@ function applyTranslations() {
   // Titre bouton paramètres
   const settingsBtn = document.getElementById('settingsBtn');
   if (settingsBtn) settingsBtn.title = t('settings.title') + ' (Ctrl+,)';
+
+  // Traduction de l'onglet secondaire "Catégories"
+  const tabSecondary = document.querySelector('.tab-secondary');
+  if (tabSecondary) {
+    tabSecondary.textContent = t('tabs.categories') || 'Catégories';
+  }
 }
 
 // Appliquer la langue au chargement
