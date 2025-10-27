@@ -27,15 +27,24 @@
   margin-bottom: 28px;
   margin-top: 0;
   padding-left: 0;
+  z-index: 120;
+  position: relative;
 }
 
 #selectedCategoryBar .category-btn {
   max-width: 280px;
   margin: 0 auto;
-  display: block;
-  background: #fff !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card) !important;
+  border: 1px solid var(--border);
   pointer-events: none;
   cursor: default;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  line-height: 40px;
 }
 
 .category-btn {
@@ -158,6 +167,8 @@
   margin-left: auto;
   margin-right: auto;
   width: 100%;
+  z-index: 110;
+  position: relative;
 }
 .tabs-secondary {
   display: flex;
@@ -515,7 +526,7 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 .tabs { display: flex; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); justify-content: center; }
 .fixed-tabs { margin-top:0; }
 .tab { padding: 10px 14px; border-radius: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; font-weight:600; font-size:17px; line-height:1; }
-.tab.active { color: var(--fg); border-color: var(--border); background: var(--card); }
+.tab.active { color: var(--fg); border-color: var(--border) !important; background: var(--card) !important; }
 
 .content { padding: 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
 

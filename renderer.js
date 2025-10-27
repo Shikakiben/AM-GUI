@@ -740,11 +740,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Affiche ou masque la barre de catégorie sélectionnée uniquement
     const selectedCategoryBar = document.getElementById('selectedCategoryBar');
     if (!selectedCategoryBar) return;
-    if (state.activeCategory === 'all') {
-      selectedCategoryBar.style.display = '';
-    } else {
-      selectedCategoryBar.style.display = 'none';
-    }
+        if (state.activeCategory === 'all') {
+          selectedCategoryBar.style.display = '';
+          selectedCategoryBar.innerHTML = '';
+          // Crée un bouton miroir "Tout" avec le même style
+          const btnAll = document.createElement('button');
+          btnAll.type = 'button';
+          btnAll.className = 'category-btn';
+          btnAll.innerHTML = `<span class="cat-icon">🗃️</span> <span>${t('categories.all')}</span>`;
+          btnAll.disabled = true;
+          selectedCategoryBar.appendChild(btnAll);
+        } else {
+          selectedCategoryBar.style.display = 'none';
+        }
   }
   // Bouton "Tout"
   // Logique Catégories migrée sur l'onglet secondaire
@@ -917,6 +925,7 @@ const descriptionCache = new Map();
 // --- Gestion multilingue ---
 const translations = {
   fr: {
+    'categories.all': 'Tout',
     'tabs.categories': 'Catégories',
     'toast.cancelRequested': 'Annulation demandée…',
     'settings.gpuTitle': 'Accélération GPU',
@@ -1031,6 +1040,7 @@ const translations = {
     'confirm.ok': 'Valider',
   },
   en: {
+    'categories.all': 'All',
     'tabs.categories': 'Categories',
     'toast.cancelRequested': 'Cancel requested…',
     'settings.gpuTitle': 'GPU acceleration',
@@ -1145,6 +1155,7 @@ const translations = {
     'confirm.ok': 'OK',
   },
   it: {
+    'categories.all': 'Tutte',
     'tabs.categories': 'Categorie',
     'toast.cancelRequested': 'Annullamento richiesto…',
     'settings.gpuTitle': 'Accelerazione GPU',
@@ -1712,6 +1723,11 @@ function showDetails(appName) {
     detailsUninstallBtn.setAttribute('data-name', app.name);
   }
   if (appDetailsSection) appDetailsSection.hidden = false;
+  // Masquer la barre d'onglets catégories et le bouton miroir/tout
+  const tabsRowSecondary = document.querySelector('.tabs-row-secondary');
+  if (tabsRowSecondary) tabsRowSecondary.style.visibility = 'hidden';
+  const selectedCategoryBar = document.getElementById('selectedCategoryBar');
+  if (selectedCategoryBar) selectedCategoryBar.style.display = 'none';
   document.body.classList.add('details-mode');
   if (appsDiv) appsDiv.hidden = true;
   loadRemoteDescription(app.name).catch(err => {
@@ -1723,6 +1739,11 @@ backToListBtn?.addEventListener('click', () => {
   if (appDetailsSection) appDetailsSection.hidden = true;
   document.body.classList.remove('details-mode');
   if (appsDiv) appsDiv.hidden = false;
+  // Réaffiche la barre d'onglets catégories et le bouton miroir/tout
+  const tabsRowSecondary = document.querySelector('.tabs-row-secondary');
+  if (tabsRowSecondary) tabsRowSecondary.style.visibility = 'visible';
+  const selectedCategoryBar = document.getElementById('selectedCategoryBar');
+  if (selectedCategoryBar) selectedCategoryBar.style.display = '';
   // Nettoyer tous les états busy/spinner sur les tuiles
   document.querySelectorAll('.app-tile.busy').forEach(t => t.classList.remove('busy'));
   // Restaurer scroll
