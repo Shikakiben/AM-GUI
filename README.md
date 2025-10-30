@@ -58,12 +58,16 @@ npm start
 
 ---
 
+
 ## Acknowledgements
 
 Thanks to [Ivan](https://github.com/ivan-hc) and the [pkgforge community](https://github.com/pkgforge-dev) for their outstanding work managing and distributing AppImages on Linux.
+
 
 ---
 
 ## License
 
-[MIT](./LICENSE)
+This project is licensed under the **GNU General Public License v3.0 (GPLv3)**, the same as the original AM project.
+
+See the LICENSE file for details.
