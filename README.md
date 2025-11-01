@@ -21,15 +21,14 @@
 
 ## Requirements (manual installation)
 
-- [Node.js](https://nodejs.org/) (version 20 or 22 recommended)
-- [git](https://git-scm.com/) (to clone the repository)
+- [Node.js](https://nodejs.org/) (>=20, 22 recommended)
 - [AM](https://github.com/ivan-hc/AM) installed and available in your system PATH
 
 *Electron, npm, node-pty, undici, etc. are installed automatically via `npm install`.*
 
 ### Native modules (node-pty): required build tools
 
-To compile some native modules (like node-pty), you may need to install the following build tools:
+you may need to install the following build tools (for git and maybe more):
 
 - **Debian/Ubuntu**:
    ```bash
