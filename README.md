@@ -17,12 +17,30 @@
 
 ---
 
-## Requirements
 
-- [Node.js](https://nodejs.org/)
-- [npm](https://www.npmjs.com/)
-- [Electron](https://www.electronjs.org/)
-- [AM](https://github.com/ivan-hc/AM) installed and accessible in the system PATH
+
+## Requirements (manual installation)
+
+- [Node.js](https://nodejs.org/) (version 20 or 22 recommended)
+- [git](https://git-scm.com/) (to clone the repository)
+- [AM](https://github.com/ivan-hc/AM) installed and available in your system PATH
+
+*Electron, npm, node-pty, undici, etc. are installed automatically via `npm install`.*
+
+### Native modules (node-pty): required build tools
+
+To compile some native modules (like node-pty), you may need to install the following build tools:
+
+- **Debian/Ubuntu**:
+   ```bash
+   sudo apt install build-essential python3 make gcc g++
+   ```
+- **Fedora**:
+   ```bash
+   sudo dnf install @development-tools python3
+   ```
+
+On most development machines, these tools are already present. If you get a compilation error during `npm install` , install the tools for your distribution as shown above.
 
 ---
 
