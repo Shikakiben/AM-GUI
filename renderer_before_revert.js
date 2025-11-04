@@ -11,363 +11,6 @@ window.addEventListener('DOMContentLoaded', () => {
         mdLightbox.style.display = 'flex';
       }
     });
-    mdLightbox.addEventListener('click', () => {
-      mdLightbox.style.display = 'none';
-      mdLightboxImg.src = '';
-    });
-  }
-});
-const loadedIcons = new Set();
-
-
-function applyViewModeClass() {
-  document.body.classList.remove('view-list','view-grid','view-icons','view-cards');
-  if (state.viewMode === 'list') document.body.classList.add('view-list');
-  else if (state.viewMode === 'icons') document.body.classList.add('view-icons');
-  else if (state.viewMode === 'cards') document.body.classList.add('view-cards');
-  else document.body.classList.add('view-grid');
-}
-
-const VISIBLE_COUNT = 50; // nombre de tuiles affichées à la fois
-let appListVirtual = [];
-let currentEndVirtual = VISIBLE_COUNT;
-let lastTileObserver = null;
-
-function setAppList(list) {
-  appListVirtual = list;
-  currentEndVirtual = VISIBLE_COUNT;
-  const scroller = document.querySelector('.scroll-shell');
-  if (scroller) scroller.scrollTop = 0;
-  renderVirtualList();
-}
-
-function renderVirtualList() {
-  if (!appsDiv) return;
-  appsDiv.innerHTML = '';
-  const useSkeleton = appListVirtual.length > 50;
-  if (useSkeleton) {
-    // Génère toutes les tuiles squelettes d’un coup
-    // Squelettes ultra-minimaux, adaptatifs selon la vue
-    const viewClass = 'view-' + (state.viewMode || 'grid');
-    for (let i = 0; i < appListVirtual.length; i++) {
-      const skel = document.createElement('div');
-      skel.className = 'app-tile-skeleton ' + viewClass;
-      skel.dataset.index = i;
-      appsDiv.appendChild(skel);
-    }
-    // Observer les squelettes visibles et les hydrater
-    if (window.skeletonObserver) window.skeletonObserver.disconnect();
-    window.skeletonObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting && !entry.target.classList.contains('hydrated')) {
-          const idx = parseInt(entry.target.dataset.index, 10);
-          const realTile = buildTile(appListVirtual[idx]);
-          realTile.classList.add('hydrated');
-          entry.target.replaceWith(realTile);
-          window.skeletonObserver.observe(realTile); // continue à observer la vraie tuile si besoin
-        }
-      });
-    }, { root: document.querySelector('.scroll-shell'), threshold: 0.1 });
-    // Observer les squelettes initialement visibles
-    const tiles = appsDiv.querySelectorAll('.app-tile-skeleton');
-    tiles.forEach(tile => window.skeletonObserver.observe(tile));
-  } else {
-    // Cas classique : moins de 50 apps, on rend tout normalement
-    const end = Math.min(currentEndVirtual, appListVirtual.length);
-    for (let i = 0; i < end; i++) {
-      appsDiv.appendChild(buildTile(appListVirtual[i]));
-    }
-    if (lastTileObserver) lastTileObserver.disconnect();
-    if (end < appListVirtual.length) {
-      // Observer les 3 dernières tuiles pour une meilleure robustesse au scroll rapide
-      const tiles = appsDiv.querySelectorAll('.app-tile');
-      const toObserve = Array.from(tiles).slice(-3); // 3 dernières
-      if (toObserve.length) {
-        try {
-          lastTileObserver = new IntersectionObserver((entries) => {
-            if (entries.some(e => e.isIntersecting)) {
-              lastTileObserver.disconnect();
-              currentEndVirtual = Math.min(currentEndVirtual + VISIBLE_COUNT, appListVirtual.length);
-              renderVirtualList();
-            }
-          }, { root: document.querySelector('.scroll-shell'), threshold: 0.1 });
-          toObserve.forEach(tile => lastTileObserver.observe(tile));
-        } catch(_) {}
-      }
-    }
-    // --- Spacer pour scroll cohérent ---
-    let spacer = appsDiv.querySelector('.app-list-spacer');
-    if (!spacer) {
-      spacer = document.createElement('div');
-      spacer.className = 'app-list-spacer';
-      spacer.style.width = '100%';
-      spacer.style.pointerEvents = 'none';
-      appsDiv.appendChild(spacer);
-    }
-    // Calculer la hauteur moyenne d'une tuile (sur le lot affiché)
-    let tileHeight = 120; // fallback par défaut
-    const firstTile = appsDiv.querySelector('.app-tile');
-    if (firstTile) {
-      tileHeight = firstTile.offsetHeight || tileHeight;
-    }
-    const missing = appListVirtual.length - end;
-    spacer.style.height = (missing > 0 ? (missing * tileHeight) : 0) + 'px';
-    // --- Fin spacer ---
-  }
-}
-
-// ...existing code...
-
-
-function buildTile(item){
-  const { name, installed, desc } = typeof item === 'string' ? { name: item, installed: false, desc: null } : item;
-  const label = name.charAt(0).toUpperCase() + name.slice(1);
-  const version = item?.version ? String(item.version) : null;
-  let shortDesc = desc || (installed ? 'Déjà présente localement.' : 'Disponible pour installation.');
-  if (shortDesc.length > 110) shortDesc = shortDesc.slice(0,107).trim() + '…';
-  let actionsHTML = '';
-  if (state.viewMode === 'list') {
-    if (!installed) {
-      let btnLabel = 'Installer';
-      let actionAttr = 'install';
-      let disabledAttr = '';
-      if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name){
-        btnLabel = 'Installation… ✕';
-        actionAttr = 'cancel-install';
-      } else {
-        const pos = getQueuePosition(name);
-        if (pos !== -1) { btnLabel = 'En file (#'+pos+') ✕'; actionAttr='remove-queue'; }
-      }
-      actionsHTML = `<div class="actions"><button class="inline-action install" data-action="${actionAttr}" data-app="${name}"${disabledAttr}>${btnLabel}</button></div>`;
-    } else {
-      actionsHTML = `<div class="actions">`;
-      actionsHTML += `<button class="inline-action uninstall" data-action="uninstall" data-app="${name}">${t('details.uninstall')}</button>`;
-      actionsHTML += `</div>`;
-    }
-  }
-
-  let stateBadge = '';
-  if (state.viewMode !== 'list' && !installed) {
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name) {
-      stateBadge = ' <span class="install-state-badge installing" data-state="installing">Installation…<button class="queue-remove-badge inline-action" data-action="cancel-install" data-app="'+name+'" title="Annuler" aria-label="Annuler">✕</button></span>';
-    } else {
-      const pos = getQueuePosition(name);
-      if (pos !== -1) stateBadge = ' <span class="install-state-badge queued" data-state="queued">En file (#'+pos+')<button class="queue-remove-badge inline-action" data-action="remove-queue" data-app="'+name+'" title="Retirer de la file" aria-label="Retirer">✕</button></span>';
-    }
-  }
-  const tile = document.createElement('div');
-  tile.className = 'app-tile';
-  tile.setAttribute('data-app', name);
-  const badgeHTML = installed ? '<span class="installed-badge" aria-label="Installée" title="Installée" style="position:absolute;top:2px;right:2px;">✓</span>' : '';
-  tile.innerHTML = `
-    <div class="tile-icon" style="position:relative;display:inline-block;">
-      <img data-src="${getIconUrl(name)}" alt="${label}" loading="lazy" decoding="async"${state.viewMode==='icons' ? ' class="icon-mode"' : ''} onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/${name}.png'; setTimeout(()=>{ if(this.naturalWidth<=1) this.src='https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; },1200);">
-      ${badgeHTML}
-    </div>
-    <div class="tile-text">
-      <div class="tile-name">${label}${version? ` <span class\"tile-version\">${version}</span>`: ''}${stateBadge}</div>
-      <div class="tile-short">${shortDesc}</div>
-    </div>
-    ${actionsHTML ? actionsHTML : ''}`;
-
-  const img = tile.querySelector('img');
-  if (img) {
-    const iconUrl = img.getAttribute('data-src');
-    if (iconUrl && loadedIcons.has(iconUrl)) {
-      img.src = iconUrl;
-      img.removeAttribute('data-src');
-    } else if (iconUrl) {
-      img.classList.add('img-loading');
-      img.addEventListener('load', () => {
-        img.classList.remove('img-loading');
-        loadedIcons.add(iconUrl);
-      }, { once:true });
-      img.addEventListener('error', () => { img.classList.remove('img-loading'); }, { once:true });
-      if (iconObserver) iconObserver.observe(img); else { img.src = iconUrl; img.removeAttribute('data-src'); }
-      if (buildTile._count === undefined) buildTile._count = 0;
-      if (buildTile._count < 48) {
-        try { img.setAttribute('fetchpriority','high'); } catch(_){ }
-      }
-      buildTile._count++;
-    }
-  }
-  tile.tabIndex = 0; // navigation clavier
-  tile.addEventListener('click', (ev) => {
-    if (ev.target.closest('.inline-action')) return; // ne pas ouvrir si clic sur bouton d'action
-    showDetails(name);
-  });
-  tile.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      if (ev.target.closest('.inline-action')) return;
-      ev.preventDefault();
-      showDetails(name);
-    }
-  });
-  return tile;
-}
-// ...existing code...
-
-// Active/désactive les animations globales selon l'état
-function setAnimationsActive(active) {
-  document.body.classList.toggle('animations-active', !!active);
-}
-
-// Désactiver les animations au démarrage
-setAnimationsActive(false);
-
-// Animations globales
-// ...existing code...
-
-
-function initXtermLog() {
-  if (!xtermLogDiv) xtermLogDiv = document.getElementById('xtermLog');
-  if (!xtermLogDiv) return;
-  if (!xterm) {
-    try {
-      const { Terminal } = require('@xterm/xterm');
-      const { FitAddon } = require('@xterm/xterm-addon-fit');
-      xterm = new Terminal({
-        fontSize: 13,
-        fontFamily: 'monospace',
-        theme: { background: '#181c20' },
-        convertEol: true,
-        scrollback: 2000,
-        disableStdin: true,
-        cursorBlink: false
-      });
-      xtermFit = new FitAddon();
-      xterm.loadAddon(xtermFit);
-      xterm.open(xtermLogDiv);
-      window.addEventListener('resize', ()=>xtermFit.fit());
-      xtermFit.fit();
-    } catch (e) {
-      xterm = null;
-      xtermFit = null;
-      if (xtermLogDiv) xtermLogDiv.style.display = 'none';
-      if (installStreamLog) installStreamLog.style.display = '';
-      return;
-    }
-  } else {
-    xterm.clear();
-    xtermFit && xtermFit.fit();
-  }
-  xtermLogDiv.style.display = '';
-  if (installStreamLog) installStreamLog.style.display = 'none';
-}
-// --- xterm.js pour affichage terminal natif ---
-let xterm = null;
-let xtermFit = null;
-let xtermLogDiv = null;
-function getIconUrl(app) {
-  return `appicon://${app}.png`;
-}
-// Fallback icône distante
-(function installAppiconFallback(){
-  document.addEventListener('error', (ev) => {
-    try {
-      const el = ev.target;
-      if (!el || el.tagName !== 'IMG') return;
-      const src = String(el.src || '');
-      if (!src.startsWith('appicon://')) return;
-      // éviter les boucles de fallback
-      if (el.dataset.__appiconFallbackTried) return;
-      el.dataset.__appiconFallbackTried = '1';
-      const name = src.replace(/^appicon:\/\//i, '').replace(/\?.*$/, '').replace(/#.*/, '');
-      const remote = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/' + name;
-      // log pour diagnostic minimal
-      console.warn('appicon fallback: replacing', src, 'with', remote);
-      // Remplacer après un petit délai pour laisser le navigateur finir l'événement
-      setTimeout(()=> { try { el.src = remote; } catch(_) {} }, 10);
-    } catch(_) {}
-  }, true);
-})();
-// Ajustement header & gestion erreurs
-(function initHeaderMetrics(){
-  const applyHeaderHeight = () => {
-    const header = document.querySelector('.app-header');
-    if (header) document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
-    document.documentElement.style.setProperty('--tabs-h', '0px');
-    const subBar = document.querySelector('.sub-bar');
-    if (subBar) document.documentElement.style.setProperty('--subbar-h', subBar.offsetHeight + 'px');
-  };
-  window.addEventListener('resize', applyHeaderHeight);
-  window.addEventListener('DOMContentLoaded', applyHeaderHeight);
-  if (document.readyState !== 'loading') applyHeaderHeight();
-  // Un seul appel différé pour garantir le calcul après le rendu initial
-  setTimeout(applyHeaderHeight, 150);
-  window.addEventListener('error', (ev) => {
-    const t = document.getElementById('toast');
-    if (t) { t.hidden = false; t.textContent = 'Erreur: ' + ev.message; setTimeout(()=>{ t.hidden = true; }, 5000); }
-    console.error('Erreur globale', ev.error || ev.message);
-  });
-  window.addEventListener('unhandledrejection', (ev) => {
-    const t = document.getElementById('toast');
-    if (t) { t.hidden = false; t.textContent = 'Promesse rejetée: ' + (ev.reason?.message || ev.reason); setTimeout(()=>{ t.hidden = true; }, 6000); }
-    console.error('Rejet non géré', ev.reason);
-  });
-})();
-
-// Contrôles fenêtre
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('.win-btn');
-  if (!b) return;
-  const act = b.getAttribute('data-action');
-  if (!act) return;
-  try { window.electronAPI.windowControl(act); } catch(_) {}
-});
-
-// Classe d'environnement de bureau
-(() => {
-  try {
-    const de = (window.electronAPI?.desktopEnv && window.electronAPI.desktopEnv()) || 'generic';
-    document.documentElement.classList.add('de-' + de);
-  } catch(_) {}
-})();
-
-const modeMenuBtn = document.getElementById('modeMenuBtn');
-const modeMenu = document.getElementById('modeMenu');
-const modeOptions = () => Array.from(document.querySelectorAll('.mode-option'));
-const disableGpuCheckbox = document.getElementById('disableGpuCheckbox');
-const state = {
-  allApps: [], // [{name, installed}]
-  filtered: [],
-  activeCategory: 'all',
-  viewMode: localStorage.getItem('viewMode') || 'grid',
-  lastRenderKey: '',
-  currentDetailsApp: null,
-  renderVersion: 0,
-  lastScrollY: 0,
-  installed: new Set() // ensemble des noms installés (lowercase)
-};
-
-// --- Gestion accélération GPU ---
-if (disableGpuCheckbox && window.electronAPI && window.electronAPI.getGpuPref && window.electronAPI.setGpuPref) {
-  // Charger l'état au démarrage
-  window.electronAPI.getGpuPref().then(val => {
-    disableGpuCheckbox.checked = !!val;
-  });
-  disableGpuCheckbox.addEventListener('change', async () => {
-    const val = !!disableGpuCheckbox.checked;
-    await window.electronAPI.setGpuPref(val);
-    // Afficher un toast traduit et proposer de relancer l'app
-    showToast(val ? t('toast.gpuDisabled') : t('toast.gpuEnabled'));
-    setTimeout(() => {
-      if (confirm(t('confirm.gpuRestart'))) {
-        window.location.reload();
-      }
-    }, 1200);
-  });
-}
-
-// --- (Ré)ajout gestion changement de mode d'affichage ---
-function updateModeMenuUI() {
-  // Mettre à jour états pressed
-  modeOptions().forEach(opt => {
-    const m = opt.getAttribute('data-mode');
-    const active = m === state.viewMode;
-    opt.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
-  // Changer l'icône du bouton principal selon mode
   const iconMap = { grid:'▦', list:'≣', icons:'◻︎', cards:'🂠' };
   if (modeMenuBtn) modeMenuBtn.textContent = iconMap[state.viewMode] || '▦';
   // Mettre à jour la classe du body selon le mode
@@ -395,26 +38,29 @@ if (modeMenuBtn && modeMenu) {
   });
   window.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && !modeMenu.hidden) {
-      modeMenu.hidden = true; modeMenuBtn.setAttribute('aria-expanded','false');
+      modeMenu.hidden = true;
+      modeMenuBtn.setAttribute('aria-expanded','false');
     }
   });
   modeMenu.addEventListener('click', (ev) => {
     const opt = ev.target.closest('.mode-option');
     if (!opt) return;
     const mode = opt.getAttribute('data-mode');
-    if (!mode || mode === state.viewMode) { modeMenu.hidden = true; modeMenuBtn.setAttribute('aria-expanded','false'); return; }
+    if (!mode || mode === state.viewMode) {
+      modeMenu.hidden = true;
+      modeMenuBtn.setAttribute('aria-expanded','false');
+      return;
+    }
     if (!['grid','list','icons','cards'].includes(mode)) return;
     state.viewMode = mode;
     localStorage.setItem('viewMode', state.viewMode);
     currentViewMode = state.viewMode;
     updateModeMenuUI();
-    // Correction : ne pas afficher de tuiles dans les onglets updates ou avancé
     if (state.activeCategory === 'updates' || state.activeCategory === 'advanced') {
       setAppList([]);
     } else {
       setAppList(state.filtered);
     }
-    // Remettre le scroll en haut à chaque changement de mode
     const scroller = document.querySelector('.scroll-shell');
     if (scroller) scroller.scrollTop = 0;
     modeMenu.hidden = true;
@@ -422,357 +68,6 @@ if (modeMenuBtn && modeMenu) {
   });
 }
 
-updateModeMenuUI();
-
-const appsDiv = document.getElementById('apps');
-
-// --- Références DOM rétablies après nettoyage catégories ---
-const appDetailsSection = document.getElementById('appDetails');
-const backToListBtn = document.getElementById('backToListBtn');
-const detailsIcon = document.getElementById('detailsIcon');
-const detailsName = document.getElementById('detailsName');
-const detailsLong = document.getElementById('detailsLong');
-const detailsInstallBtn = document.getElementById('detailsInstallBtn');
-const detailsUninstallBtn = document.getElementById('detailsUninstallBtn');
-const detailsGallery = document.getElementById('detailsGallery');
-const detailsGalleryInner = document.getElementById('detailsGalleryInner');
-// Éléments streaming installation
-// Galerie supprimée : toutes les images sont dans la description
-const installStream = document.getElementById('installStream');
-const installStreamStatus = document.getElementById('installStreamStatus');
-
-const installStreamElapsed = document.getElementById('installStreamElapsed');
-// Log, compteur de lignes et bouton log supprimés de l'UI
-const installProgressBar = document.getElementById('installStreamProgressBar');
-const installProgressPercentLabel = document.getElementById('installStreamProgressPercent');
-const installProgressEtaLabel = document.getElementById('installStreamEta');
-
-// Mémoire de la session d'installation en cours
-let activeInstallSession = {
-  id: null,
-  name: null,
-  start: 0,
-  lines: [], // tableau de chaînes
-  done: false,
-  success: null,
-  code: null
-};
-// File d'attente séquentielle
-const installQueue = []; // noms d'apps en attente (FIFO)
-
-function getQueuePosition(name){
-  const idx = installQueue.indexOf(name);
-  return idx === -1 ? -1 : (idx + 1); // position 1-based
-}
-
-function removeFromQueue(name){
-  const idx = installQueue.indexOf(name);
-  if (idx === -1) return false;
-  installQueue.splice(idx,1);
-  try {
-    if (typeof updateQueueIndicators === 'function') updateQueueIndicators();
-    // Debounce pour éviter double refresh si plusieurs suppressions rapides
-    if (window.__queueRefreshTimeout) clearTimeout(window.__queueRefreshTimeout);
-    window.__queueRefreshTimeout = setTimeout(()=>{
-      try { refreshAllInstallButtons(); } catch(e) { console.error('Erreur refreshAllInstallButtons', e); }
-    }, 300);
-  showToast(t('toast.removedFromQueue', {name}));
-  } catch(e) {
-    console.error('Erreur removeFromQueue', e);
-  showToast(t('toast.removeQueueError'));
-  }
-  return true;
-}
-
-function refreshDetailsInstallButtonForQueue(){
-  if (!detailsInstallBtn || !detailsInstallBtn.getAttribute('data-name')) return;
-  detailsInstallBtn.classList.remove('loading'); // suppression systématique du spinner
-  const name = detailsInstallBtn.getAttribute('data-name');
-  if (!name) return;
-  // Active en cours
-  if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name){
-    // Bouton devient annulation
-    detailsInstallBtn.disabled = false;
-    detailsInstallBtn.classList.remove('loading');
-    detailsInstallBtn.textContent = t('install.status') + ' ✕';
-    detailsInstallBtn.setAttribute('data-action','cancel-install');
-    detailsInstallBtn.setAttribute('aria-label', t('install.cancel') || 'Annuler installation en cours ('+name+')');
-    return;
-  }
-  const pos = getQueuePosition(name);
-  if (pos !== -1){
-    detailsInstallBtn.disabled = false;
-    detailsInstallBtn.classList.remove('loading');
-    detailsInstallBtn.textContent = t('install.queued') ? t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕');
-    detailsInstallBtn.setAttribute('data-action','remove-queue');
-    detailsInstallBtn.setAttribute('aria-label', t('install.removeQueue') || ('Retirer de la file (' + name + ')'));
-    return;
-  }
-  // Sinon si déjà installée, on masque ailleurs, mais reset label au cas où
-  if (!detailsInstallBtn.hidden){
-    detailsInstallBtn.textContent = t('details.install');
-    detailsInstallBtn.classList.remove('loading');
-    detailsInstallBtn.disabled = false;
-    detailsInstallBtn.setAttribute('data-action','install');
-  }
-}
-
-// Synchroniser les boutons de la liste
-function refreshListInstallButtons(){
-  const buttons = document.querySelectorAll('.inline-action.install');
-  buttons.forEach(btn => {
-    const name = btn.getAttribute('data-app');
-    if (!name) return;
-    // Si appli déjà installée, ce bouton devrait avoir disparu après re-render.
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name){
-      btn.textContent = t('install.status') + ' ✕';
-      btn.disabled = false;
-      btn.setAttribute('data-action','cancel-install');
-      btn.setAttribute('aria-label', t('install.cancel') || 'Annuler installation en cours ('+name+')');
-      return;
-    }
-    const pos = getQueuePosition(name);
-    if (pos !== -1){
-      btn.textContent = t('install.queued') ? t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕');
-      btn.disabled = false;
-      btn.setAttribute('data-action','remove-queue');
-      btn.setAttribute('aria-label', t('install.removeQueue') || ('Retirer de la file (' + name + ')'));
-      return;
-    }
-    btn.textContent = t('details.install');
-    btn.disabled = false;
-    btn.setAttribute('data-action','install');
-  });
-}
-
-function refreshAllInstallButtons(){
-  refreshDetailsInstallButtonForQueue();
-  refreshListInstallButtons();
-  refreshTileBadges();
-}
-
-// Met à jour/injecte les badges d'état dans les modes non-list
-function refreshTileBadges() {
-  if (state.viewMode === 'list') return; // list géré par les boutons
-  if (!state.installed || typeof state.installed.has !== 'function') return; // garde de sécurité
-  const tiles = document.querySelectorAll('.app-tile');
-  tiles.forEach(tile => {
-    const name = tile.getAttribute('data-app');
-    const installed = state.installed.has(name);
-    const nameEl = tile.querySelector('.tile-name');
-    if (!nameEl) return;
-    // Supprimer badge existant
-    const existing = nameEl.querySelector('.install-state-badge');
-    if (existing) existing.remove();
-    if (installed) return; // pas de badge si déjà installée
-    let badgeHtml = '';
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name) {
-      // Ajouter bouton d'annulation dans le badge installation
-      badgeHtml = '<span class="install-state-badge installing" data-state="installing">Installation…<button class="queue-remove-badge inline-action" data-action="cancel-install" data-app="'+name+'" title="Annuler" aria-label="Annuler l\'installation">✕</button></span>';
-    } else {
-      const pos = getQueuePosition(name);
-      if (pos !== -1) badgeHtml = '<span class="install-state-badge queued" data-state="queued">En file (#'+pos+')<button class="queue-remove-badge inline-action" data-action="remove-queue" data-app="'+name+'" title="Retirer de la file" aria-label="Retirer">✕</button></span>';
-    }
-    if (badgeHtml) nameEl.insertAdjacentHTML('beforeend', ' ' + badgeHtml);
-  });
-}
-
-function refreshQueueUI(){
-  // Rafraîchit uniquement les représentations de la file.
-  refreshAllInstallButtons();
-}
-
-function processNextInstall(){
-  // Ne rien lancer si une installation active non terminée
-  if (activeInstallSession.id && !activeInstallSession.done) return;
-  if (!installQueue.length) return;
-  const next = installQueue.shift();
-  refreshQueueUI();
-  refreshTileBadges();
-  // Nettoyer busy sur toutes les autres tuiles, puis marquer uniquement celle en cours
-  document.querySelectorAll('.app-tile.busy').forEach(t => t.classList.remove('busy'));
-  const tile = document.querySelector(`.app-tile[data-app="${CSS.escape(next)}"]`);
-  if (tile) tile.classList.add('busy');
-  const inlineBtn = document.querySelector(`.inline-action.install[data-app="${CSS.escape(next)}"]`);
-  if (inlineBtn) inlineBtn.disabled = true;
-  showToast(t('toast.installing', {name: next}));
-  startStreamingInstall(next).catch(() => {
-    // Fallback: exécuter via amAction puis enchaîner
-    window.electronAPI.amAction('install', next).then(()=>{
-      loadApps().then(()=> applySearch());
-    }).finally(()=>{
-      activeInstallSession.done = true;
-      setTimeout(()=> processNextInstall(), 200);
-    });
-  });
-  refreshAllInstallButtons();
-}
-
-function enqueueInstall(name){
-  if (!name) return;
-  // Vérifier si déjà en cours ou dans la file
-  if ((activeInstallSession.name === name && !activeInstallSession.done) || installQueue.includes(name)) {
-    showToast(t('toast.alreadyInQueue', {name}));
-    return;
-  }
-  if (activeInstallSession.id && !activeInstallSession.done) {
-    installQueue.push(name);
-  refreshQueueUI();
-  showToast(t('toast.addedToQueue', {name, count: installQueue.length}));
-  } else {
-    installQueue.push(name);
-  refreshQueueUI();
-    processNextInstall();
-  }
-  refreshAllInstallButtons();
-}
-const toast = document.getElementById('toast');
-const searchInput = document.getElementById('searchInput');
-let searchMode = false;
-let lastSearchValue = '';
-
-if (searchInput) {
-  searchInput.addEventListener('focus', () => {
-    searchMode = true;
-    if (lastSearchValue) searchInput.value = lastSearchValue;
-    // Simuler le clic sur le bouton retour si visible
-    const backBtn = document.getElementById('backToListBtn');
-    if (backBtn && backBtn.offsetParent !== null) backBtn.click();
-    if (state.activeCategory !== 'all') {
-      state.activeCategory = 'all';
-      const tabAll = document.querySelector('.tab[data-category="all"]');
-      if (tabAll && !tabAll.classList.contains('active')) tabAll.click();
-    }
-    setCategoriesDropdownBtnLabel();
-    applySearch();
-  });
-}
-const refreshBtn = document.getElementById('refreshBtn');
-const settingsBtn = document.getElementById('settingsBtn');
-const settingsPanel = document.getElementById('settingsPanel');
-const purgeIconsBtn = document.getElementById('purgeIconsBtn');
-const purgeIconsResult = document.getElementById('purgeIconsResult');
-const tabs = document.querySelectorAll('.tab');
-// Mise à jour
-let updateInProgress = false;
-const updatesPanel = document.getElementById('updatesPanel');
-const advancedPanel = document.getElementById('advancedPanel');
-const runUpdatesBtn = document.getElementById('runUpdatesBtn');
-const updateSpinner = document.getElementById('updateSpinner');
-const updateResult = document.getElementById('updateResult');
-const updateFinalMessage = document.getElementById('updateFinalMessage');
-const updatedAppsIcons = document.getElementById('updatedAppsIcons');
-const installedCountEl = document.getElementById('installedCount');
-// Modale sortie brute update
-const showRawUpdateBtn = document.getElementById('showRawUpdateBtn');
-const rawUpdateModal = document.getElementById('rawUpdateModal');
-const rawUpdatePre = document.getElementById('rawUpdatePre');
-const rawUpdateClose = document.getElementById('rawUpdateClose');
-const rawUpdateClose2 = document.getElementById('rawUpdateClose2');
-const rawCopyBtn = document.getElementById('rawCopyBtn');
-const rawSaveBtn = document.getElementById('rawSaveBtn');
-let lastUpdateRaw = '';
-// ...existing code...
-// Modale confirmation actions
-const actionConfirmModal = document.getElementById('actionConfirmModal');
-const actionConfirmMessage = document.getElementById('actionConfirmMessage');
-const actionConfirmCancel = document.getElementById('actionConfirmCancel');
-const actionConfirmOk = document.getElementById('actionConfirmOk');
-let confirmResolve = null;
-function openActionConfirm({ title, message, okLabel, intent }) {
-  if (!actionConfirmModal) return Promise.resolve(false);
-  actionConfirmMessage.innerHTML = message || '';
-  actionConfirmOk.textContent = okLabel || 'Valider';
-  // Intent styling (danger / install)
-  actionConfirmOk.className = 'btn';
-  if (intent === 'danger') {
-    actionConfirmOk.classList.add('btn-soft-red');
-  } else {
-    actionConfirmOk.classList.add('btn-soft-blue');
-  }
-  if (actionConfirmCancel) actionConfirmCancel.className = 'btn-soft-neutral';
-  actionConfirmModal.hidden = false;
-  setTimeout(()=> actionConfirmOk.focus(), 30);
-  return new Promise(res => { confirmResolve = res; });
-}
-function closeActionConfirm(result){
-  if (!actionConfirmModal) return;
-  actionConfirmModal.hidden = true;
-  if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
-}
-actionConfirmCancel?.addEventListener('click', ()=> closeActionConfirm(false));
-actionConfirmOk?.addEventListener('click', ()=> closeActionConfirm(true));
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && actionConfirmModal && !actionConfirmModal.hidden) {
-    e.stopPropagation();
-    closeActionConfirm(false);
-  }
-  if (e.key === 'Enter' && actionConfirmModal && !actionConfirmModal.hidden) {
-    // Valide sur Enter uniquement si focus pas sur Cancel
-    const active = document.activeElement;
-    if (active !== actionConfirmCancel) {
-      e.preventDefault();
-      closeActionConfirm(true);
-    }
-  }
-}, { capture:true });
-// Lightbox
-const lightbox = document.getElementById('lightbox');
-const lightboxImage = document.getElementById('lightboxImage');
-const lightboxCaption = document.getElementById('lightboxCaption');
-const lightboxPrev = document.getElementById('lightboxPrev');
-const lightboxNext = document.getElementById('lightboxNext');
-const lightboxClose = document.getElementById('lightboxClose');
-let lightboxState = { images: [], index: 0, originApp: null };
-
-// Cache descriptions (réinstallé)
-// --- Test catégorie dynamique ---
-// Toujours forcer le contenu du bouton Catégories (texte + flèche)
-function setCategoriesDropdownBtnLabel() {
-  const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
-  if (categoriesDropdownBtn) {
-    // Détermine la catégorie active
-    let label = t('tabs.categories');
-    let icon = '📦';
-    if (state.activeCategory && state.activeCategory !== 'all') {
-      // Cherche le nom et l’icône de la catégorie sélectionnée
-      const key = state.activeCategory.trim().toLowerCase();
-      const iconMap = {
-        "android": "🤖",
-        "appimages": "📦",
-        "audio": "🎵",
-        "comic": "📚",
-        "command-line": "💻",
-        "communication": "💬",
-        "disk": "🖴",
-        "education": "🎓",
-        "file-manager": "🗂️",
-        "finance": "💰",
-        "game": "🎮",
-        "gnome": "👣",
-        "graphic": "🎨",
-        "internet": "🌐",
-        "kde": "🖥️",
-        "office": "🗎",
-        "password": "🔑",
-        "steam": "🕹️",
-        "system-monitor": "📊",
-        "video": "🎬",
-        "web-app": "🕸️",
-        "web-browser": "🌍",
-        "wine": "🍷",
-        "autre": "❓"
-      };
-      icon = iconMap[key] || "📦";
-      label = state.activeCategory.charAt(0).toUpperCase() + state.activeCategory.slice(1);
-    } else {
-      // Cas "Tout"
-      icon = '🗃️';
-      label = t('categories.all');
-    }
-    categoriesDropdownBtn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${label}</span> <span class="cat-arrow">▼</span>`;
-  }
-}
 window.addEventListener('DOMContentLoaded', async () => {
   // Dropdown menu catégories : ouverture/fermeture
   const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
@@ -1028,8 +323,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 });
 const descriptionCache = new Map();
-const translations = window.translations || {};
 // --- Gestion multilingue ---
+
+const translations = window.translations || {};
+
 function getSystemLang() {
   try {
     // Prefer value fournie par le main / preload si disponible
@@ -2274,7 +1571,7 @@ if (window.electronAPI.onInstallProgress){
     if (msg.kind === 'line') {
       // --- Extraction du pourcentage de progression depuis le flux ---
       if (msg.raw !== undefined) {
-        // Nettoyage robuste de toutes les séquences d'échappement ANSI/OSC (couleurs, curseur, ESC 7/8, etc.)
+          // Nettoyage robuste de toutes les séquences d'échappement ANSI/OSC (couleurs, curseur, ESC 7/8, etc.)
         const ansiCleaned = msg.raw
           // Séquences ESC [ ... (CSI)
           .replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '')
@@ -2284,7 +1581,6 @@ if (window.electronAPI.onInstallProgress){
           .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
           // Autres caractères de contrôle
           .replace(/[\x07\x08\x0D\x0A\x1B]/g, '');
-
         // --- Détection et accumulation du bloc warning ---
         if (!window._installWarningBuffer) window._installWarningBuffer = null;
         if (!window._installWarningActive) window._installWarningActive = false;
@@ -2306,8 +1602,7 @@ if (window.electronAPI.onInstallProgress){
           window._installWarningBuffer += ansiCleaned + '\n';
           return;
         }
-
-        // Cherche un motif du type "   6%[>" ou " 99%[" ou "100%[" (tolère espaces avant)
+            // Cherche un motif du type "   6%[>" ou " 99%[" ou "100%[" (tolère espaces avant)
         const percentMatch = ansiCleaned.match(/\s(\d{1,3})%\s*\[/);
         if (percentMatch) {
           let percent = parseInt(percentMatch[1], 10);
@@ -2381,8 +1676,8 @@ if (window.electronAPI.onInstallProgress){
     }
   });
 }
-
 function showPopupWarning(msg) {
+  // Vérifie si l'utilisateur a choisi de ne plus afficher le warning
   const dontShowKey = 'hideWget2Warning';
   if (localStorage.getItem(dontShowKey) === '1') return;
   let modal = document.getElementById('warningModal');
@@ -2405,13 +1700,13 @@ function showPopupWarning(msg) {
     </div>`;
     document.body.appendChild(modal);
     document.getElementById('closeWarningModal').onclick = () => {
-      const checkbox = document.getElementById('dontShowWget2Warning');
-      if (checkbox?.checked) localStorage.setItem(dontShowKey, '1');
+      if (document.getElementById('dontShowWget2Warning').checked) {
+        localStorage.setItem(dontShowKey, '1');
+      }
       modal.remove();
     };
   } else {
-    const pre = modal.querySelector('pre');
-    if (pre) pre.textContent = msg;
+    modal.querySelector('pre').textContent = msg;
     modal.style.display = 'block';
   }
 }

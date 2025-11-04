@@ -2,9 +2,6 @@
 	"folders": [
 		{
 			"path": "."
-		},
-		{
-			"path": "../../../mnt/All/All/appstore-electron/AM-AppStore-Test-All"
 		}
 	],
 	"settings": {}
