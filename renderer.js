@@ -2634,7 +2634,7 @@ if (window.electronAPI.onInstallProgress){
           // Autres caractères de contrôle
           .replace(/[\x07\x08\x0D\x0A\x1B]/g, '');
         console.log('[INSTALL DEBUG] ansiCleaned:', ansiCleaned);
-        // Cherche un motif du type "   6%[>" ou " 99%[" ou "100%[" (tolère espaces avant)
+            // Cherche un motif du type "   6%[>" ou " 99%[" ou "100%[" (tolère espaces avant)
         const percentMatch = ansiCleaned.match(/\s(\d{1,3})%\s*\[/);
         if (percentMatch) {
           let percent = parseInt(percentMatch[1], 10);

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=App Manager
-Exec=/mnt/All/All/appstore-electron/AM-AppStore-Test/start-appstore.sh
-Icon=//mnt/All/All/appstore-electron/AM-AppStore-Test/app-icon.png
-StartupWMClass=App manager
+Exec=/home/moi/AM-AppStore-Test/start-appstore.sh
+Icon=/home/moi/AM-AppStore-Test/app-icon.png
+StartupWMClass=App Manager
 Terminal=false
 Categories=Utility;

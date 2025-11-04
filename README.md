@@ -51,6 +51,7 @@ Clone this repository:
 git clone https://github.com/Shikakiben/AM-AppStore-Test.git
 cd AM-AppStore-Test
 npm install
+npm rebuild
 ```
 
 ---
