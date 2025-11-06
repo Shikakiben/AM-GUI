@@ -1,4 +1,4 @@
-(function(){
+(function registerPreferences(){
   function getThemePref() {
     try {
       return localStorage.getItem('themePref') || 'system';
@@ -29,10 +29,14 @@
     } catch (_){ }
   }
 
-  window.preferences = Object.freeze({
+  const api = Object.freeze({
     getThemePref,
     applyThemePreference,
     loadOpenExternalPref,
     saveOpenExternalPref
   });
+
+  window.services = window.services || {};
+  window.services.preferences = api;
+  window.preferences = api;
 })();

@@ -1,10 +1,16 @@
-(function(){
-  let categoriesCache = null;
+(function registerCategoriesDropdown(){
+  const categoriesNamespace = window.features = window.features || {};
+  categoriesNamespace.categories = categoriesNamespace.categories || {};
+
+  function getIconMap(iconMapOverride) {
+    if (iconMapOverride) return iconMapOverride;
+    return (window.constants && window.constants.CATEGORY_ICON_MAP) || {};
+  }
 
   function updateDropdownLabel(state, t, iconMapOverride) {
     const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
     if (!categoriesDropdownBtn) return;
-    const iconMap = iconMapOverride || (window.constants && window.constants.CATEGORY_ICON_MAP) || {};
+    const iconMap = getIconMap(iconMapOverride);
     const translate = typeof t === 'function' ? t : (key) => key;
     let label = translate('tabs.categories');
     let icon = '📦';
@@ -19,35 +25,6 @@
     categoriesDropdownBtn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${label}</span> <span class="cat-arrow">▼</span>`;
   }
 
-  async function loadCategories(options) {
-    const opts = options || {};
-    if (categoriesCache) return categoriesCache;
-    try {
-      const cacheRes = await window.electronAPI.getCategoriesCache();
-      if (cacheRes.ok && Array.isArray(cacheRes.categories) && cacheRes.categories.length > 0) {
-        categoriesCache = cacheRes.categories;
-        return categoriesCache;
-      }
-    } catch (_) {}
-    try {
-      const res = await window.electronAPI.fetchAllCategories();
-      if (!res.ok || !Array.isArray(res.categories)) throw new Error(res.error || 'Erreur catégories');
-      categoriesCache = res.categories;
-      return categoriesCache;
-    } catch (e) {
-      if (typeof opts.showToast === 'function') {
-        opts.showToast('Erreur catégories: ' + (e.message || e));
-      } else {
-        console.warn('Erreur catégories', e);
-      }
-      return [];
-    }
-  }
-
-  function resetCategoriesCache() {
-    categoriesCache = null;
-  }
-
   function createCategoryButton(name, onClick, iconMap) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -59,17 +36,22 @@
     return btn;
   }
 
-  async function initDropdown(options) {
-    const opts = options || {};
-    const state = opts.state || {};
-    const translate = typeof opts.t === 'function' ? opts.t : (key) => key;
-    const showToast = typeof opts.showToast === 'function' ? opts.showToast : null;
-    const setAppList = typeof opts.setAppList === 'function' ? opts.setAppList : () => {};
-    const loadApps = typeof opts.loadApps === 'function' ? opts.loadApps : null;
-    const appDetailsSection = opts.appDetailsSection || null;
-    const appsDiv = opts.appsDiv || null;
-    const tabs = Array.isArray(opts.tabs) ? opts.tabs : Array.from(opts.tabs || document.querySelectorAll('.tab'));
-    const iconMap = opts.iconMap || (window.constants && window.constants.CATEGORY_ICON_MAP) || {};
+  async function initDropdown(options = {}) {
+    const state = options.state || {};
+    const translate = typeof options.t === 'function' ? options.t : (key) => key;
+    const showToast = typeof options.showToast === 'function' ? options.showToast : null;
+    const setAppList = typeof options.setAppList === 'function' ? options.setAppList : () => {};
+    const loadApps = typeof options.loadApps === 'function' ? options.loadApps : null;
+    const appDetailsSection = options.appDetailsSection || null;
+    const appsDiv = options.appsDiv || null;
+    const tabs = Array.isArray(options.tabs) ? options.tabs : Array.from(options.tabs || document.querySelectorAll('.tab'));
+    const iconMap = options.iconMap || getIconMap();
+
+    const cacheApi = categoriesNamespace.categories.cache;
+    if (!cacheApi || typeof cacheApi.load !== 'function') {
+      console.warn('Categories cache API non disponible.');
+      return;
+    }
 
     const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
     const categoriesDropdownMenu = document.getElementById('categoriesDropdownMenu');
@@ -82,10 +64,9 @@
 
     if (typeof window.applyTranslations === 'function') {
       const origApplyTranslations = window.applyTranslations;
-      window.applyTranslations = function() {
+      window.applyTranslations = function patchedApplyTranslations() {
         origApplyTranslations();
         updateLabel();
-        // Ne pas écraser le label du bouton dropdown ici
       };
     }
 
@@ -103,8 +84,8 @@
       if (categoriesDropdownOverlay) categoriesDropdownOverlay.hidden = false;
     }
 
-    categoriesDropdownBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
+    categoriesDropdownBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
       if (categoriesDropdownMenu.hidden) openCategoriesDropdown();
       else closeCategoriesDropdown();
     });
@@ -113,8 +94,8 @@
       categoriesDropdownOverlay.addEventListener('click', () => closeCategoriesDropdown());
     }
 
-    document.addEventListener('click', (e) => {
-      if (!categoriesDropdownMenu.hidden && !categoriesDropdownMenu.contains(e.target) && e.target !== categoriesDropdownBtn) {
+    document.addEventListener('click', (event) => {
+      if (!categoriesDropdownMenu.hidden && !categoriesDropdownMenu.contains(event.target) && event.target !== categoriesDropdownBtn) {
         closeCategoriesDropdown();
       }
     });
@@ -125,7 +106,7 @@
       });
     });
 
-    loadCategories({ showToast });
+    cacheApi.load({ showToast });
 
     const tabSecondary = document.querySelector('.tab-secondary');
     if (tabSecondary) {
@@ -137,7 +118,7 @@
         if (appsDiv) appsDiv.hidden = false;
         state.currentDetailsApp = null;
         categoriesDropdownMenu.innerHTML = '';
-        const categories = await loadCategories({ showToast });
+        const categories = await cacheApi.load({ showToast });
         categories.forEach(({ name, apps }) => {
           const btn = createCategoryButton(name, () => {
             closeCategoriesDropdown();
@@ -246,10 +227,10 @@
     });
   }
 
-  window.categories = Object.freeze({
-    initDropdown,
-    loadCategories: (options) => loadCategories(options || {}),
-    resetCache: resetCategoriesCache,
-    updateDropdownLabel
+  const api = Object.freeze({
+    updateDropdownLabel,
+    initDropdown
   });
+
+  categoriesNamespace.categories.dropdown = api;
 })();

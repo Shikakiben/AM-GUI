@@ -1,5 +1,5 @@
-(function(){
-  const CATEGORY_ICON_MAP = {
+(function registerConstants(){
+  const CATEGORY_ICON_MAP = Object.freeze({
     "android": "🤖",
     "appimages": "📦",
     "audio": "🎵",
@@ -24,9 +24,14 @@
     "web-browser": "🌍",
     "wine": "🍷",
     "autre": "❓"
-  };
-  window.constants = Object.freeze({
+  });
+
+  const constants = Object.freeze({
     VISIBLE_COUNT: 50,
     CATEGORY_ICON_MAP
   });
+
+  window.appConfig = window.appConfig || {};
+  window.appConfig.constants = constants;
+  window.constants = constants;
 })();
