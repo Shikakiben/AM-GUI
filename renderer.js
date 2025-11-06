@@ -1,5 +1,5 @@
 // Lightbox ultra-légère pour images Markdown (initialisation après DOM prêt)
-window.addEventListener('DOMContentLoaded', () => {
+function initMarkdownLightbox() {
   const mdLightbox = document.getElementById('mdLightbox');
   const mdLightboxImg = document.getElementById('mdLightboxImg');
   const detailsLong = document.getElementById('detailsLong');
@@ -16,8 +16,53 @@ window.addEventListener('DOMContentLoaded', () => {
       mdLightboxImg.src = '';
     });
   }
-});
+}
 const loadedIcons = new Set();
+const scrollShell = document.querySelector('.scroll-shell');
+const appConstants = window.constants || {};
+const VISIBLE_COUNT = typeof appConstants.VISIBLE_COUNT === 'number' ? appConstants.VISIBLE_COUNT : 50;
+const CATEGORY_ICON_MAP = appConstants.CATEGORY_ICON_MAP || {};
+const appUtils = window.utils || {};
+const appPreferences = window.preferences || {};
+const getThemePref = typeof appPreferences.getThemePref === 'function'
+  ? appPreferences.getThemePref
+  : () => {
+      try { return localStorage.getItem('themePref') || 'system'; }
+      catch (_) { return 'system'; }
+    };
+const applyThemePreference = typeof appPreferences.applyThemePreference === 'function'
+  ? appPreferences.applyThemePreference
+  : () => {
+      const pref = getThemePref();
+      const root = document.documentElement;
+      root.classList.remove('theme-light','theme-dark');
+      if (pref === 'light') root.classList.add('theme-light');
+      else if (pref === 'dark') root.classList.add('theme-dark');
+    };
+const loadOpenExternalPref = typeof appPreferences.loadOpenExternalPref === 'function'
+  ? appPreferences.loadOpenExternalPref
+  : () => {
+      try { return localStorage.getItem('openExternalLinks') === '1'; }
+      catch (_) { return false; }
+    };
+const saveOpenExternalPref = typeof appPreferences.saveOpenExternalPref === 'function'
+  ? appPreferences.saveOpenExternalPref
+  : (val) => {
+      try { localStorage.setItem('openExternalLinks', val ? '1' : '0'); }
+      catch (_) {}
+    };
+const getIconUrl = typeof appUtils.getIconUrl === 'function'
+  ? appUtils.getIconUrl
+  : (name) => `appicon://${name}.png`;
+const debounce = typeof appUtils.debounce === 'function'
+  ? appUtils.debounce
+  : (fn, delay) => {
+      let timer;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+      };
+    };
 
 
 function applyViewModeClass() {
@@ -28,7 +73,6 @@ function applyViewModeClass() {
   else document.body.classList.add('view-grid');
 }
 
-const VISIBLE_COUNT = 50; // nombre de tuiles affichées à la fois
 let appListVirtual = [];
 let currentEndVirtual = VISIBLE_COUNT;
 let lastTileObserver = null;
@@ -36,8 +80,7 @@ let lastTileObserver = null;
 function setAppList(list) {
   appListVirtual = list;
   currentEndVirtual = VISIBLE_COUNT;
-  const scroller = document.querySelector('.scroll-shell');
-  if (scroller) scroller.scrollTop = 0;
+  if (scrollShell) scrollShell.scrollTop = 0;
   renderVirtualList();
 }
 
@@ -49,12 +92,14 @@ function renderVirtualList() {
     // Génère toutes les tuiles squelettes d’un coup
     // Squelettes ultra-minimaux, adaptatifs selon la vue
     const viewClass = 'view-' + (state.viewMode || 'grid');
+    const fragment = document.createDocumentFragment();
     for (let i = 0; i < appListVirtual.length; i++) {
       const skel = document.createElement('div');
       skel.className = 'app-tile-skeleton ' + viewClass;
       skel.dataset.index = i;
-      appsDiv.appendChild(skel);
+      fragment.appendChild(skel);
     }
+    appsDiv.appendChild(fragment);
     // Observer les squelettes visibles et les hydrater
     if (window.skeletonObserver) window.skeletonObserver.disconnect();
     window.skeletonObserver = new IntersectionObserver((entries) => {
@@ -67,16 +112,18 @@ function renderVirtualList() {
           window.skeletonObserver.observe(realTile); // continue à observer la vraie tuile si besoin
         }
       });
-    }, { root: document.querySelector('.scroll-shell'), threshold: 0.1 });
+    }, { root: scrollShell, threshold: 0.1 });
     // Observer les squelettes initialement visibles
     const tiles = appsDiv.querySelectorAll('.app-tile-skeleton');
     tiles.forEach(tile => window.skeletonObserver.observe(tile));
   } else {
     // Cas classique : moins de 50 apps, on rend tout normalement
     const end = Math.min(currentEndVirtual, appListVirtual.length);
+    const fragment = document.createDocumentFragment();
     for (let i = 0; i < end; i++) {
-      appsDiv.appendChild(buildTile(appListVirtual[i]));
+      fragment.appendChild(buildTile(appListVirtual[i]));
     }
+    appsDiv.appendChild(fragment);
     if (lastTileObserver) lastTileObserver.disconnect();
     if (end < appListVirtual.length) {
       // Observer les 3 dernières tuiles pour une meilleure robustesse au scroll rapide
@@ -90,7 +137,7 @@ function renderVirtualList() {
               currentEndVirtual = Math.min(currentEndVirtual + VISIBLE_COUNT, appListVirtual.length);
               renderVirtualList();
             }
-          }, { root: document.querySelector('.scroll-shell'), threshold: 0.1 });
+          }, { root: scrollShell, threshold: 0.1 });
           toObserve.forEach(tile => lastTileObserver.observe(tile));
         } catch(_) {}
       }
@@ -258,55 +305,6 @@ function initXtermLog() {
 let xterm = null;
 let xtermFit = null;
 let xtermLogDiv = null;
-function getIconUrl(app) {
-  return `appicon://${app}.png`;
-}
-// Fallback icône distante
-(function installAppiconFallback(){
-  document.addEventListener('error', (ev) => {
-    try {
-      const el = ev.target;
-      if (!el || el.tagName !== 'IMG') return;
-      const src = String(el.src || '');
-      if (!src.startsWith('appicon://')) return;
-      // éviter les boucles de fallback
-      if (el.dataset.__appiconFallbackTried) return;
-      el.dataset.__appiconFallbackTried = '1';
-      const name = src.replace(/^appicon:\/\//i, '').replace(/\?.*$/, '').replace(/#.*/, '');
-      const remote = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/' + name;
-      // log pour diagnostic minimal
-      console.warn('appicon fallback: replacing', src, 'with', remote);
-      // Remplacer après un petit délai pour laisser le navigateur finir l'événement
-      setTimeout(()=> { try { el.src = remote; } catch(_) {} }, 10);
-    } catch(_) {}
-  }, true);
-})();
-// Ajustement header & gestion erreurs
-(function initHeaderMetrics(){
-  const applyHeaderHeight = () => {
-    const header = document.querySelector('.app-header');
-    if (header) document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
-    document.documentElement.style.setProperty('--tabs-h', '0px');
-    const subBar = document.querySelector('.sub-bar');
-    if (subBar) document.documentElement.style.setProperty('--subbar-h', subBar.offsetHeight + 'px');
-  };
-  window.addEventListener('resize', applyHeaderHeight);
-  window.addEventListener('DOMContentLoaded', applyHeaderHeight);
-  if (document.readyState !== 'loading') applyHeaderHeight();
-  // Un seul appel différé pour garantir le calcul après le rendu initial
-  setTimeout(applyHeaderHeight, 150);
-  window.addEventListener('error', (ev) => {
-    const t = document.getElementById('toast');
-    if (t) { t.hidden = false; t.textContent = 'Erreur: ' + ev.message; setTimeout(()=>{ t.hidden = true; }, 5000); }
-    console.error('Erreur globale', ev.error || ev.message);
-  });
-  window.addEventListener('unhandledrejection', (ev) => {
-    const t = document.getElementById('toast');
-    if (t) { t.hidden = false; t.textContent = 'Promesse rejetée: ' + (ev.reason?.message || ev.reason); setTimeout(()=>{ t.hidden = true; }, 6000); }
-    console.error('Rejet non géré', ev.reason);
-  });
-})();
-
 // Contrôles fenêtre
 document.addEventListener('click', (e) => {
   const b = e.target.closest('.win-btn');
@@ -414,9 +412,8 @@ if (modeMenuBtn && modeMenu) {
     } else {
       setAppList(state.filtered);
     }
-    // Remettre le scroll en haut à chaque changement de mode
-    const scroller = document.querySelector('.scroll-shell');
-    if (scroller) scroller.scrollTop = 0;
+  // Remettre le scroll en haut à chaque changement de mode
+  if (scrollShell) scrollShell.scrollTop = 0;
     modeMenu.hidden = true;
     modeMenuBtn.setAttribute('aria-expanded','false');
   });
@@ -627,6 +624,7 @@ function enqueueInstall(name){
   refreshAllInstallButtons();
 }
 const toast = document.getElementById('toast');
+let toastHideTimer = null;
 const searchInput = document.getElementById('searchInput');
 let searchMode = false;
 let lastSearchValue = '';
@@ -643,7 +641,9 @@ if (searchInput) {
       const tabAll = document.querySelector('.tab[data-category="all"]');
       if (tabAll && !tabAll.classList.contains('active')) tabAll.click();
     }
-    setCategoriesDropdownBtnLabel();
+    if (window.categories && typeof window.categories.updateDropdownLabel === 'function') {
+      window.categories.updateDropdownLabel(state, t, CATEGORY_ICON_MAP);
+    }
     applySearch();
   });
 }
@@ -725,308 +725,6 @@ const lightboxNext = document.getElementById('lightboxNext');
 const lightboxClose = document.getElementById('lightboxClose');
 let lightboxState = { images: [], index: 0, originApp: null };
 
-// Cache descriptions (réinstallé)
-// --- Test catégorie dynamique ---
-// Toujours forcer le contenu du bouton Catégories (texte + flèche)
-function setCategoriesDropdownBtnLabel() {
-  const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
-  if (categoriesDropdownBtn) {
-    // Détermine la catégorie active
-    let label = t('tabs.categories');
-    let icon = '📦';
-    if (state.activeCategory && state.activeCategory !== 'all') {
-      // Cherche le nom et l’icône de la catégorie sélectionnée
-      const key = state.activeCategory.trim().toLowerCase();
-      const iconMap = {
-        "android": "🤖",
-        "appimages": "📦",
-        "audio": "🎵",
-        "comic": "📚",
-        "command-line": "💻",
-        "communication": "💬",
-        "disk": "🖴",
-        "education": "🎓",
-        "file-manager": "🗂️",
-        "finance": "💰",
-        "game": "🎮",
-        "gnome": "👣",
-        "graphic": "🎨",
-        "internet": "🌐",
-        "kde": "🖥️",
-        "office": "🗎",
-        "password": "🔑",
-        "steam": "🕹️",
-        "system-monitor": "📊",
-        "video": "🎬",
-        "web-app": "🕸️",
-        "web-browser": "🌍",
-        "wine": "🍷",
-        "autre": "❓"
-      };
-      icon = iconMap[key] || "📦";
-      label = state.activeCategory.charAt(0).toUpperCase() + state.activeCategory.slice(1);
-    } else {
-      // Cas "Tout"
-      icon = '🗃️';
-      label = t('categories.all');
-    }
-    categoriesDropdownBtn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${label}</span> <span class="cat-arrow">▼</span>`;
-  }
-}
-window.addEventListener('DOMContentLoaded', async () => {
-  // Dropdown menu catégories : ouverture/fermeture
-  const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
-  const categoriesDropdownMenu = document.getElementById('categoriesDropdownMenu'); // maintenant global, juste après <body>
-  const categoriesDropdownOverlay = document.getElementById('categoriesDropdownOverlay');
-  const dropdownCategories = document.querySelector('.dropdown-categories');
-  // Appliquer le label au chargement
-  setCategoriesDropdownBtnLabel();
-
-  // S'assurer que la flèche reste après une traduction dynamique
-  // (patch la fonction applyTranslations pour réappliquer la flèche)
-  const origApplyTranslations = applyTranslations;
-  window.applyTranslations = function() {
-    origApplyTranslations();
-    setCategoriesDropdownBtnLabel();
-  };
-  function closeCategoriesDropdown() {
-    categoriesDropdownMenu.hidden = true;
-    categoriesDropdownBtn.setAttribute('aria-expanded', 'false');
-    categoriesDropdownBtn.classList.remove('active');
-    if (categoriesDropdownOverlay) categoriesDropdownOverlay.hidden = true;
-  }
-  function openCategoriesDropdown() {
-    // Affiche le menu déroulant, largeur gérée par le CSS (100% de .content)
-    categoriesDropdownMenu.hidden = false;
-    categoriesDropdownBtn.setAttribute('aria-expanded', 'true');
-    categoriesDropdownBtn.classList.add('active');
-    if (categoriesDropdownOverlay) categoriesDropdownOverlay.hidden = false;
-  }
-  // Fonction factorisée pour créer un bouton de catégorie
-  function createCategoryButton(name, onClick) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'category-btn';
-    // Mapping d'icônes génériques par catégorie
-    const iconMap = {
-      "android": "🤖",
-      "appimages": "📦",
-      "audio": "🎵",
-      "comic": "📚",
-      "command-line": "💻",
-      "communication": "💬",
-      "disk": "🖴",
-      "education": "🎓",
-      "file-manager": "🗂️",
-      "finance": "💰",
-      "game": "🎮",
-      "gnome": "👣",
-      "graphic": "🎨",
-      "internet": "🌐",
-      "kde": "🖥️",
-      "office": "🗎",
-      "password": "🔑",
-      "steam": "🕹️",
-      "system-monitor": "📊",
-      "video": "🎬",
-      "web-app": "🕸️",
-      "web-browser": "🌍",
-      "wine": "🍷",
-      "autre": "❓"
-    };
-    const key = name.trim().toLowerCase();
-    const icon = iconMap[key] || "📦";
-    btn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${name.charAt(0).toUpperCase() + name.slice(1)}</span>`;
-    btn.onclick = onClick;
-    return btn;
-  }
-  if (categoriesDropdownBtn && categoriesDropdownMenu) {
-    categoriesDropdownBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (categoriesDropdownMenu.hidden) openCategoriesDropdown();
-      else closeCategoriesDropdown();
-    });
-    // Fermer au clic extérieur ou sur l'overlay
-    if (categoriesDropdownOverlay) {
-      categoriesDropdownOverlay.addEventListener('click', () => closeCategoriesDropdown());
-    }
-    document.addEventListener('click', (e) => {
-      if (!categoriesDropdownMenu.hidden && !categoriesDropdownMenu.contains(e.target) && e.target !== categoriesDropdownBtn) {
-        closeCategoriesDropdown();
-      }
-    });
-    // Fermer au changement d’onglet principal
-    document.querySelectorAll('.tab[data-category]').forEach(tab => {
-      tab.addEventListener('click', () => {
-        closeCategoriesDropdown();
-      });
-    });
-  }
-  function updateAppsModeBarVisibility() {
-    // Affiche ou masque la barre de catégorie sélectionnée uniquement
-    // Barre supprimée : plus d’action
-    setCategoriesDropdownBtnLabel();
-  }
-  // Bouton "Tout"
-  // Logique Catégories migrée sur l'onglet secondaire
-  let categoriesCache = null;
-  async function loadCategories() {
-    if (categoriesCache) return categoriesCache;
-    try {
-      const cacheRes = await window.electronAPI.getCategoriesCache();
-      if (cacheRes.ok && Array.isArray(cacheRes.categories) && cacheRes.categories.length > 0) {
-        categoriesCache = cacheRes.categories;
-        return categoriesCache;
-      }
-    } catch(e) {}
-    try {
-      const res = await window.electronAPI.fetchAllCategories();
-      if (!res.ok || !Array.isArray(res.categories)) throw new Error(res.error || 'Erreur catégories');
-      categoriesCache = res.categories;
-      return categoriesCache;
-    } catch(e) {
-      showToast('Erreur catégories: ' + (e.message || e));
-      return [];
-    }
-  }
-  loadCategories();
-  // Attacher la logique sur l'onglet secondaire
-  // (Nettoyé : plus d'ajout de flèche JS sur .tab-secondary)
-  const tabSecondary = document.querySelector('.tab-secondary');
-  if (tabSecondary) {
-    tabSecondary.addEventListener('click', async () => {
-      document.querySelectorAll('.tab-secondary').forEach(t => t.classList.remove('active'));
-      tabSecondary.classList.add('active');
-      if (appDetailsSection) appDetailsSection.hidden = true;
-      document.body.classList.remove('details-mode');
-      if (appsDiv) appsDiv.hidden = false;
-      state.currentDetailsApp = null;
-      const categoriesDropdownMenu = document.getElementById('categoriesDropdownMenu');
-      if (!categoriesDropdownMenu) return;
-      categoriesDropdownMenu.innerHTML = '';
-      const categories = await loadCategories();
-      // Générer les entrées de catégorie sous forme de boutons stylés
-      categories.forEach(({ name, apps }) => {
-        const btn = createCategoryButton(name, () => {
-          closeCategoriesDropdown();
-          if (appDetailsSection) appDetailsSection.hidden = true;
-          document.body.classList.remove('details-mode');
-          if (appsDiv) appsDiv.hidden = false;
-          state.currentDetailsApp = null;
-          state.activeCategory = name;
-          setCategoriesDropdownBtnLabel();
-          const filteredApps = Array.isArray(apps) ? apps.filter(a => typeof a === 'string' && a.length > 0) : [];
-          const detailedApps = filteredApps.map(appName => {
-            const found = Array.isArray(state.allApps) ? state.allApps.find(x => x && x.name === appName) : null;
-            return found ? { ...found } : { name: appName };
-          });
-          setAppList(detailedApps);
-          showToast(`Catégorie "${name}" : ${filteredApps.length} apps`);
-        });
-        categoriesDropdownMenu.appendChild(btn);
-      });
-      // Bouton "Autre" affiché immédiatement, désactivé/spinner
-      const btnOther = createCategoryButton('Autre', () => {});
-      btnOther.disabled = true;
-      btnOther.innerHTML += ' <span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">⏳</span>';
-      categoriesDropdownMenu.appendChild(btnOther);
-      // Calcul asynchrone des apps non catégorisées
-      setTimeout(() => {
-        const allCategorizedNames = new Set();
-        categories.forEach(cat => {
-          if (Array.isArray(cat.apps)) {
-            cat.apps.forEach(name => allCategorizedNames.add(name));
-          }
-        });
-        const uncategorizedApps = Array.isArray(state.allApps)
-          ? state.allApps.filter(app => app && !allCategorizedNames.has(app.name))
-          : [];
-        // Remplacer le handler et l'état du bouton
-        btnOther.disabled = uncategorizedApps.length === 0;
-        btnOther.querySelector('.cat-spinner')?.remove();
-        btnOther.onclick = () => {
-          closeCategoriesDropdown();
-          if (appDetailsSection) appDetailsSection.hidden = true;
-          document.body.classList.remove('details-mode');
-          if (appsDiv) appsDiv.hidden = false;
-          state.currentDetailsApp = null;
-          state.activeCategory = 'autre';
-          setCategoriesDropdownBtnLabel();
-          setAppList(uncategorizedApps);
-          showToast(`Autres applications : ${uncategorizedApps.length}`);
-        };
-      }, 0);
-    });
-  }
-  // Par défaut, affiche tout via l'onglet Applications
-  const tabApplications = document.querySelector('.tab[data-category="all"]');
-  if (tabApplications) tabApplications.click();
-  // Affiche ou masque le bouton Catégorie selon l'onglet actif
-  function updateDropdownCategoriesVisibility() {
-    const activeTab = document.querySelector('.tab.active');
-    if (!dropdownCategories) return;
-    if (activeTab && activeTab.dataset.category === 'all') {
-      dropdownCategories.style.display = '';
-    } else {
-      dropdownCategories.style.display = 'none';
-      if (categoriesDropdownMenu) categoriesDropdownMenu.hidden = true;
-      if (categoriesDropdownBtn) {
-        categoriesDropdownBtn.setAttribute('aria-expanded', 'false');
-        categoriesDropdownBtn.classList.remove('active');
-      }
-    }
-  }
-  // Sur chaque changement d'onglet principal, mettre à jour la visibilité
-  document.querySelectorAll('.tab[data-category]').forEach(tab => {
-    tab.addEventListener('click', () => setTimeout(updateDropdownCategoriesVisibility, 0));
-  });
-  // Initialiser la visibilité au chargement
-  updateDropdownCategoriesVisibility();
-
-  // Sécurité : s'assurer que le bouton n'est jamais bloqué en mode "active" si le menu est caché
-  document.addEventListener('mousemove', () => {
-    if (categoriesDropdownMenu && categoriesDropdownBtn && categoriesDropdownMenu.hidden && categoriesDropdownBtn.classList.contains('active')) {
-      categoriesDropdownBtn.classList.remove('active');
-    }
-  });
-
-  // (Suppression du masquage automatique de catBar sur changement d’onglet)
-  updateAppsModeBarVisibility();
-
-  // Sur changement d’onglet, mettre à jour la visibilité
-  tabs.forEach(tab => {
-    tab.addEventListener('click', async () => {
-      setTimeout(updateAppsModeBarVisibility, 0);
-      // Désactive l'onglet secondaire 'Categories' si on quitte Applications
-      if (tab.getAttribute('data-category') !== 'all') {
-        document.querySelectorAll('.tab-secondary').forEach(t => t.classList.remove('active'));
-      }
-      // Si on clique sur l'onglet Applications, afficher toutes les apps
-      if (tab.dataset.category === 'all') {
-        if (appDetailsSection) appDetailsSection.hidden = true;
-        document.body.classList.remove('details-mode');
-        if (appsDiv) appsDiv.hidden = false;
-        state.currentDetailsApp = null;
-        // Masque le nom de la catégorie sélectionnée
-  // Suppression de la barre : rien à faire
-        // Affiche toutes les apps
-        if (!Array.isArray(state.allApps) || state.allApps.length === 0) {
-          setAppList([]);
-          showToast('Chargement des applications…');
-          await loadApps();
-        }
-        if (Array.isArray(state.allApps) && state.allApps.length > 0) {
-          setAppList(state.allApps);
-          showToast(`Toutes les applications : ${state.allApps.length}`);
-        } else {
-          showToast('Aucune application trouvée.');
-        }
-        // (plus de bouton Catégories à désactiver)
-  // (plus de bouton Catégories à désactiver)
-      }
-    });
-  });
-});
 const descriptionCache = new Map();
 const translations = window.translations || {};
 // --- Gestion multilingue ---
@@ -1125,8 +823,8 @@ function applyTranslations() {
   }
 }
 
-// Appliquer la langue au chargement
-window.addEventListener('DOMContentLoaded', () => {
+// Appliquer la langue et préparer les contrôles
+function initLanguagePreferences() {
   applyTranslations();
   // Mettre à jour l'attribut lang du HTML
   document.documentElement.setAttribute('lang', getLangPref());
@@ -1161,6 +859,30 @@ window.addEventListener('DOMContentLoaded', () => {
       } catch(_){}
     });
   } catch(_) {}
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    initMarkdownLightbox();
+    initIconObserver();
+    await loadApps();
+    if (window.categories && typeof window.categories.initDropdown === 'function') {
+      await window.categories.initDropdown({
+        state,
+        t,
+        showToast,
+        setAppList,
+        loadApps,
+        appDetailsSection,
+        appsDiv,
+        tabs,
+        iconMap: CATEGORY_ICON_MAP
+      });
+    }
+    initLanguagePreferences();
+  } catch (err) {
+    console.error('Erreur initialisation DOM', err);
+  }
 });
 
 // Gérer le changement de langue
@@ -1190,12 +912,6 @@ if (updatesPanel) {
 if (advancedPanel) {
   advancedPanel.hidden = true;
 }
-function applyThemePreference() {
-  const pref = localStorage.getItem('themePref') || 'system';
-  document.documentElement.classList.remove('theme-light','theme-dark');
-  if (pref === 'light') document.documentElement.classList.add('theme-light');
-  else if (pref === 'dark') document.documentElement.classList.add('theme-dark');
-}
 applyThemePreference();
 
 // Initialisation defaultMode
@@ -1213,7 +929,7 @@ if (settingsBtn && settingsPanel) {
       settingsBtn.setAttribute('aria-expanded','false');
     } else {
       // Synchroniser radios
-      const themePref = localStorage.getItem('themePref') || 'system';
+  const themePref = getThemePref();
       settingsPanel.querySelectorAll('input[name="themePref"]').forEach(r => { r.checked = (r.value === themePref); });
       settingsPanel.hidden = false;
       settingsBtn.setAttribute('aria-expanded','true');
@@ -1284,13 +1000,6 @@ if (settingsBtn && settingsPanel) {
 // --- Opening external links preference ---
 // Key: openExternalLinks (string '1' == true)
 const openExternalCheckbox = document.getElementById('openExternalLinksCheckbox');
-function loadOpenExternalPref() {
-  const v = localStorage.getItem('openExternalLinks');
-  return v === '1';
-}
-function saveOpenExternalPref(val) {
-  localStorage.setItem('openExternalLinks', val ? '1' : '0');
-}
 // Initialiser checkbox état à l'ouverture du panneau
 if (openExternalCheckbox) {
   openExternalCheckbox.checked = loadOpenExternalPref();
@@ -1322,7 +1031,11 @@ function showToast(msg) {
   if (!toast) return;
   toast.textContent = msg;
   toast.hidden = false;
-  setTimeout(()=> { if (toast) toast.hidden = true; }, 2300);
+  if (toastHideTimer) clearTimeout(toastHideTimer);
+  toastHideTimer = setTimeout(() => {
+    toast.hidden = true;
+    toastHideTimer = null;
+  }, 2300);
 }
 
 async function loadApps() {
@@ -1422,8 +1135,7 @@ function showDetails(appName) {
   const app = state.allApps.find(a => a.name === appName);
   if (!app) return;
   // Mémoriser la position de scroll actuelle (shell scrollable)
-  const scroller = document.querySelector('.scroll-shell');
-  if (scroller) state.lastScrollY = scroller.scrollTop;
+  if (scrollShell) state.lastScrollY = scrollShell.scrollTop;
   state.currentDetailsApp = app.name;
   const label = app.name.charAt(0).toUpperCase() + app.name.slice(1);
   const version = app.version ? String(app.version) : null;
@@ -1527,8 +1239,7 @@ function exitDetailsView() {
   // Nettoyer tous les états busy/spinner sur les tuiles
   document.querySelectorAll('.app-tile.busy').forEach(t => t.classList.remove('busy'));
   // Restaurer scroll
-  const scroller = document.querySelector('.scroll-shell');
-  if (scroller) scroller.scrollTop = state.lastScrollY || 0;
+  if (scrollShell) scrollShell.scrollTop = state.lastScrollY || 0;
   // Mémoriser dernier détail pour potentielle restauration
   if (state.currentDetailsApp) sessionStorage.setItem('lastDetailsApp', state.currentDetailsApp);
 }
@@ -1712,14 +1423,17 @@ appsDiv?.addEventListener('click', (e) => {
 });
 
 // Debounce recherche pour éviter re-rendus superflus
-function debounce(fn, delay){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), delay); }; }
 searchInput?.addEventListener('input', debounce(applySearch, 140));
 async function triggerRefresh() {
   if (!refreshBtn) return;
   if (refreshBtn.classList.contains('loading')) return;
   // Rafraîchir le cache des catégories comme au démarrage
-  if (typeof categoriesCache !== 'undefined') categoriesCache = null;
-  if (typeof loadCategories === 'function') await loadCategories();
+  if (window.categories && typeof window.categories.resetCache === 'function') {
+    window.categories.resetCache();
+  }
+  if (window.categories && typeof window.categories.loadCategories === 'function') {
+    await window.categories.loadCategories({ showToast });
+  }
   // Bascule sur l'onglet Applications (remplace btnAll)
   const tabApplications = document.querySelector('.tab[data-category="all"]');
   if (tabApplications) tabApplications.click();
@@ -1878,6 +1592,9 @@ tabs.forEach(tab => {
     tabs.forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     state.activeCategory = tab.getAttribute('data-category') || 'all';
+    if (window.categories && typeof window.categories.updateDropdownLabel === 'function') {
+      window.categories.updateDropdownLabel(state, t, CATEGORY_ICON_MAP);
+    }
     applySearch();
     // Fermer tout prompt de choix interactif lors du changement d’onglet
     document.querySelectorAll('.choice-dialog').forEach(e => e.remove());

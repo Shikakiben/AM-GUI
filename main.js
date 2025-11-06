@@ -517,6 +517,13 @@ ipcMain.handle('purge-icons-cache', async () => {
     for (const f of files) {
       try { fs.unlinkSync(path.join(iconsCacheDir, f)); removed++; } catch(_){}
     }
+    // Réinitialiser les variables internes
+    iconsMeta = {};
+    inFlightDownloads.clear();
+    // Sauvegarder l'état vide
+    if (iconsMetaPath) {
+      try { fs.writeFileSync(iconsMetaPath, '{}'); } catch(_){}
+    }
   } catch(_){}
   return { removed };
 });
