@@ -338,6 +338,8 @@ const state = {
   installed: new Set() // ensemble des noms installés (lowercase)
 };
 
+let applySearch = () => {};
+
 // --- Gestion accélération GPU ---
 if (disableGpuCheckbox && window.electronAPI && window.electronAPI.getGpuPref && window.electronAPI.setGpuPref) {
   // Charger l'état au démarrage
@@ -625,28 +627,6 @@ function enqueueInstall(name){
 }
 const toast = document.getElementById('toast');
 let toastHideTimer = null;
-const searchInput = document.getElementById('searchInput');
-let searchMode = false;
-let lastSearchValue = '';
-
-if (searchInput) {
-  searchInput.addEventListener('focus', () => {
-    searchMode = true;
-    if (lastSearchValue) searchInput.value = lastSearchValue;
-    // Simuler le clic sur le bouton retour si visible
-    const backBtn = document.getElementById('backToListBtn');
-    if (backBtn && backBtn.offsetParent !== null) backBtn.click();
-    if (state.activeCategory !== 'all') {
-      state.activeCategory = 'all';
-      const tabAll = document.querySelector('.tab[data-category="all"]');
-      if (tabAll && !tabAll.classList.contains('active')) tabAll.click();
-    }
-    if (window.categories && typeof window.categories.updateDropdownLabel === 'function') {
-      window.categories.updateDropdownLabel(state, t, CATEGORY_ICON_MAP);
-    }
-    applySearch();
-  });
-}
 const refreshBtn = document.getElementById('refreshBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
@@ -663,6 +643,25 @@ const updateResult = document.getElementById('updateResult');
 const updateFinalMessage = document.getElementById('updateFinalMessage');
 const updatedAppsIcons = document.getElementById('updatedAppsIcons');
 const installedCountEl = document.getElementById('installedCount');
+
+const searchFeature = window.features?.search?.init?.({
+  state,
+  searchInput: document.getElementById('searchInput'),
+  tabs: Array.from(tabs),
+  setAppList,
+  updatesPanel,
+  advancedPanel,
+  appsContainer: appsDiv,
+  refreshInstallUi: () => refreshAllInstallButtons(),
+  categoriesApi: window.categories,
+  translate: t,
+  iconMap: CATEGORY_ICON_MAP,
+  exitDetailsView,
+  debounce
+});
+if (searchFeature && typeof searchFeature.applySearch === 'function') {
+  applySearch = searchFeature.applySearch;
+}
 // Modale sortie brute update
 const showRawUpdateBtn = document.getElementById('showRawUpdateBtn');
 const rawUpdateModal = document.getElementById('rawUpdateModal');
@@ -1246,58 +1245,6 @@ function exitDetailsView() {
 
 backToListBtn?.addEventListener('click', exitDetailsView);
 
-function applySearch() {
-  // Gestion du mode recherche :
-  let base = state.allApps;
-  if (state.activeCategory === 'updates') {
-    if (updatesPanel) updatesPanel.hidden = false;
-    if (advancedPanel) advancedPanel.hidden = true;
-    setAppList([]);
-    if (appsDiv) appsDiv.innerHTML = '';
-    return;
-  }
-  if (state.activeCategory === 'advanced') {
-    if (advancedPanel) advancedPanel.hidden = false;
-    if (updatesPanel) updatesPanel.hidden = true;
-    setAppList([]);
-    if (appsDiv) appsDiv.innerHTML = '';
-    return;
-  }
-  if (updatesPanel) updatesPanel.hidden = true;
-  if (advancedPanel) advancedPanel.hidden = true;
-  if (state.activeCategory === 'installed') {
-    // Dès qu'on quitte "Tout", on désactive la recherche
-    if (searchMode) {
-      searchMode = false;
-      lastSearchValue = searchInput?.value || '';
-      if (searchInput) searchInput.blur();
-    }
-    base = state.allApps.filter(a => a.installed && (a.hasDiamond === true));
-  } else if (state.activeCategory !== 'all') {
-    // Dès qu'on quitte "Tout", on désactive la recherche
-    if (searchMode) {
-      searchMode = false;
-      lastSearchValue = searchInput?.value || '';
-      if (searchInput) searchInput.blur();
-    }
-    base = state.allApps.filter(app => app.category === state.activeCategory);
-  }
-  let filtered = base;
-  if (searchMode && searchInput && searchInput.value.trim() !== '') {
-    const q = searchInput.value.trim().toLowerCase();
-    const words = q.split(/\s+/).filter(Boolean);
-    filtered = base.filter(app => {
-      const name = (app.name || '').toLowerCase();
-      const desc = (app.desc || '').toLowerCase();
-      // Tous les mots doivent être présents dans name OU desc
-      return words.every(word => name.includes(word) || desc.includes(word));
-    });
-  }
-  state.filtered = filtered;
-  setAppList(filtered);
-  if (typeof refreshAllInstallButtons === 'function') refreshAllInstallButtons();
-}
-
 // Listeners (vue détaillée) pour installation / désinstallation
 detailsInstallBtn?.addEventListener('click', async () => {
   const name = detailsInstallBtn.getAttribute('data-name');
@@ -1423,7 +1370,6 @@ appsDiv?.addEventListener('click', (e) => {
 });
 
 // Debounce recherche pour éviter re-rendus superflus
-searchInput?.addEventListener('input', debounce(applySearch, 140));
 async function triggerRefresh() {
   if (!refreshBtn) return;
   if (refreshBtn.classList.contains('loading')) return;
