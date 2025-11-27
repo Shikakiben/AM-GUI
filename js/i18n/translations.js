@@ -98,13 +98,9 @@
       'advanced.docs': 'Documentation complète & guides →',
       'details.back': '← Retour',
       'details.desc': 'Description',
-      'details.captures': 'Captures',
       'details.install': 'Installer',
       'details.uninstall': 'Désinstaller',
       'install.lines': '0 lignes',
-      'lightbox.close': 'Fermer',
-      'lightbox.prev': 'Précédente',
-      'lightbox.next': 'Suivante',
       'modal.updateTitle': 'Détails de la mise à jour',
       'modal.close': 'Fermer',
       'modal.copy': 'Copier',
@@ -114,7 +110,13 @@
       'confirm.ok': 'Valider',
       'warning.title': 'Avertissement',
       'warning.checkboxText': "Je reste avec wget2, ne plus afficher cet avertissement (peut causer des bugs mineurs)",
-      'warning.closeBtn': 'Fermer'
+      'warning.closeBtn': 'Fermer',
+      'password.title': 'Mot de passe requis',
+      'password.desc': 'Pour continuer, veuillez entrer votre mot de passe administrateur.',
+      'password.placeholder': 'Mot de passe',
+      'password.ok': 'Valider',
+      'password.cancel': 'Annuler',
+      'password.error': 'Veuillez entrer un mot de passe.'
     },
     en: {
       'categories.all': 'All',
@@ -214,13 +216,9 @@
       'advanced.docs': 'Complete documentation & guides →',
       'details.back': '← Back',
       'details.desc': 'Description',
-      'details.captures': 'Screenshots',
       'details.install': 'Install',
       'details.uninstall': 'Uninstall',
       'install.lines': '0 lines',
-      'lightbox.close': 'Close',
-      'lightbox.prev': 'Previous',
-      'lightbox.next': 'Next',
       'modal.updateTitle': 'Update details',
       'modal.close': 'Close',
       'modal.copy': 'Copy',
@@ -230,7 +228,13 @@
       'confirm.ok': 'OK',
       'warning.title': 'Warning',
       'warning.checkboxText': "I stay with wget2, do not show this warning again (may cause minor bugs)",
-      'warning.closeBtn': 'Close'
+      'warning.closeBtn': 'Close',
+      'password.title': 'Password required',
+      'password.desc': 'To continue, please enter your administrator password.',
+      'password.placeholder': 'Password',
+      'password.ok': 'OK',
+      'password.cancel': 'Cancel',
+      'password.error': 'Please enter a password.'
     },
     it: {
       'categories.all': 'Tutte',
@@ -330,13 +334,9 @@
       'advanced.docs': 'Documentazione completa & guide →',
       'details.back': '← Indietro',
       'details.desc': 'Descrizione',
-      'details.captures': 'Screenshot',
       'details.install': 'Installa',
       'details.uninstall': 'Disinstalla',
       'install.lines': '0 righe',
-      'lightbox.close': 'Chiudi',
-      'lightbox.prev': 'Precedente',
-      'lightbox.next': 'Successiva',
       'modal.updateTitle': 'Dettagli aggiornamento',
       'modal.close': 'Chiudi',
       'modal.copy': 'Copia',
@@ -346,7 +346,13 @@
       'confirm.ok': 'Conferma',
       'warning.title': 'Avviso',
       'warning.checkboxText': "Resto con wget2, non mostrare più questo avviso (potrebbe causare piccoli bug)",
-      'warning.closeBtn': 'Chiudi'
+      'warning.closeBtn': 'Chiudi',
+      'password.title': 'Password richiesto',
+      'password.desc': 'Per continuare, inserisci la tua password di amministratore.',
+      'password.placeholder': 'Password',
+      'password.ok': 'Conferma',
+      'password.cancel': 'Annulla',
+      'password.error': 'Inserisci una password.'
     }
   };
 

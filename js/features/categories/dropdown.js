@@ -128,9 +128,13 @@
             state.currentDetailsApp = null;
             state.activeCategory = name;
             updateLabel();
+            // Normalisation des noms pour le mapping
+            const normalize = s => (s || '').toLowerCase().trim();
             const filteredApps = Array.isArray(apps) ? apps.filter(a => typeof a === 'string' && a.length > 0) : [];
             const detailedApps = filteredApps.map(appName => {
-              const found = Array.isArray(state.allApps) ? state.allApps.find(x => x && x.name === appName) : null;
+              const found = Array.isArray(state.allApps)
+                ? state.allApps.find(x => x && normalize(x.name) === normalize(appName))
+                : null;
               return found ? { ...found } : { name: appName };
             });
             setAppList(detailedApps);
@@ -143,14 +147,16 @@
         btnOther.innerHTML += ' <span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">⏳</span>';
         categoriesDropdownMenu.appendChild(btnOther);
         setTimeout(() => {
+          // Normalisation des noms pour éviter les faux "autre"
+          const normalize = s => (s || '').toLowerCase().trim();
           const allCategorizedNames = new Set();
           categories.forEach(cat => {
             if (Array.isArray(cat.apps)) {
-              cat.apps.forEach(name => allCategorizedNames.add(name));
+              cat.apps.forEach(name => allCategorizedNames.add(normalize(name)));
             }
           });
           const uncategorizedApps = Array.isArray(state.allApps)
-            ? state.allApps.filter(app => app && !allCategorizedNames.has(app.name))
+            ? state.allApps.filter(app => app && !allCategorizedNames.has(normalize(app.name)))
             : [];
           btnOther.disabled = uncategorizedApps.length === 0;
           btnOther.querySelector('.cat-spinner')?.remove();

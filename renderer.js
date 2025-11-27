@@ -163,6 +163,15 @@ function renderVirtualList() {
   }
 }
 
+
+// --- Intégration du prompt mot de passe sudo ---
+if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
+  window.electronAPI.onPasswordPrompt(async (data) => {
+    if (!window.ui || !window.ui.passwordPrompt || typeof window.ui.passwordPrompt.promptPassword !== 'function') return;
+    const password = await window.ui.passwordPrompt.promptPassword();
+    window.electronAPI.sendPassword({ id: data && data.id, password });
+  });
+}
 // ...existing code...
 
 
@@ -459,6 +468,45 @@ let activeInstallSession = {
 // File d'attente séquentielle
 const installQueue = []; // noms d'apps en attente (FIFO)
 
+let detailsApi = null;
+
+function ensureDetailsApi() {
+  if (detailsApi) return detailsApi;
+  const initFn = window.features?.details?.init;
+  if (typeof initFn !== 'function') return null;
+  detailsApi = initFn({
+    state,
+    activeInstallSession,
+    getIconUrl,
+    showToast,
+    translate: t,
+    enqueueInstall,
+    removeFromQueue,
+    refreshAllInstallButtons,
+    setAppList,
+    loadApps,
+    openActionConfirm,
+    scrollShell,
+    appsContainer: appsDiv,
+    getActiveInstallSession: () => activeInstallSession,
+    elements: {
+      appDetailsSection,
+      backToListBtn,
+      detailsIcon,
+      detailsName,
+      detailsLong,
+      detailsInstallBtn,
+      detailsUninstallBtn,
+      installStream,
+      installStreamElapsed,
+      installProgressBar,
+      installProgressPercentLabel,
+      installProgressEtaLabel
+    }
+  }) || null;
+  return detailsApi;
+}
+
 function getQueuePosition(name){
   const idx = installQueue.indexOf(name);
   return idx === -1 ? -1 : (idx + 1); // position 1-based
@@ -627,7 +675,8 @@ function enqueueInstall(name){
 }
 const toast = document.getElementById('toast');
 let toastHideTimer = null;
-const refreshBtn = document.getElementById('refreshBtn');
+
+let syncBtn = null;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const purgeIconsBtn = document.getElementById('purgeIconsBtn');
@@ -862,7 +911,6 @@ function initLanguagePreferences() {
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    initMarkdownLightbox();
     initIconObserver();
     await loadApps();
     if (window.categories && typeof window.categories.initDropdown === 'function') {
@@ -877,6 +925,32 @@ window.addEventListener('DOMContentLoaded', async () => {
         tabs,
         iconMap: CATEGORY_ICON_MAP
       });
+    }
+    // Remplacer le bouton refresh par le nouveau bouton sync (après chargement du script)
+    if (window.syncButton && !syncBtn) {
+      const { createSyncButton, replaceSyncButton } = window.syncButton;
+      syncBtn = createSyncButton({
+        onSync: async () => {
+          // Suppression forcée du cache fichier catégories
+          if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
+            await window.electronAPI.deleteCategoriesCache();
+          }
+          // Rafraîchir le cache JS des catégories
+          if (window.categories && typeof window.categories.resetCache === 'function') {
+            window.categories.resetCache();
+          }
+          if (window.categories && typeof window.categories.loadCategories === 'function') {
+            await window.categories.loadCategories({ showToast });
+          }
+          // Bascule sur l'onglet Applications
+          const tabApplications = document.querySelector('.tab[data-category="all"]');
+          if (tabApplications) tabApplications.click();
+          showToast(t('toast.refreshing'));
+          await loadApps();
+          applySearch();
+        }
+      });
+      replaceSyncButton(syncBtn);
     }
     initLanguagePreferences();
   } catch (err) {
@@ -1243,67 +1317,21 @@ function exitDetailsView() {
   if (state.currentDetailsApp) sessionStorage.setItem('lastDetailsApp', state.currentDetailsApp);
 }
 
-backToListBtn?.addEventListener('click', exitDetailsView);
+const legacyShowDetails = showDetails;
+const legacyExitDetailsView = exitDetailsView;
 
-// Listeners (vue détaillée) pour installation / désinstallation
-detailsInstallBtn?.addEventListener('click', async () => {
-  const name = detailsInstallBtn.getAttribute('data-name');
-  if (!name) return;
-  const action = detailsInstallBtn.getAttribute('data-action') || 'install';
-  if (action === 'cancel-install') {
-    if (activeInstallSession.id) {
-      try { await window.electronAPI.installCancel(activeInstallSession.id); } catch(_){ }
-      showToast(t('toast.cancelRequested'));
-      // Lancer la désinstallation directement après l'annulation
-      try {
-        await window.electronAPI.amAction('uninstall', name);
-        await loadApps();
-        showDetails(name);
-      } catch(_){}
-    }
-    return;
-  }
-  if (action === 'remove-queue') { removeFromQueue(name); return; }
-  const ok = await openActionConfirm({
-  title: t('confirm.installTitle'),
-  message: t('confirm.installMsg', {name: `<strong>${name}</strong>`}),
-  okLabel: t('details.install')
-  });
-  if (!ok) return;
-  if (activeInstallSession.id && !activeInstallSession.done) {
-    enqueueInstall(name);
-    detailsInstallBtn.classList.remove('loading');
-    refreshAllInstallButtons();
-    return;
-  }
-  // Mise à jour immédiate du bouton avant réponse IPC pour meilleure réactivité
-  detailsInstallBtn.classList.remove('loading');
-  detailsInstallBtn.disabled = false;
-  detailsInstallBtn.setAttribute('aria-label','Annuler installation en cours ('+name+')');
-  enqueueInstall(name);
-});
-
-detailsUninstallBtn?.addEventListener('click', async () => {
-  const name = detailsUninstallBtn.getAttribute('data-name');
-  if (!name) return;
-  const ok = await openActionConfirm({
-  title: t('confirm.uninstallTitle'),
-  message: t('confirm.uninstallMsg', {name: `<strong>${name}</strong>`}),
-  okLabel: t('details.uninstall'),
-  intent: 'danger'
-  });
-  if (!ok) return;
-  detailsUninstallBtn.classList.add('loading');
-  detailsUninstallBtn.disabled = true;
-  showToast(t('toast.uninstalling', {name}));
-  try {
-    await window.electronAPI.amAction('uninstall', name);
-  } finally {
-    await loadApps();
-    showDetails(name);
-    detailsUninstallBtn.classList.remove('loading');
-  }
-});
+(function wireDetailsModule() {
+  const api = ensureDetailsApi();
+  if (!api) return;
+  showDetails = (appName) => {
+    if (api && typeof api.showDetails === 'function') api.showDetails(appName);
+    else legacyShowDetails(appName);
+  };
+  exitDetailsView = () => {
+    if (api && typeof api.exitDetailsView === 'function') api.exitDetailsView();
+    else legacyExitDetailsView();
+  };
+})();
 
 appsDiv?.addEventListener('click', (e) => {
   const actionBtn = e.target.closest('.inline-action');
@@ -1370,30 +1398,7 @@ appsDiv?.addEventListener('click', (e) => {
 });
 
 // Debounce recherche pour éviter re-rendus superflus
-async function triggerRefresh() {
-  if (!refreshBtn) return;
-  if (refreshBtn.classList.contains('loading')) return;
-  // Rafraîchir le cache des catégories comme au démarrage
-  if (window.categories && typeof window.categories.resetCache === 'function') {
-    window.categories.resetCache();
-  }
-  if (window.categories && typeof window.categories.loadCategories === 'function') {
-    await window.categories.loadCategories({ showToast });
-  }
-  // Bascule sur l'onglet Applications (remplace btnAll)
-  const tabApplications = document.querySelector('.tab[data-category="all"]');
-  if (tabApplications) tabApplications.click();
-  showToast(t('toast.refreshing'));
-  refreshBtn.classList.add('loading');
-  try {
-    await loadApps();
-    applySearch();
-  } finally {
-    setTimeout(()=> refreshBtn.classList.remove('loading'), 300);
-    if (updateSpinner) updateSpinner.hidden = true;
-  }
-}
-refreshBtn?.addEventListener('click', triggerRefresh);
+
 
 // Unification des raccourcis clavier
 window.addEventListener('keydown', (e) => {
@@ -1673,8 +1678,22 @@ runUpdatesBtn?.addEventListener('click', async () => {
     const res = await window.electronAPI.amAction('__update_all__');
     lastUpdateRaw = res || '';
     handleUpdateCompletion(res || '');
+    // --- Synchronisation complète comme le bouton sync ---
+    if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
+      await window.electronAPI.deleteCategoriesCache();
+    }
+    if (window.categories && typeof window.categories.resetCache === 'function') {
+      window.categories.resetCache();
+    }
+    if (window.categories && typeof window.categories.loadCategories === 'function') {
+      await window.categories.loadCategories({ showToast });
+    }
+    const tabApplications = document.querySelector('.tab[data-category="all"]');
+    if (tabApplications) tabApplications.click();
+    showToast(t('toast.refreshing'));
     await loadApps();
     applySearch();
+    // --- Fin synchronisation ---
     try {
       const needs = state.allApps.some(a => a.installed && (!a.version || String(a.version).toLowerCase().includes('unsupported')));
       if (needs) {

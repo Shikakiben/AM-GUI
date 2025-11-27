@@ -12,8 +12,7 @@
 
 - **Displays a catalog of AppImage applications** available via AM/appman, with icons.
 - **One-click installation and removal** of AppImage applications.
-- **Fast search and sorting** of software (coming soon).
-- **Displays results and action feedback** (success/errors).
+- **Fast search and sorting** of software
 
 ---
 
@@ -69,13 +68,6 @@ npm start
 
 ---
 
-## Architecture
-
-- **main.js**: Manages the Electron window, communicates with `AM`/`appman`, and sends the application list to the renderer.
-- **preload.js**: Provides a secure bridge between the frontend (renderer) and Electron's backend.
-- **renderer.js**: Dynamically generates the user interface, handles actions, and displays icons.
-
----
 
 
 ## Acknowledgements

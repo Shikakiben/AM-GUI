@@ -21,9 +21,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onInstallProgress: (cb) => ipcRenderer.on('install-progress', (e, msg) => cb && cb(msg)),
   purgeIconsCache: () => ipcRenderer.invoke('purge-icons-cache'),
   getGpuPref: () => ipcRenderer.invoke('get-gpu-pref'),
-  setGpuPref: (val) => ipcRenderer.invoke('set-gpu-pref', val)
-  ,fetchAllCategories: () => ipcRenderer.invoke('fetch-all-categories')
-  ,getCategoriesCache: () => ipcRenderer.invoke('get-categories-cache')
+  setGpuPref: (val) => ipcRenderer.invoke('set-gpu-pref', val),
+  fetchAllCategories: () => ipcRenderer.invoke('fetch-all-categories'),
+  getCategoriesCache: () => ipcRenderer.invoke('get-categories-cache'),
+  // Ajout pour gestion mot de passe sudo
+  onPasswordPrompt: (cb) => ipcRenderer.on('password-prompt', (e, data) => cb && cb(data)),
+  sendPassword: (payload) => ipcRenderer.send('password-response', payload)
 });
 try {
   const lArg = process.argv.find(a => a.startsWith('--locale='));

@@ -962,21 +962,4 @@ body.details-mode #appDetails { opacity:1; transform:translateY(0); }
 .empty-state code { background:rgba(0,0,0,.05); padding:2px 6px; border-radius:6px; font-size:12px; }
 @media (prefers-color-scheme: dark){ .empty-state code { background:rgba(255,255,255,.08); } }
 
-/* Lightbox */
-.lightbox { position:fixed; inset:0; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; z-index:500; padding:40px 60px; backdrop-filter: blur(4px); }
-.lightbox[hidden] { display:none !important; }
-.lightbox-figure { margin:0; max-width: 90vw; max-height:80vh; display:flex; flex-direction:column; align-items:center; gap:12px; }
-.lightbox-figure img { max-width:100%; max-height:70vh; border-radius:12px; box-shadow:0 4px 30px rgba(0,0,0,.4); background:#111; }
-.lightbox-caption { font-size:12px; color:#e2e8f0; font-style:italic; text-align:center; max-width:70ch; }
-.lightbox-close { position:absolute; top:14px; right:18px; background:rgba(0,0,0,.55); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:50%; width:38px; height:38px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
-.lightbox-close:hover { background:rgba(0,0,0,.75); }
-.lightbox-nav { position:absolute; top:50%; transform:translateY(-50%); background:rgba(0,0,0,.55); color:#fff; border:1px solid rgba(255,255,255,.2); width:50px; height:70px; cursor:pointer; font-size:34px; border-radius:14px; display:flex; align-items:center; justify-content:center; }
-.lightbox-nav:hover { background:rgba(0,0,0,.75); }
-.lightbox-nav.prev { left:12px; }
-.lightbox-nav.next { right:12px; }
-@media (max-width: 760px) {
-  .lightbox { padding:20px; }
-  .lightbox-nav { width:42px; height:60px; font-size:28px; }
-  .lightbox-close { width:34px; height:34px; }
-}
 

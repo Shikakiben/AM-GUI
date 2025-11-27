@@ -1,5 +1,16 @@
-
 const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
+// Handler IPC pour supprimer le cache local des catégories
+ipcMain.handle('delete-categories-cache', async () => {
+  try {
+    const fs = require('fs');
+    if (fs.existsSync(categoriesCachePath)) {
+      fs.unlinkSync(categoriesCachePath);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+});
 // Sauvegarde le cache des catégories dans le dossier du projet
 const categoriesCachePath = require('path').join(__dirname, 'categories-cache.json');
 function updateCategoriesCache(categories) {
@@ -167,7 +178,7 @@ const detectPackageManager = () => {
 // -- Cache icônes via protocole personnalisé appicon:// --
 let iconsCacheDir = null;
 let blankIconPath = null;
-const ICON_TTL_MS = 7 * 24 * 3600 * 1000; // 7 jours
+const ICON_TTL_MS = 24 * 3600 * 1000; // 1 jour
 const MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB max cache size
 
 // In-flight downloads deduplication map: fileName -> Promise<string|null>
@@ -544,7 +555,7 @@ ipcMain.handle('open-external', async (_event, url) => {
 
 
 // Action générique: install / uninstall / update (simple)
-ipcMain.handle('am-action', async (_event, action, software) => {
+ipcMain.handle('am-action', async (event, action, software) => {
   const pm = await detectPackageManager();
   if (!pm) return "Aucun gestionnaire 'am' ou 'appman' trouvé";
 
@@ -565,7 +576,7 @@ ipcMain.handle('am-action', async (_event, action, software) => {
     });
   }
 
-  // Use spawn to avoid shell interpolation / injection risks
+  // Pour install/désinstall, utiliser node-pty pour la gestion du mot de passe
   let args;
   if (action === 'install') args = ['-i', software];
   else if (action === 'uninstall') args = ['-R', software];
@@ -573,18 +584,44 @@ ipcMain.handle('am-action', async (_event, action, software) => {
 
   return new Promise((resolve) => {
     try {
-      const child = spawn(pm, args);
-      let stdoutBuf = '';
-      let stderrBuf = '';
-      const killTimer = setTimeout(() => { try { child.kill('SIGTERM'); } catch(_){} }, 5*60*1000);
-      child.stdout.on('data', d => { stdoutBuf += d.toString(); });
-      child.stderr.on('data', d => { stderrBuf += d.toString(); });
-      child.on('close', (code) => {
-        clearTimeout(killTimer);
-        if (code === 0) return resolve(stdoutBuf || '');
-        resolve(stderrBuf || stdoutBuf || `Processus terminé avec code ${code}`);
+      const pty = require('node-pty');
+      const env = Object.assign({}, process.env, {
+        TERM: 'xterm',
+        COLS: '80',
+        ROWS: '30',
+        FORCE_COLOR: '1',
       });
-      child.on('error', (err) => { clearTimeout(killTimer); resolve(err.message || 'Erreur processus'); });
+      const child = pty.spawn(pm, args, {
+        name: 'xterm-color',
+        cols: 80,
+        rows: 30,
+        cwd: process.cwd(),
+        env
+      });
+      let output = '';
+      let done = false;
+      const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+      // Gestion du prompt mot de passe sudo
+      passwordWaiters.set(id, (password) => {
+        if (typeof password === 'string') {
+          try { child.write(password + '\n'); } catch(_) {}
+        } else {
+          try { child.kill('SIGKILL'); } catch(_) {}
+        }
+      });
+      child.onData((txt) => {
+        output += txt;
+        if (/mot de passe.*:|password.*:/i.test(txt)) {
+          // Demander le mot de passe au renderer via IPC
+          if (event.sender) event.sender.send('password-prompt', { id });
+        }
+      });
+      child.onExit((evt) => {
+        if (done) return;
+        done = true;
+        passwordWaiters.delete(id);
+        resolve(output);
+      });
     } catch (e) {
       return resolve(e && e.message ? e.message : String(e));
     }
@@ -598,8 +635,17 @@ ipcMain.handle('am-action', async (_event, action, software) => {
 // { id, kind:'line', line }
 // { id, kind:'done', code, success, duration, output }
 // { id, kind:'error', message }
-// Pas d'annulation encore (peut être ajoutée plus tard).
+// Ajout : gestion du prompt mot de passe sudo
 const activeInstalls = new Map();
+const passwordWaiters = new Map();
+ipcMain.on('password-response', (event, payload) => {
+  if (!payload || !payload.id) return;
+  const waiter = passwordWaiters.get(payload.id);
+  if (waiter) {
+    waiter(payload.password);
+    passwordWaiters.delete(payload.id);
+  }
+});
 ipcMain.handle('install-start', async (event, name) => {
   console.log('IPC install-start reçu pour', name);
   const pm = await detectPackageManager();
@@ -637,6 +683,20 @@ ipcMain.handle('install-start', async (event, name) => {
     // Log chaque chunk reçu du processus
     const txt = chunk.toString();
     output += txt;
+    // Détection du prompt mot de passe sudo
+    if (/mot de passe.*:|password.*:/i.test(txt)) {
+      // Demander le mot de passe au renderer via IPC
+      wc.send('password-prompt', { id });
+      // Attendre la réponse avant d'envoyer le mot de passe au process
+      passwordWaiters.set(id, (password) => {
+        if (typeof password === 'string') {
+          try { child.write(password + '\n'); } catch(_) {}
+        } else {
+          // Si annulé, tuer le process
+          try { child.kill('SIGKILL'); } catch(_) {}
+        }
+      });
+    }
     // Envoi du chunk brut pour affichage terminal fidèle
     send({ kind: 'line', raw: txt, stream: isErr ? 'stderr' : 'stdout' });
     // Ancien découpage en lignes pour prompts interactifs
