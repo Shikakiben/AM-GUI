@@ -26,7 +26,7 @@
       'install.cancel': 'Annuler installation en cours',
       'install.queued': 'En file (#{pos}) ✕',
       'install.removeQueue': 'Retirer de la file',
-      'main.title': 'App Manager',
+      'main.title': 'AM-GUI',
       'search.placeholder': 'Rechercher des applications…',
       'settings.theme': 'Thème',
       'settings.lang': 'Langue',

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=App Manager
+Name=AM-GUI
 Exec=/home/moi/AM-AppStore-Test/start-appstore.sh
 Icon=/home/moi/AM-AppStore-Test/app-icon.png
-StartupWMClass=App Manager
+StartupWMClass=AM-GUI
 Terminal=false
 Categories=Utility;

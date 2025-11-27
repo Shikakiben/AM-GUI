@@ -106,9 +106,9 @@ function logGlobalError(err) {
 
 process.on('uncaughtException', logGlobalError);
 process.on('unhandledRejection', logGlobalError);
-// Vérifier si app.setName ou équivalent existe et remplacer par 'App Manager' si besoin
+// Vérifier si app.setName ou équivalent existe et remplacer par 'AM-GUI' si besoin
 if (app.setName) {
-  app.setName('App Manager');
+  app.setName('AM-GUI');
 }
 
 // IPC pour lire/écrire la préférence GPU
@@ -451,7 +451,7 @@ function createWindow () {
     width: 1100,
     height: 750,
     frame: false, // retour à la barre personnalisée
-    title: 'App Manager',
+    title: 'AM-GUI',
     icon: iconPath,
     backgroundColor: '#f6f8fa',
     webPreferences: {
