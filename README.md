@@ -1,22 +1,12 @@
 # AM-GUI
 
-**AM-GUI** is an Electron-based application that serves as a graphical App Store for [AM](https://github.com/ivan-hc/AM). “AM”/“AppMan” is a set of scripts and modules for installing, updating, and managing AppImage packages and other portable formats on Linux.
+**AM-GUI** is an Electron-based application that serves as a graphical Front for [AM](https://github.com/ivan-hc/AM). “AM”/“AppMan” is a set of scripts and modules for installing, updating, and managing AppImage packages and other portable formats on Linux.
 
 ⚠️ **This project is not yet functional: it is under development and some features may not work or may be incomplete.**
 
    **ALL credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only make the GUI using AI.**
    
 ---
-
-## Features
-
-- **Displays a catalog of AppImage applications** available via AM/appman, with icons.
-- **One-click installation and removal** of AppImage applications.
-- **Fast search and sorting** of software
-
----
-
-
 
 ## Requirements (manual installation)
 
@@ -47,8 +37,8 @@ On most development machines, these tools are already present. If you get a comp
 Clone this repository:
 
 ```bash
-git clone https://github.com/Shikakiben/AM-AppStore-Test.git
-cd AM-AppStore-Test
+git clone https://github.com/Shikakiben/AM-GUI.git
+cd AM-GUI
 npm install
 npx electron-rebuild
 ```
