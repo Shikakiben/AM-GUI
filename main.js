@@ -1,35 +1,65 @@
 const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const fsp = fs.promises;
+const categoriesCachePath = path.join(__dirname, 'categories-cache.json');
+const categoriesMetaPath = path.join(__dirname, 'categories-cache.meta.json');
+const MAX_CATEGORY_FETCH_CONCURRENCY = 6;
+
+async function readJsonSafe(filePath, fallback) {
+  try {
+    const raw = await fsp.readFile(filePath, 'utf8');
+    return JSON.parse(raw);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+async function writeJsonSafe(filePath, data) {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true }).catch(() => {});
+  const tmpPath = `${filePath}.tmp`;
+  await fsp.writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+  await fsp.rename(tmpPath, filePath);
+}
+
+async function updateCategoriesCache(categories) {
+  try {
+    await writeJsonSafe(categoriesCachePath, categories);
+  } catch (e) {
+    console.error('Erreur écriture cache catégories:', e);
+  }
+}
+
+async function mapWithConcurrency(limit, items, iteratorFn) {
+  if (!Array.isArray(items) || !items.length) return [];
+  const chunkSize = Math.max(1, Number(limit) || 1);
+  const results = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const slice = items.slice(i, i + chunkSize);
+    const sliceResults = await Promise.all(slice.map(iteratorFn));
+    results.push(...sliceResults);
+  }
+  return results;
+}
+
 // Handler IPC pour supprimer le cache local des catégories
 ipcMain.handle('delete-categories-cache', async () => {
   try {
-    const fs = require('fs');
-    if (fs.existsSync(categoriesCachePath)) {
-      fs.unlinkSync(categoriesCachePath);
-    }
+    await Promise.all([
+      fsp.rm(categoriesCachePath, { force: true }).catch(() => {}),
+      fsp.rm(categoriesMetaPath, { force: true }).catch(() => {})
+    ]);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
   }
 });
-// Sauvegarde le cache des catégories dans le dossier du projet
-const categoriesCachePath = require('path').join(__dirname, 'categories-cache.json');
-function updateCategoriesCache(categories) {
-  try {
-    require('fs').writeFileSync(categoriesCachePath, JSON.stringify(categories, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Erreur écriture cache catégories:', e);
-  }
-}
+
 // Handler IPC pour lire le cache local des catégories (après import Electron)
 ipcMain.handle('get-categories-cache', async () => {
   try {
-    const fs = require('fs');
-    if (fs.existsSync(categoriesCachePath)) {
-      const data = fs.readFileSync(categoriesCachePath, 'utf8');
-      return { ok: true, categories: JSON.parse(data) };
-    } else {
-      return { ok: true, categories: [] };
-    }
+    const categories = await readJsonSafe(categoriesCachePath, []);
+    return { ok: true, categories };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
   }
@@ -42,48 +72,93 @@ ipcMain.handle('fetch-all-categories', async () => {
   const rawBase = `https://raw.githubusercontent.com/${repo}/main`;
   const undici = require('undici');
   const fetch = undici.fetch;
+
+  const parseApps = (markdown) => {
+    const apps = [];
+    const lines = markdown.split(/\r?\n/);
+    for (const line of lines) {
+      if ((line.match(/\|/g) || []).length < 2) continue;
+      const matches = [...line.matchAll(/\*\*\*(.*?)\*\*\*/g)];
+      for (const match of matches) {
+        if (match[1]) apps.push(match[1].trim());
+      }
+    }
+    return apps;
+  };
+
   try {
-    // Récupère la liste des fichiers markdown
-    const res = await fetch(apiBase);
+    const [prevCategories, prevMeta] = await Promise.all([
+      readJsonSafe(categoriesCachePath, []),
+      readJsonSafe(categoriesMetaPath, {})
+    ]);
+    const previousByName = new Map((prevCategories || []).map(cat => [cat.name, Array.isArray(cat.apps) ? cat.apps : []]));
+    const res = await fetch(apiBase, { headers: { 'User-Agent': 'AM-GUI' } });
     if (!res.ok) throw new Error('Erreur requête GitHub: ' + res.status);
     const files = await res.json();
-    // Exclure README.md et tout fichier .md non catégorie
     const mdFiles = files.filter(f => {
-  if (!f.name.endsWith('.md')) return false;
-  const lower = f.name.toLowerCase();
-  if (lower === 'apps.md' || lower === 'index.md') return false;
-  if (lower.includes('readme') || lower.includes('changelog') || lower.includes('contribut')) return false;
-  return true;
+      if (!f.name.endsWith('.md')) return false;
+      const lower = f.name.toLowerCase();
+      if (lower === 'apps.md' || lower === 'index.md') return false;
+      if (lower.includes('readme') || lower.includes('changelog') || lower.includes('contribut')) return false;
+      return true;
     });
-    if (mdFiles.length === 0) throw new Error('Aucune catégorie trouvée');
-    const categories = [];
-    for (const file of mdFiles) {
-      const catName = file.name.replace(/\.md$/, '');
-      const mdRes = await fetch(`${rawBase}/${file.name}`);
-      if (!mdRes.ok) continue;
-      const mdText = await mdRes.text();
-      const apps = [];
-      const lines = mdText.split(/\r?\n/);
-      for (const line of lines) {
-        if ((line.match(/\|/g) || []).length < 2) continue;
-        const matches = [...line.matchAll(/\*\*\*(.*?)\*\*\*/g)];
-        for (const m of matches) {
-          if (m[1]) apps.push(m[1].trim());
+    if (!mdFiles.length) throw new Error('Aucune catégorie trouvée');
+
+    const nextMeta = {};
+    const results = await mapWithConcurrency(
+      MAX_CATEGORY_FETCH_CONCURRENCY,
+      mdFiles,
+      async (file) => {
+        const catName = file.name.replace(/\.md$/, '');
+        const headers = { 'User-Agent': 'AM-GUI' };
+        const previousMeta = prevMeta && prevMeta[file.name];
+        if (previousMeta?.etag) headers['If-None-Match'] = previousMeta.etag;
+        if (previousMeta?.lastModified) headers['If-Modified-Since'] = previousMeta.lastModified;
+
+        let mdResponse;
+        try {
+          mdResponse = await fetch(`${rawBase}/${file.name}`, { headers });
+        } catch (err) {
+          console.warn('[categories] fetch échoué pour', file.name, err?.message || err);
+          return null;
         }
+
+        if (mdResponse.status === 304) {
+          if (previousMeta) nextMeta[file.name] = previousMeta;
+          if (previousByName.has(catName)) {
+            return { name: catName, apps: previousByName.get(catName) };
+          }
+          return null;
+        }
+        if (!mdResponse.ok) {
+          console.warn('[categories] HTTP', mdResponse.status, 'pour', file.name);
+          return null;
+        }
+        const mdText = await mdResponse.text();
+        const apps = parseApps(mdText);
+        const etag = mdResponse.headers?.get?.('etag');
+        const lastModified = mdResponse.headers?.get?.('last-modified');
+        if (etag || lastModified) {
+          nextMeta[file.name] = Object.fromEntries(
+            Object.entries({ etag, lastModified }).filter(([, v]) => !!v)
+          );
+        }
+        return { name: catName, apps };
       }
-      categories.push({ name: catName, apps });
-    }
-  // Sauvegarde le cache local
-  updateCategoriesCache(categories);
-  return { ok: true, categories };
+    );
+
+    const categories = results.filter(Boolean);
+    await Promise.all([
+      updateCategoriesCache(categories),
+      writeJsonSafe(categoriesMetaPath, nextMeta).catch((err) => console.warn('Erreur écriture meta catégories:', err))
+    ]);
+    return { ok: true, categories };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
   }
 });
 
 // --- Gestion accélération GPU (doit être AVANT app.whenReady) ---
-const fs = require('fs');
-const path = require('path');
 let disableGpuPref = false;
 try {
   const prefPath = path.join(app.getPath('userData'), 'gpu-pref.json');
@@ -163,18 +238,34 @@ const fetch = undici.fetch;
 // AbortController fallback: prefer global, then undici.AbortController, then optional polyfill
 let AbortControllerCtor = globalThis.AbortController || undici.AbortController || null;
 try { if (!AbortControllerCtor) AbortControllerCtor = require('abort-controller'); } catch(_) { }
-// Fonction pour détecter le gestionnaire dispo
-const detectPackageManager = () => {
-  return new Promise((resolve) => {
+
+const PM_CACHE_TTL_MS = 60 * 1000;
+let cachedPackageManager = null;
+let cachedPmTimestamp = 0;
+
+async function detectPackageManager(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedPmTimestamp && (now - cachedPmTimestamp) < PM_CACHE_TTL_MS) {
+    return cachedPackageManager;
+  }
+  const pm = await new Promise((resolve) => {
     exec('command -v am', (err) => {
       if (!err) return resolve('am');
       exec('command -v appman', (err2) => {
         if (!err2) return resolve('appman');
-        resolve(null); // aucun trouvé
+        resolve(null);
       });
     });
   });
-};
+  cachedPackageManager = pm;
+  cachedPmTimestamp = Date.now();
+  return pm;
+}
+
+function invalidatePackageManagerCache() {
+  cachedPackageManager = null;
+  cachedPmTimestamp = 0;
+}
 // -- Cache icônes via protocole personnalisé appicon:// --
 let iconsCacheDir = null;
 let blankIconPath = null;
@@ -572,7 +663,11 @@ ipcMain.handle('am-action', async (event, action, software) => {
         if (code === 0) return resolve(stdoutBuf || '');
         resolve(stderrBuf || stdoutBuf || `Processus terminé avec code ${code}`);
       });
-      child.on('error', (err) => { clearTimeout(killTimer); resolve(err.message || 'Erreur inconnue'); });
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        invalidatePackageManagerCache();
+        resolve(err.message || 'Erreur inconnue');
+      });
     });
   }
 
@@ -622,7 +717,15 @@ ipcMain.handle('am-action', async (event, action, software) => {
         passwordWaiters.delete(id);
         resolve(output);
       });
+      child.on?.('error', (err) => {
+        if (done) return;
+        done = true;
+        passwordWaiters.delete(id);
+        invalidatePackageManagerCache();
+        resolve(err?.message || 'Erreur inconnue');
+      });
     } catch (e) {
+      invalidatePackageManagerCache();
       return resolve(e && e.message ? e.message : String(e));
     }
   });
@@ -666,13 +769,19 @@ ipcMain.handle('install-start', async (event, name) => {
     FORCE_COLOR: '1',
     // Ajoute d'autres variables si besoin
   });
-  const child = pty.spawn(pm, ['-i', name], {
-    name: 'xterm-color',
-    cols: 80,
-    rows: 30,
-    cwd: process.cwd(),
-    env
-  });
+  let child;
+  try {
+    child = pty.spawn(pm, ['-i', name], {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 30,
+      cwd: process.cwd(),
+      env
+    });
+  } catch (err) {
+    invalidatePackageManagerCache();
+    return { error: err?.message || 'Impossible de démarrer le processus.' };
+  }
   activeInstalls.set(id, child);
   console.log('[ACTIVE-INSTALLS] Ajout process id:', id);
   const wc = event.sender;
@@ -772,6 +881,12 @@ ipcMain.handle('install-start', async (event, name) => {
     const success = code === 0;
     send({ kind:'done', code, success, duration, output });
   });
+  child.on?.('error', (err) => {
+    clearTimeout(killTimer);
+    invalidatePackageManagerCache();
+    try { activeInstalls.delete(id); } catch(_){ }
+    send({ kind:'error', message: err?.message || 'Erreur processus' });
+  });
   return { id };
 });
 
@@ -810,6 +925,9 @@ ipcMain.handle('list-apps-detailed', async () => {
   return new Promise(async (resolve) => {
     try {
       const [listRes, instRes] = await Promise.all([execPromise(listCmd), execPromise(installedCmd)]);
+      if ((listRes.err && listRes.err.code === 127) || (instRes.err && instRes.err.code === 127)) {
+        invalidatePackageManagerCache();
+      }
       if ((listRes.err || !listRes.stdout) && (instRes.err || !instRes.stdout)) {
         return resolve({ installed: [], all: [], pmFound: true, error: 'Échec exécution commande liste.' });
       }

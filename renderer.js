@@ -1178,30 +1178,47 @@ function initIconObserver(){
 // Préchargement async throttlé des images encore non démarrées — démarre après rendu
 let _prefetchScheduled = false;
 function prefetchPreloadImages(limit = 200, concurrency = 6) {
-  // Ne pas relancer si déjà planifié
   if (_prefetchScheduled) return;
-  _prefetchScheduled = true;
-  // Récupérer les images qui portent encore data-src
   const imgs = Array.from(document.querySelectorAll('img[data-src]'));
   if (!imgs.length) return;
-  // Trier par proximité avec le haut de la fenêtre
-  imgs.sort((a,b) => (a.getBoundingClientRect().top || 0) - (b.getBoundingClientRect().top || 0));
+  _prefetchScheduled = true;
   const toLoad = imgs.slice(0, Math.min(limit, imgs.length));
   let idx = 0;
   let active = 0;
-  function nextBatch(){
+
+  const scheduleNext = () => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(pump);
+    } else {
+      setTimeout(pump, 0);
+    }
+  };
+
+  const pump = () => {
     while (active < concurrency && idx < toLoad.length) {
       const img = toLoad[idx++];
       active++;
-      // Start load on next frame to avoid blocking
-      requestAnimationFrame(()=>{
-        try { if (img.getAttribute('data-src')) { img.src = img.getAttribute('data-src'); img.removeAttribute('data-src'); } } catch(_){}
-        active--; if (idx < toLoad.length) setTimeout(nextBatch, 0);
+      queueMicrotask(() => {
+        try {
+          const dataSrc = img.getAttribute('data-src');
+          if (dataSrc) {
+            img.src = dataSrc;
+            img.removeAttribute('data-src');
+          }
+        } catch (_) {}
+        active--;
+        if (idx < toLoad.length) scheduleNext();
+        else if (active === 0) _prefetchScheduled = false;
       });
     }
-  }
-  // lancer après un court délai pour laisser le rendu initial se stabiliser
-  setTimeout(nextBatch, 180);
+    if (idx >= toLoad.length && active === 0) {
+      _prefetchScheduled = false;
+    }
+  };
+
+  setTimeout(() => {
+    pump();
+  }, 180);
 }
 
 function showDetails(appName) {
