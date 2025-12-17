@@ -347,6 +347,35 @@ const state = {
   installed: new Set() // ensemble des noms installés (lowercase)
 };
 
+const toast = document.getElementById('toast');
+const toastFallbackApi = (() => {
+  let hideTimer = null;
+  function fallbackShow(message) {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.hidden = false;
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      toast.hidden = true;
+      hideTimer = null;
+    }, 2300);
+  }
+  function fallbackHide() {
+    if (!toast) return;
+    toast.hidden = true;
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+  return { showToast: fallbackShow, hideToast: fallbackHide };
+})();
+const toastModule = typeof window.ui?.toast?.init === 'function'
+  ? window.ui.toast.init({ element: toast, duration: 2300 })
+  : null;
+const showToast = toastModule?.showToast || toastFallbackApi.showToast;
+const hideToast = toastModule?.hideToast || toastFallbackApi.hideToast;
+
 let applySearch = () => {};
 
 // --- Gestion accélération GPU ---
@@ -673,9 +702,6 @@ function enqueueInstall(name){
   }
   refreshAllInstallButtons();
 }
-const toast = document.getElementById('toast');
-let toastHideTimer = null;
-
 let syncBtn = null;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
@@ -1100,17 +1126,6 @@ document.addEventListener('click', (ev) => {
     window.electronAPI.openExternal(href);
   }
 }, { capture: true });
-function showToast(msg) {
-  if (!toast) return;
-  toast.textContent = msg;
-  toast.hidden = false;
-  if (toastHideTimer) clearTimeout(toastHideTimer);
-  toastHideTimer = setTimeout(() => {
-    toast.hidden = true;
-    toastHideTimer = null;
-  }, 2300);
-}
-
 async function loadApps() {
   appsDiv?.setAttribute('aria-busy','true');
   let detailed;
@@ -1170,7 +1185,7 @@ function initIconObserver(){
           iconObserver.unobserve(img);
         }
       });
-    }, { rootMargin: '1200px' }); // marge accrue pour charger encore plus tôt hors écran
+    }, { rootMargin: '1600px' }); // marge accrue pour charger encore plus tôt hors écran
   }
 }
 
@@ -1178,6 +1193,7 @@ function initIconObserver(){
 // Préchargement async throttlé des images encore non démarrées — démarre après rendu
 let _prefetchScheduled = false;
 function prefetchPreloadImages(limit = 200, concurrency = 6) {
+  if (iconObserver) return; // IntersectionObserver gère déjà le préchargement anticipé
   if (_prefetchScheduled) return;
   const imgs = Array.from(document.querySelectorAll('img[data-src]'));
   if (!imgs.length) return;
