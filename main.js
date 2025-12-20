@@ -1,89 +1,15 @@
 const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
-// Handler IPC pour supprimer le cache local des catégories
-ipcMain.handle('delete-categories-cache', async () => {
-  try {
-    const fs = require('fs');
-    if (fs.existsSync(categoriesCachePath)) {
-      fs.unlinkSync(categoriesCachePath);
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message || String(e) };
-  }
-});
-// Sauvegarde le cache des catégories dans le dossier du projet
-const categoriesCachePath = require('path').join(__dirname, 'categories-cache.json');
-function updateCategoriesCache(categories) {
-  try {
-    require('fs').writeFileSync(categoriesCachePath, JSON.stringify(categories, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Erreur écriture cache catégories:', e);
-  }
-}
-// Handler IPC pour lire le cache local des catégories (après import Electron)
-ipcMain.handle('get-categories-cache', async () => {
-  try {
-    const fs = require('fs');
-    if (fs.existsSync(categoriesCachePath)) {
-      const data = fs.readFileSync(categoriesCachePath, 'utf8');
-      return { ok: true, categories: JSON.parse(data) };
-    } else {
-      return { ok: true, categories: [] };
-    }
-  } catch (e) {
-    return { ok: false, error: e.message || String(e) };
-  }
-});
+const path = require('path');
+const fs = require('fs');
+const { exec, spawn } = require('child_process');
+const { registerCategoryHandlers } = require('./src/main/categories');
+const { detectPackageManager, invalidatePackageManagerCache } = require('./src/main/packageManager');
+const { createIconCacheManager } = require('./src/main/iconCache');
 
-// Handler IPC pour récupérer toutes les catégories et leurs apps
-ipcMain.handle('fetch-all-categories', async () => {
-  const repo = 'Portable-Linux-Apps/Portable-Linux-Apps.github.io';
-  const apiBase = `https://api.github.com/repos/${repo}/contents`;
-  const rawBase = `https://raw.githubusercontent.com/${repo}/main`;
-  const undici = require('undici');
-  const fetch = undici.fetch;
-  try {
-    // Récupère la liste des fichiers markdown
-    const res = await fetch(apiBase);
-    if (!res.ok) throw new Error('Erreur requête GitHub: ' + res.status);
-    const files = await res.json();
-    // Exclure README.md et tout fichier .md non catégorie
-    const mdFiles = files.filter(f => {
-  if (!f.name.endsWith('.md')) return false;
-  const lower = f.name.toLowerCase();
-  if (lower === 'apps.md' || lower === 'index.md') return false;
-  if (lower.includes('readme') || lower.includes('changelog') || lower.includes('contribut')) return false;
-  return true;
-    });
-    if (mdFiles.length === 0) throw new Error('Aucune catégorie trouvée');
-    const categories = [];
-    for (const file of mdFiles) {
-      const catName = file.name.replace(/\.md$/, '');
-      const mdRes = await fetch(`${rawBase}/${file.name}`);
-      if (!mdRes.ok) continue;
-      const mdText = await mdRes.text();
-      const apps = [];
-      const lines = mdText.split(/\r?\n/);
-      for (const line of lines) {
-        if ((line.match(/\|/g) || []).length < 2) continue;
-        const matches = [...line.matchAll(/\*\*\*(.*?)\*\*\*/g)];
-        for (const m of matches) {
-          if (m[1]) apps.push(m[1].trim());
-        }
-      }
-      categories.push({ name: catName, apps });
-    }
-  // Sauvegarde le cache local
-  updateCategoriesCache(categories);
-  return { ok: true, categories };
-  } catch (e) {
-    return { ok: false, error: e.message || String(e) };
-  }
-});
+const iconCacheManager = createIconCacheManager(app);
+registerCategoryHandlers(ipcMain);
 
 // --- Gestion accélération GPU (doit être AVANT app.whenReady) ---
-const fs = require('fs');
-const path = require('path');
 let disableGpuPref = false;
 try {
   const prefPath = path.join(app.getPath('userData'), 'gpu-pref.json');
@@ -91,7 +17,7 @@ try {
     const raw = fs.readFileSync(prefPath, 'utf8');
     disableGpuPref = JSON.parse(raw).disableGpu === true;
   }
-} catch(_){}
+} catch(_){ }
 if (disableGpuPref && typeof app.disableHardwareAcceleration === 'function') {
   app.disableHardwareAcceleration();
 }
@@ -119,7 +45,7 @@ ipcMain.handle('get-gpu-pref', async () => {
       const raw = fs.readFileSync(prefPath, 'utf8');
       return JSON.parse(raw).disableGpu === true;
     }
-  } catch(_){}
+  } catch(_){ }
   return false;
 });
 ipcMain.handle('set-gpu-pref', async (_event, val) => {
@@ -129,306 +55,6 @@ ipcMain.handle('set-gpu-pref', async (_event, val) => {
     return { ok:true };
   } catch(e){ return { ok:false, error: e.message||String(e) }; }
 });
-
-// Handler IPC pour envoyer le choix utilisateur lors d'une installation à choix multiples
-ipcMain.handle('install-send-choice', async (event, installId, choice) => {
-  console.log('[IPC] install-send-choice reçu pour id:', installId, 'choix:', choice);
-  const child = activeInstalls.get(installId);
-  if (!child) {
-    console.warn('[IPC] Aucun process actif pour id:', installId);
-    return { ok:false, error:'Processus introuvable' };
-  }
-  try {
-    // Envoyer le choix au processus (stdin)
-    console.log(`[INSTALL-CHOICE] Avant write pour id ${installId} :`, choice, 'child:', !!child);
-    child.write(choice + '\n');
-    if (child._pty && typeof child._pty.flush === 'function') {
-      try { child._pty.flush(); } catch(_) {}
-    }
-    // Loguer la sortie pty après envoi du choix
-    setTimeout(() => {
-      console.log('[DEBUG] 1s après write, process toujours actif:', !!child);
-    }, 1000);
-    console.log(`[INSTALL-CHOICE] Après write pour id ${installId}`);
-    return { ok:true };
-  } catch(e){
-    console.error('[IPC] Erreur lors de l’envoi du choix:', e);
-    return { ok:false, error: e.message || 'Erreur envoi choix' };
-  }
-});
-const { exec, spawn } = require('child_process');
-// ...existing code...
-const undici = require('undici');
-const fetch = undici.fetch;
-// AbortController fallback: prefer global, then undici.AbortController, then optional polyfill
-let AbortControllerCtor = globalThis.AbortController || undici.AbortController || null;
-try { if (!AbortControllerCtor) AbortControllerCtor = require('abort-controller'); } catch(_) { }
-// Fonction pour détecter le gestionnaire dispo
-const detectPackageManager = () => {
-  return new Promise((resolve) => {
-    exec('command -v am', (err) => {
-      if (!err) return resolve('am');
-      exec('command -v appman', (err2) => {
-        if (!err2) return resolve('appman');
-        resolve(null); // aucun trouvé
-      });
-    });
-  });
-};
-// -- Cache icônes via protocole personnalisé appicon:// --
-let iconsCacheDir = null;
-let blankIconPath = null;
-const ICON_TTL_MS = 24 * 3600 * 1000; // 1 jour
-const MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB max cache size
-
-// In-flight downloads deduplication map: fileName -> Promise<string|null>
-const inFlightDownloads = new Map();
-let iconsMeta = null; // lazy-loaded index { [fileName]: { etag, lastModified, size, mtime } }
-let iconsMetaPath = null;
-
-function ensureIconCacheSetup(){
-  if (!iconsCacheDir) {
-    iconsCacheDir = path.join(app.getPath('userData'), 'icons-cache');
-    try { fs.mkdirSync(iconsCacheDir, { recursive: true }); } catch(_){ }
-  }
-  if (!blankIconPath) {
-    blankIconPath = path.join(iconsCacheDir, '__blank.png');
-    if (!fs.existsSync(blankIconPath)) {
-      // Créer une petite image PNG 1x1 transparente (base64)
-      const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGP4BwQACfsD/QiP3O4AAAAASUVORK5CYII=','base64');
-      try { fs.writeFileSync(blankIconPath, png1x1); } catch(_){ }
-    }
-  }
-  if (!iconsMetaPath) iconsMetaPath = path.join(iconsCacheDir, 'index.json');
-  // lazy load index
-  if (iconsMeta === null) {
-    try {
-      if (fs.existsSync(iconsMetaPath)) {
-        const raw = fs.readFileSync(iconsMetaPath, 'utf8');
-        iconsMeta = JSON.parse(raw || '{}');
-      } else iconsMeta = {};
-    } catch(_) { iconsMeta = {}; }
-  }
-}
-
-function saveIconsMeta() {
-  try {
-    if (!iconsMetaPath) return;
-    fs.writeFileSync(iconsMetaPath + '.tmp', JSON.stringify(iconsMeta || {}, null, 2));
-    fs.renameSync(iconsMetaPath + '.tmp', iconsMetaPath);
-  } catch(_) {}
-}
-function pruneCache() {
-  try {
-    ensureIconCacheSetup();
-    const files = fs.readdirSync(iconsCacheDir).filter(f => f.endsWith('.png') && f !== path.basename(blankIconPath));
-    let total = 0;
-    const infos = [];
-    for (const f of files) {
-      try {
-        const p = path.join(iconsCacheDir, f);
-        const st = fs.statSync(p);
-        total += st.size;
-        infos.push({ file: f, path: p, size: st.size, mtime: st.mtimeMs });
-      } catch(_){ }
-    }
-    if (total <= MAX_CACHE_SIZE_BYTES) return;
-    infos.sort((a,b)=> a.mtime - b.mtime); // oldest first
-    for (const info of infos) {
-      try { fs.unlinkSync(info.path); total -= info.size; if (iconsMeta && iconsMeta[info.file]) delete iconsMeta[info.file]; } catch(_){ }
-      if (total <= MAX_CACHE_SIZE_BYTES) break;
-    }
-    saveIconsMeta();
-  } catch(_) {}
-}
-
-function isExpired(file){
-  try {
-    const st = fs.statSync(file);
-    const age = Date.now() - st.mtimeMs;
-    return age > ICON_TTL_MS;
-  } catch(_) { return true; }
-}
-
-function downloadIconToCache(fileName){
-  ensureIconCacheSetup();
-  const dest = path.join(iconsCacheDir, fileName);
-  // Deduplicate concurrent downloads
-  if (inFlightDownloads.has(fileName)) return inFlightDownloads.get(fileName);
-
-  const p = new Promise((resolve) => {
-    // Quick cache hit if exists and fresh
-    try {
-      const st = fs.statSync(dest);
-      if (st.size > 200 && !isExpired(dest)) {
-        // update meta and return
-        if (!iconsMeta) iconsMeta = {};
-        iconsMeta[fileName] = iconsMeta[fileName] || {};
-        iconsMeta[fileName].size = st.size;
-        iconsMeta[fileName].mtime = Date.now();
-        saveIconsMeta();
-        return resolve(dest);
-      }
-    } catch(_){ }
-
-    // prepare logging
-    const logPath = path.join(iconsCacheDir, 'download.log');
-    const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5 MB
-    const MAX_LOG_BACKUPS = 3;
-    function rotateLogIfNeeded(){
-      try {
-        if (!fs.existsSync(logPath)) return;
-        const st = fs.statSync(logPath);
-        if (st.size <= MAX_LOG_SIZE) return;
-        // rotate: download.log.2 -> download.log.3, etc.
-        for (let i = MAX_LOG_BACKUPS - 1; i >= 0; i--) {
-          const src = i === 0 ? logPath : `${logPath}.${i}`;
-          const dst = `${logPath}.${i+1}`;
-          if (fs.existsSync(src)) {
-            try { fs.renameSync(src, dst); } catch(_){ }
-          }
-        }
-      } catch(_){ }
-    }
-    function appendLog(msg){
-      try { fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`); } catch(_){ }
-      try { rotateLogIfNeeded(); } catch(_){ }
-    }
-
-    // Prepare conditional headers from stored metadata
-    const meta = iconsMeta && iconsMeta[fileName];
-    const baseUrl = `https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/${fileName}`;
-    const headersBase = {};
-    if (meta) {
-      if (meta.etag) headersBase['If-None-Match'] = meta.etag;
-      if (meta.lastModified) headersBase['If-Modified-Since'] = meta.lastModified;
-    }
-
-    // retry logic
-    const maxAttempts = 3;
-    let attempt = 0;
-
-    function tryDownload(){
-      attempt++;
-      appendLog(`Attempt ${attempt} for ${fileName}`);
-      const headers = Object.assign({}, headersBase);
-
-      // use undici.fetch with AbortController and a 15s timeout
-      (async () => {
-  const controller = new (AbortControllerCtor || globalThis.AbortController || (class { constructor(){ throw new Error('AbortController unavailable'); } }))();
-  const timeout = setTimeout(() => { try { controller.abort(); } catch(_){} }, 15000);
-        let res;
-        try {
-          res = await fetch(baseUrl, { method: 'GET', headers, signal: controller.signal });
-        } catch (err) {
-          clearTimeout(timeout);
-          const msg = err && err.name === 'AbortError' ? 'timeout' : (err && err.message) || String(err);
-          appendLog(`${fileName} fetch error: ${msg}`);
-          return onFail(msg);
-        }
-        clearTimeout(timeout);
-
-        try {
-          if (res.status === 304) {
-            appendLog(`${fileName} not modified (304)`);
-            try { fs.utimesSync(dest, new Date(), new Date()); } catch(_){ }
-            iconsMeta = iconsMeta || {};
-            iconsMeta[fileName] = iconsMeta[fileName] || {};
-            iconsMeta[fileName].mtime = Date.now();
-            saveIconsMeta();
-            return resolve(dest);
-          }
-          if (res.status !== 200) {
-            appendLog(`${fileName} HTTP ${res.status}`);
-            return onFail(`http ${res.status}`);
-          }
-
-          const tmpPath = dest + '.tmp';
-          try {
-            const ab = await res.arrayBuffer();
-            const buf = Buffer.from(ab);
-            if (buf.length < 200) { appendLog(`${fileName} too small after fetch (${buf.length})`); try { fs.unlinkSync(tmpPath); } catch(_){} return onFail('too-small'); }
-            fs.writeFileSync(tmpPath, buf);
-            const stat = fs.statSync(tmpPath);
-            fs.renameSync(tmpPath, dest);
-            const newMeta = { size: stat.size, mtime: Date.now() };
-            const etag = res.headers && (res.headers.get ? res.headers.get('etag') : (res.headers && res.headers['etag']));
-            const lastMod = res.headers && (res.headers.get ? res.headers.get('last-modified') : (res.headers && res.headers['last-modified']));
-            if (etag) newMeta.etag = etag;
-            if (lastMod) newMeta.lastModified = lastMod;
-            iconsMeta = iconsMeta || {};
-            iconsMeta[fileName] = newMeta;
-            saveIconsMeta();
-            pruneCache();
-            appendLog(`${fileName} downloaded OK (${stat.size} bytes)`);
-            return resolve(dest);
-          } catch (e) {
-            try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch(_){ }
-            appendLog(`${fileName} write error: ${e && e.message}`);
-            return onFail(e && e.message);
-          }
-        } catch (e) {
-          appendLog(`${fileName} processing error: ${e && e.message}`);
-          return onFail(e && e.message);
-        }
-      })();
-    }
-
-    function onFail(reason){
-      if (attempt < maxAttempts) {
-        const delay = 300 * Math.pow(2, attempt-1);
-        appendLog(`${fileName} will retry in ${delay}ms (reason: ${reason})`);
-        setTimeout(tryDownload, delay);
-      } else {
-        appendLog(`${fileName} failed after ${attempt} attempts (reason: ${reason})`);
-        // record lastError in iconsMeta for diagnostics
-        iconsMeta = iconsMeta || {};
-        iconsMeta[fileName] = iconsMeta[fileName] || {};
-        iconsMeta[fileName].lastError = String(reason);
-        iconsMeta[fileName].mtime = Date.now();
-        saveIconsMeta();
-        return resolve(null);
-      }
-    }
-
-    // start first attempt
-    tryDownload();
-  });
-
-  inFlightDownloads.set(fileName, p);
-  // cleanup inFlight map after completion
-  p.then(() => inFlightDownloads.delete(fileName), () => inFlightDownloads.delete(fileName));
-  return p;
-}
-
-
-function registerIconProtocol(){
-  ensureIconCacheSetup();
-  protocol.registerFileProtocol('appicon', (request, callback) => {
-    try {
-      // Formats acceptés: appicon://name ou appicon://name.png
-      let urlPath = request.url.replace(/^appicon:\/\//i, '');
-      if (!urlPath) return callback(blankIconPath);
-      // Sécuriser (retirer éventuels ../)
-      urlPath = urlPath.replace(/\?.*$/, '').replace(/#.*/, '');
-      urlPath = path.basename(urlPath); // garde seulement le fichier
-      if (!/\.png$/i.test(urlPath)) urlPath += '.png';
-      const localPath = path.join(iconsCacheDir, urlPath);
-      // Vérifier en cache
-      try {
-        const st = fs.statSync(localPath);
-        if (st.size > 200 && !isExpired(localPath)) return callback(localPath);
-      } catch(_){}
-      // Télécharger sinon
-      downloadIconToCache(urlPath).then(result => {
-        if (result) return callback(result);
-        callback(blankIconPath);
-      });
-    } catch(_) {
-      callback(blankIconPath);
-    }
-  });
-}
 
 function createWindow () {
   // Détection simple de l'environnement de bureau pour stylage léger
@@ -515,29 +141,12 @@ function createWindow () {
 }
 
 app.whenReady().then(() => {
-  try { registerIconProtocol(); } catch(e) { console.warn('Protocole appicon échec:', e); }
+  try { iconCacheManager.registerProtocol(protocol); } catch(e) { console.warn('Protocole appicon échec:', e); }
   createWindow();
 });
 
 // IPC: purge complète du cache d'icônes
-ipcMain.handle('purge-icons-cache', async () => {
-  ensureIconCacheSetup();
-  let removed = 0;
-  try {
-    const files = fs.readdirSync(iconsCacheDir).filter(f => f.endsWith('.png') && f !== path.basename(blankIconPath));
-    for (const f of files) {
-      try { fs.unlinkSync(path.join(iconsCacheDir, f)); removed++; } catch(_){}
-    }
-    // Réinitialiser les variables internes
-    iconsMeta = {};
-    inFlightDownloads.clear();
-    // Sauvegarder l'état vide
-    if (iconsMetaPath) {
-      try { fs.writeFileSync(iconsMetaPath, '{}'); } catch(_){}
-    }
-  } catch(_){}
-  return { removed };
-});
+ipcMain.handle('purge-icons-cache', async () => iconCacheManager.purgeCache());
 
 // Ouvrir une URL dans le navigateur externe
 ipcMain.handle('open-external', async (_event, url) => {
@@ -572,7 +181,11 @@ ipcMain.handle('am-action', async (event, action, software) => {
         if (code === 0) return resolve(stdoutBuf || '');
         resolve(stderrBuf || stdoutBuf || `Processus terminé avec code ${code}`);
       });
-      child.on('error', (err) => { clearTimeout(killTimer); resolve(err.message || 'Erreur inconnue'); });
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        invalidatePackageManagerCache();
+        resolve(err.message || 'Erreur inconnue');
+      });
     });
   }
 
@@ -622,7 +235,15 @@ ipcMain.handle('am-action', async (event, action, software) => {
         passwordWaiters.delete(id);
         resolve(output);
       });
+      child.on?.('error', (err) => {
+        if (done) return;
+        done = true;
+        passwordWaiters.delete(id);
+        invalidatePackageManagerCache();
+        resolve(err?.message || 'Erreur inconnue');
+      });
     } catch (e) {
+      invalidatePackageManagerCache();
       return resolve(e && e.message ? e.message : String(e));
     }
   });
@@ -666,13 +287,19 @@ ipcMain.handle('install-start', async (event, name) => {
     FORCE_COLOR: '1',
     // Ajoute d'autres variables si besoin
   });
-  const child = pty.spawn(pm, ['-i', name], {
-    name: 'xterm-color',
-    cols: 80,
-    rows: 30,
-    cwd: process.cwd(),
-    env
-  });
+  let child;
+  try {
+    child = pty.spawn(pm, ['-i', name], {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 30,
+      cwd: process.cwd(),
+      env
+    });
+  } catch (err) {
+    invalidatePackageManagerCache();
+    return { error: err?.message || 'Impossible de démarrer le processus.' };
+  }
   activeInstalls.set(id, child);
   console.log('[ACTIVE-INSTALLS] Ajout process id:', id);
   const wc = event.sender;
@@ -772,6 +399,12 @@ ipcMain.handle('install-start', async (event, name) => {
     const success = code === 0;
     send({ kind:'done', code, success, duration, output });
   });
+  child.on?.('error', (err) => {
+    clearTimeout(killTimer);
+    invalidatePackageManagerCache();
+    try { activeInstalls.delete(id); } catch(_){ }
+    send({ kind:'error', message: err?.message || 'Erreur processus' });
+  });
   return { id };
 });
 
@@ -789,6 +422,24 @@ ipcMain.handle('install-cancel', async (event, installId) => {
     return { ok:true };
   } catch(e){
     return { ok:false, error: e.message || 'Annulation échouée' };
+  }
+});
+
+ipcMain.handle('install-send-choice', async (_event, installId, choice) => {
+  if (!installId) return { ok:false, error: 'ID manquant' };
+  const child = activeInstalls.get(installId);
+  if (!child) return { ok:false, error: 'Processus introuvable' };
+  const normalizedChoice = (() => {
+    if (typeof choice === 'number' && Number.isFinite(choice)) return String(choice);
+    if (typeof choice === 'string') return choice.trim();
+    return '';
+  })();
+  if (!normalizedChoice) return { ok:false, error: 'Choix invalide' };
+  try {
+    child.write(normalizedChoice + '\n');
+    return { ok:true };
+  } catch (err) {
+    return { ok:false, error: err?.message || 'Échec envoi du choix' };
   }
 });
 
@@ -810,6 +461,9 @@ ipcMain.handle('list-apps-detailed', async () => {
   return new Promise(async (resolve) => {
     try {
       const [listRes, instRes] = await Promise.all([execPromise(listCmd), execPromise(installedCmd)]);
+      if ((listRes.err && listRes.err.code === 127) || (instRes.err && instRes.err.code === 127)) {
+        invalidatePackageManagerCache();
+      }
       if ((listRes.err || !listRes.stdout) && (instRes.err || !instRes.stdout)) {
         return resolve({ installed: [], all: [], pmFound: true, error: 'Échec exécution commande liste.' });
       }
@@ -925,48 +579,6 @@ ipcMain.handle('list-apps-detailed', async () => {
 });
 
 // Contrôles de fenêtre pour le mode frameless
-// Handler IPC pour récupérer dynamiquement la première catégorie existante et ses apps
-ipcMain.handle('fetch-first-category', async () => {
-  const repo = 'Portable-Linux-Apps/Portable-Linux-Apps.github.io';
-  const apiBase = `https://api.github.com/repos/${repo}/contents`;
-  const rawBase = `https://raw.githubusercontent.com/${repo}/main`;
-  const undici = require('undici');
-  const fetch = undici.fetch;
-  try {
-    // Récupère la liste des fichiers markdown
-    const res = await fetch(apiBase);
-    if (!res.ok) throw new Error('Erreur requête GitHub: ' + res.status);
-    const files = await res.json();
-    // Exclure README.md et tout fichier .md non catégorie (ex: readme, changelog, etc.)
-    const mdFiles = files.filter(f => {
-      if (!f.name.endsWith('.md')) return false;
-      const lower = f.name.toLowerCase();
-      if (lower.includes('readme') || lower.includes('changelog') || lower.includes('contribut')) return false;
-      return true;
-    });
-    if (mdFiles.length === 0) throw new Error('Aucune catégorie trouvée');
-    const file = mdFiles[0];
-    const catName = file.name.replace(/\.md$/, '');
-    // Récupère le contenu brut du markdown
-    const mdRes = await fetch(`${rawBase}/${file.name}`);
-    if (!mdRes.ok) throw new Error('Erreur requête GitHub: ' + mdRes.status);
-    const mdText = await mdRes.text();
-    // Parse les apps : extrait les noms entre *** dans les lignes du tableau
-    const apps = [];
-    const lines = mdText.split(/\r?\n/);
-    for (const line of lines) {
-      // Ne garder que les lignes du tableau (au moins deux '|')
-      if ((line.match(/\|/g) || []).length < 2) continue;
-      const matches = [...line.matchAll(/\*\*\*(.*?)\*\*\*/g)];
-      for (const m of matches) {
-        if (m[1]) apps.push(m[1].trim());
-      }
-    }
-    return { ok: true, category: { name: catName, apps } };
-  } catch (e) {
-    return { ok: false, error: e.message || String(e) };
-  }
-});
 ipcMain.handle('window-control', (event, action) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;

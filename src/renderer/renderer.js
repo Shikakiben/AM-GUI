@@ -77,11 +77,15 @@ let appListVirtual = [];
 let currentEndVirtual = VISIBLE_COUNT;
 let lastTileObserver = null;
 
-function setAppList(list) {
+let setAppListImpl = function(list) {
   appListVirtual = list;
   currentEndVirtual = VISIBLE_COUNT;
   if (scrollShell) scrollShell.scrollTop = 0;
   renderVirtualList();
+};
+
+function setAppList(list) {
+  return setAppListImpl(list);
 }
 
 function renderVirtualList() {
@@ -296,7 +300,7 @@ function initXtermLog() {
       xterm.open(xtermLogDiv);
       window.addEventListener('resize', ()=>xtermFit.fit());
       xtermFit.fit();
-    } catch (e) {
+    } catch (_err) {
       xterm = null;
       xtermFit = null;
       if (xtermLogDiv) xtermLogDiv.style.display = 'none';
@@ -347,26 +351,37 @@ const state = {
   installed: new Set() // ensemble des noms installés (lowercase)
 };
 
-let applySearch = () => {};
+let virtualListApi = null;
 
-// --- Gestion accélération GPU ---
-if (disableGpuCheckbox && window.electronAPI && window.electronAPI.getGpuPref && window.electronAPI.setGpuPref) {
-  // Charger l'état au démarrage
-  window.electronAPI.getGpuPref().then(val => {
-    disableGpuCheckbox.checked = !!val;
-  });
-  disableGpuCheckbox.addEventListener('change', async () => {
-    const val = !!disableGpuCheckbox.checked;
-    await window.electronAPI.setGpuPref(val);
-    // Afficher un toast traduit et proposer de relancer l'app
-    showToast(val ? t('toast.gpuDisabled') : t('toast.gpuEnabled'));
-    setTimeout(() => {
-      if (confirm(t('confirm.gpuRestart'))) {
-        window.location.reload();
-      }
-    }, 1200);
-  });
-}
+const toast = document.getElementById('toast');
+const toastFallbackApi = (() => {
+  let hideTimer = null;
+  function fallbackShow(message) {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.hidden = false;
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      toast.hidden = true;
+      hideTimer = null;
+    }, 2300);
+  }
+  function fallbackHide() {
+    if (!toast) return;
+    toast.hidden = true;
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+  return { showToast: fallbackShow, hideToast: fallbackHide };
+})();
+const toastModule = typeof window.ui?.toast?.init === 'function'
+  ? window.ui.toast.init({ element: toast, duration: 2300 })
+  : null;
+const showToast = toastModule?.showToast || toastFallbackApi.showToast;
+
+let applySearch = () => {};
 
 // --- (Ré)ajout gestion changement de mode d'affichage ---
 function updateModeMenuUI() {
@@ -673,12 +688,10 @@ function enqueueInstall(name){
   }
   refreshAllInstallButtons();
 }
-const toast = document.getElementById('toast');
-let toastHideTimer = null;
-
 let syncBtn = null;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
+const openExternalCheckbox = document.getElementById('openExternalLinksCheckbox');
 const purgeIconsBtn = document.getElementById('purgeIconsBtn');
 const purgeIconsResult = document.getElementById('purgeIconsResult');
 const tabs = document.querySelectorAll('.tab');
@@ -692,6 +705,21 @@ const updateResult = document.getElementById('updateResult');
 const updateFinalMessage = document.getElementById('updateFinalMessage');
 const updatedAppsIcons = document.getElementById('updatedAppsIcons');
 const installedCountEl = document.getElementById('installedCount');
+
+const handleIconCachePurged = () => {
+  document.querySelectorAll('.app-tile img').forEach(img => {
+    if (img.src && img.src.startsWith('appicon://')) {
+      const original = img.src;
+      img.removeAttribute('src');
+      img.setAttribute('data-src', original);
+      if (virtualListApi?.observeIcon) {
+        virtualListApi.observeIcon(img, original);
+      } else if (iconObserver) {
+        iconObserver.observe(img);
+      }
+    }
+  });
+};
 
 const searchFeature = window.features?.search?.init?.({
   state,
@@ -909,8 +937,26 @@ function initLanguagePreferences() {
   } catch(_) {}
 }
 
+const settingsPanelApi = window.ui?.settingsPanel?.init?.({
+  settingsBtn,
+  settingsPanel,
+  disableGpuCheckbox,
+  openExternalCheckbox,
+  purgeIconsBtn,
+  purgeIconsResult,
+  electronAPI: window.electronAPI,
+  showToast,
+  t,
+  getThemePref,
+  applyThemePreference,
+  loadOpenExternalPref,
+  saveOpenExternalPref,
+  onIconCachePurged: handleIconCachePurged
+}) || null;
+
 window.addEventListener('DOMContentLoaded', async () => {
   try {
+    initMarkdownLightbox();
     initIconObserver();
     await loadApps();
     if (window.categories && typeof window.categories.initDropdown === 'function') {
@@ -992,95 +1038,6 @@ if (!localStorage.getItem('defaultMode')) {
   localStorage.setItem('defaultMode', state.viewMode || 'grid');
 }
 
-// Panneau paramètres
-if (settingsBtn && settingsPanel) {
-  settingsBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isOpen = !settingsPanel.hidden;
-    if (isOpen) {
-      settingsPanel.hidden = true;
-      settingsBtn.setAttribute('aria-expanded','false');
-    } else {
-      // Synchroniser radios
-  const themePref = getThemePref();
-      settingsPanel.querySelectorAll('input[name="themePref"]').forEach(r => { r.checked = (r.value === themePref); });
-      settingsPanel.hidden = false;
-      settingsBtn.setAttribute('aria-expanded','true');
-      // Focus panneau pour accessibilité
-      setTimeout(()=> settingsPanel.focus(), 20);
-    }
-  });
-  // Fermer clic extérieur
-  document.addEventListener('click', (ev) => {
-    if (settingsPanel.hidden) return;
-    if (ev.target === settingsPanel || settingsPanel.contains(ev.target) || ev.target === settingsBtn) return;
-    settingsPanel.hidden = true;
-    settingsBtn.setAttribute('aria-expanded','false');
-  });
-  // Fermeture ESC
-  window.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && !settingsPanel.hidden) {
-      settingsPanel.hidden = true;
-      settingsBtn.setAttribute('aria-expanded','false');
-      settingsBtn.focus();
-    }
-    // Ctrl+, ouvre / toggle paramètres
-    if ((ev.ctrlKey || ev.metaKey) && ev.key === ',') {
-      if (settingsBtn) settingsBtn.click();
-    }
-  });
-  // Radios thème
-  settingsPanel.addEventListener('change', (ev) => {
-    const t = ev.target;
-    if (t.name === 'themePref') {
-      localStorage.setItem('themePref', t.value);
-      applyThemePreference();
-      settingsPanel.hidden = true;
-      settingsBtn.setAttribute('aria-expanded','false');
-      settingsBtn.focus();
-    }
-  });
-
-  // Purge cache icônes
-  if (purgeIconsBtn) {
-    purgeIconsBtn.addEventListener('click', async () => {
-      purgeIconsBtn.disabled = true;
-      const oldLabel = purgeIconsBtn.textContent;
-      purgeIconsBtn.textContent = t('settings.purging');
-      try {
-        const res = await window.electronAPI.purgeIconsCache();
-        if (purgeIconsResult) purgeIconsResult.textContent = (res && typeof res.removed === 'number') ? t('settings.removedFiles', {count: res.removed}) : t('settings.done');
-        // Forcer rechargement visible: nettoyer attributs src pour celles déjà en cache
-        document.querySelectorAll('.app-tile img').forEach(img => {
-          if (img.src.startsWith('appicon://')) {
-            const original = img.src; // déclencher rechargement en modifiant data-src
-            img.removeAttribute('src');
-            img.setAttribute('data-src', original);
-            if (iconObserver) iconObserver.observe(img);
-          }
-        });
-      } catch(e){ if (purgeIconsResult) purgeIconsResult.textContent = t('settings.purgeError'); }
-      finally {
-        purgeIconsBtn.textContent = oldLabel;
-        purgeIconsBtn.disabled = false;
-      }
-    });
-  }
-}
-
-
-
-// --- Opening external links preference ---
-// Key: openExternalLinks (string '1' == true)
-const openExternalCheckbox = document.getElementById('openExternalLinksCheckbox');
-// Initialiser checkbox état à l'ouverture du panneau
-if (openExternalCheckbox) {
-  openExternalCheckbox.checked = loadOpenExternalPref();
-  openExternalCheckbox.addEventListener('change', (ev) => {
-    saveOpenExternalPref(openExternalCheckbox.checked);
-  });
-}
-
 // Liens externes
 document.addEventListener('click', (ev) => {
   const a = ev.target.closest && ev.target.closest('a');
@@ -1100,17 +1057,6 @@ document.addEventListener('click', (ev) => {
     window.electronAPI.openExternal(href);
   }
 }, { capture: true });
-function showToast(msg) {
-  if (!toast) return;
-  toast.textContent = msg;
-  toast.hidden = false;
-  if (toastHideTimer) clearTimeout(toastHideTimer);
-  toastHideTimer = setTimeout(() => {
-    toast.hidden = true;
-    toastHideTimer = null;
-  }, 2300);
-}
-
 async function loadApps() {
   appsDiv?.setAttribute('aria-busy','true');
   let detailed;
@@ -1156,6 +1102,7 @@ async function loadApps() {
   } catch(_) { state.installed = new Set(); }
   if (installedCountEl) installedCountEl.textContent = String(state.allApps.filter(a => a.installed && a.hasDiamond).length);
   setAppList(state.filtered);
+  prefetchPreloadImages();
 }
 
 let iconObserver = null;
@@ -1170,7 +1117,7 @@ function initIconObserver(){
           iconObserver.unobserve(img);
         }
       });
-    }, { rootMargin: '1200px' }); // marge accrue pour charger encore plus tôt hors écran
+    }, { rootMargin: '1600px' }); // marge accrue pour charger encore plus tôt hors écran
   }
 }
 
@@ -1178,30 +1125,48 @@ function initIconObserver(){
 // Préchargement async throttlé des images encore non démarrées — démarre après rendu
 let _prefetchScheduled = false;
 function prefetchPreloadImages(limit = 200, concurrency = 6) {
-  // Ne pas relancer si déjà planifié
+  if (iconObserver) return; // IntersectionObserver gère déjà le préchargement anticipé
   if (_prefetchScheduled) return;
-  _prefetchScheduled = true;
-  // Récupérer les images qui portent encore data-src
   const imgs = Array.from(document.querySelectorAll('img[data-src]'));
   if (!imgs.length) return;
-  // Trier par proximité avec le haut de la fenêtre
-  imgs.sort((a,b) => (a.getBoundingClientRect().top || 0) - (b.getBoundingClientRect().top || 0));
+  _prefetchScheduled = true;
   const toLoad = imgs.slice(0, Math.min(limit, imgs.length));
   let idx = 0;
   let active = 0;
-  function nextBatch(){
+
+  const scheduleNext = () => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(pump);
+    } else {
+      setTimeout(pump, 0);
+    }
+  };
+
+  const pump = () => {
     while (active < concurrency && idx < toLoad.length) {
       const img = toLoad[idx++];
       active++;
-      // Start load on next frame to avoid blocking
-      requestAnimationFrame(()=>{
-        try { if (img.getAttribute('data-src')) { img.src = img.getAttribute('data-src'); img.removeAttribute('data-src'); } } catch(_){}
-        active--; if (idx < toLoad.length) setTimeout(nextBatch, 0);
+      queueMicrotask(() => {
+        try {
+          const dataSrc = img.getAttribute('data-src');
+          if (dataSrc) {
+            img.src = dataSrc;
+            img.removeAttribute('data-src');
+          }
+        } catch (_) {}
+        active--;
+        if (idx < toLoad.length) scheduleNext();
+        else if (active === 0) _prefetchScheduled = false;
       });
     }
-  }
-  // lancer après un court délai pour laisser le rendu initial se stabiliser
-  setTimeout(nextBatch, 180);
+    if (idx >= toLoad.length && active === 0) {
+      _prefetchScheduled = false;
+    }
+  };
+
+  setTimeout(() => {
+    pump();
+  }, 180);
 }
 
 function showDetails(appName) {
@@ -1333,6 +1298,29 @@ const legacyExitDetailsView = exitDetailsView;
   };
 })();
 
+if (window.ui?.virtualList?.init) {
+  const api = window.ui.virtualList.init({
+    state,
+    appsDiv,
+    scrollShell,
+    visibleCount: VISIBLE_COUNT,
+    getIconUrl,
+    t,
+    getQueuePosition,
+    getActiveInstallSession: () => activeInstallSession,
+    showDetails,
+    document,
+    window
+  });
+  if (api) {
+    virtualListApi = api;
+    if (typeof api.setAppList === 'function') setAppListImpl = api.setAppList;
+    if (typeof api.renderVirtualList === 'function') renderVirtualList = api.renderVirtualList;
+    if (typeof api.initIconObserver === 'function') initIconObserver = () => api.initIconObserver();
+    if (typeof api.prefetchPreloadImages === 'function') prefetchPreloadImages = (...args) => api.prefetchPreloadImages(...args);
+  }
+}
+
 appsDiv?.addEventListener('click', (e) => {
   const actionBtn = e.target.closest('.inline-action');
 
@@ -1411,7 +1399,8 @@ window.addEventListener('keydown', (e) => {
   // Toggle paramètres Ctrl+,
   if ((e.ctrlKey || e.metaKey) && e.key === ',') {
     e.preventDefault();
-    settingsBtn?.click();
+    if (settingsPanelApi?.toggle) settingsPanelApi.toggle();
+    else settingsBtn?.click();
     return;
   }
   // Escape: fermer détails ou lightbox / menu modes / paramètres
@@ -1419,6 +1408,7 @@ window.addEventListener('keydown', (e) => {
     if (lightbox && !lightbox.hidden) { closeLightbox(); return; }
     if (document.body.classList.contains('details-mode')) { exitDetailsView(); return; }
     if (!modeMenu?.hidden){ modeMenu.hidden = true; modeMenuBtn?.setAttribute('aria-expanded','false'); return; }
+    if (settingsPanelApi?.isOpen?.()) { settingsPanelApi.close(); return; }
     if (!settingsPanel?.hidden){ settingsPanel.hidden = true; settingsBtn?.setAttribute('aria-expanded','false'); return; }
   }
   if (lightbox && !lightbox.hidden) {
@@ -1704,7 +1694,7 @@ runUpdatesBtn?.addEventListener('click', async () => {
     } catch (_) {}
     const dur = Math.round((performance.now()-start)/1000);
     if (updateFinalMessage && updateFinalMessage.textContent) updateFinalMessage.textContent += t('updates.duration', {dur});
-  } catch(e){
+  } catch (_err) {
     // (Sortie supprimée)
   } finally {
     updateInProgress = false;
@@ -1739,7 +1729,7 @@ rawSaveBtn?.addEventListener('click', () => {
     a.download = 'update-log-'+ ts + '.txt';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=> URL.revokeObjectURL(url), 2000);
-  } catch(e){ showToast(t('toast.saveError')); }
+  } catch (_err) { showToast(t('toast.saveError')); }
 });
 
 // ...existing code...
@@ -1773,7 +1763,7 @@ async function loadRemoteDescription(appName) {
   // Pour le shortDesc, on prend la première ligne non vide (hors titre)
   const descLines = md.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
   shortDesc = descLines[0] || 'Description non fournie.';
-  } catch (e) {
+  } catch (_err) {
     shortDesc = 'Description indisponible.';
     longDesc = 'Impossible de parser le markdown.';
   }
@@ -1833,23 +1823,6 @@ function applyDescription(appName, record) {
 // Lightbox supprimé
   }
 }
-
-// Transforme le texte brut de description en HTML avec liens cliquables
-function linkifyDescription(text) {
-  if (!text) return '';
-  // Échapper d'abord
-  const escaped = text
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;');
-  // Regex simple pour URLs http(s) (éviter de trop englober ponctuation finale)
-  const urlRegex = /(https?:\/\/[A-Za-z0-9._~:/?#@!$&'()*+,;=%-]+)(?=[\s)|\]}"'<>]|$)/g;
-  const withLinks = escaped.replace(urlRegex, (m) => `<a href="${m}" target="_blank" rel="noopener noreferrer">${m}</a>`);
-  // Newlines => <br>
-  return withLinks.replace(/\n/g,'<br>');
-}
-
-// (override supprimé, applyDescription fait déjà le travail)
 
 function openLightbox(images, index, captionBase) {
   if (!lightbox || !lightboxImage) return;
