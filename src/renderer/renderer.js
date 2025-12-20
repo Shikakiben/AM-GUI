@@ -861,6 +861,16 @@ function applyTranslations() {
       }
     }
   });
+  // data-i18n-html (innerHTML autorisé pour cas spécifiques)
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.getAttribute('data-i18n-html');
+    const localized = (translations[lang] && translations[lang][key])
+      || (translations['en'] && translations['en'][key])
+      || (translations['fr'] && translations['fr'][key]);
+    if (localized) {
+      el.innerHTML = localized;
+    }
+  });
   // data-i18n-placeholder
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     const key = el.getAttribute('data-i18n-placeholder');
@@ -1254,6 +1264,9 @@ function showDetails(appName) {
   if (tabsRowSecondary) tabsRowSecondary.style.visibility = 'hidden';
   // Suppression de la barre : rien à faire
   document.body.classList.add('details-mode');
+  if (virtualListApi?.disconnectObservers) {
+    try { virtualListApi.disconnectObservers(); } catch (_) {}
+  }
   if (appsDiv) appsDiv.hidden = true;
   loadRemoteDescription(app.name).catch(err => {
     if (detailsLong) detailsLong.textContent = t('details.errorDesc', {error: err?.message || err || t('error.unknown')});
@@ -1264,6 +1277,9 @@ function exitDetailsView() {
   if (appDetailsSection) appDetailsSection.hidden = true;
   document.body.classList.remove('details-mode');
   if (appsDiv) appsDiv.hidden = false;
+  if (virtualListApi?.renderVirtualList) {
+    try { virtualListApi.renderVirtualList(); } catch (_) {}
+  }
   // Réaffiche la barre d'onglets catégories et le bouton miroir/tout
   const tabsRowSecondary = document.querySelector('.tabs-row-secondary');
   if (tabsRowSecondary) tabsRowSecondary.style.visibility = 'visible';
@@ -1543,6 +1559,15 @@ tabs.forEach(tab => {
     const isAdvancedTab = state.activeCategory === 'advanced';
     if (updatesPanel) updatesPanel.hidden = !isUpdatesTab;
     if (advancedPanel) advancedPanel.hidden = !isAdvancedTab;
+    const showingApps = !(isUpdatesTab || isAdvancedTab);
+    if (appsDiv) appsDiv.hidden = !showingApps;
+    if (showingApps) {
+      if (virtualListApi?.renderVirtualList) {
+        try { virtualListApi.renderVirtualList(); } catch (_) {}
+      }
+    } else if (virtualListApi?.disconnectObservers) {
+      try { virtualListApi.disconnectObservers(); } catch (_) {}
+    }
     if (!isUpdatesTab && updateSpinner) updateSpinner.hidden = true;
     if (isUpdatesTab) {
       if (updateInProgress) {
