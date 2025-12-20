@@ -4,11 +4,17 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8"
+    "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
+    "lint": "eslint main.js preload.js src/**/*.js"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
+    "@eslint/js": "^9.39.2",
     "electron": "^35.7.5",
-    "@electron/rebuild": "^4.0.1"
+    "eslint": "^9.39.2",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.50.0"
   },
   "dependencies": {
     "@xterm/xterm": "^5.5.0",
