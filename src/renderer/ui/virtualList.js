@@ -20,8 +20,14 @@
     let lastTileObserver = null;
     let iconObserver = null;
     let skeletonObserver = null;
+    let hydrationQueue = [];
+    let hydrationScheduled = false;
+    const HYDRATE_BATCH_SIZE = 6;
 
     function setAppList(list) {
+      disconnectListObservers();
+      hydrationQueue = [];
+      hydrationScheduled = false;
       appListVirtual = Array.isArray(list) ? list : [];
       currentEndVirtual = visibleCount;
       if (scrollShell) scrollShell.scrollTop = 0;
@@ -30,6 +36,7 @@
 
     function renderVirtualList() {
       if (!appsDiv) return;
+      disconnectListObservers();
       appsDiv.innerHTML = '';
       const useSkeleton = appListVirtual.length > 50;
       if (useSkeleton) {
@@ -45,13 +52,12 @@
         if (skeletonObserver) skeletonObserver.disconnect();
         skeletonObserver = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
-            if (entry.isIntersecting && !entry.target.classList.contains('hydrated')) {
-              const idx = parseInt(entry.target.dataset.index, 10);
-              const realTile = buildTile(appListVirtual[idx]);
-              realTile.classList.add('hydrated');
-              entry.target.replaceWith(realTile);
-              if (skeletonObserver) skeletonObserver.observe(realTile);
-            }
+            if (!entry.isIntersecting) return;
+            if (entry.target.classList.contains('hydrated')) return;
+            if (entry.target.dataset.hydrateQueued === '1') return;
+            const idx = parseInt(entry.target.dataset.index, 10);
+            entry.target.dataset.hydrateQueued = '1';
+            enqueueHydration(idx, entry.target);
           });
         }, { root: scrollShell, threshold: 0.1 });
         const tiles = appsDiv.querySelectorAll('.app-tile-skeleton');
@@ -256,12 +262,79 @@
       setTimeout(() => pump(), 180);
     }
 
+    function enqueueHydration(index, placeholder) {
+      hydrationQueue.push({ index, placeholder });
+      scheduleHydration();
+    }
+
+    function scheduleHydration() {
+      if (hydrationScheduled) return;
+      hydrationScheduled = true;
+      const runner = (deadline) => {
+        hydrationScheduled = false;
+        let processed = 0;
+        while (hydrationQueue.length) {
+          if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() < 2 && processed >= HYDRATE_BATCH_SIZE) {
+            break;
+          }
+          hydrateSkeleton(hydrationQueue.shift());
+          processed++;
+        }
+        if (hydrationQueue.length) scheduleHydration();
+      };
+      if (typeof windowRef.requestIdleCallback === 'function') {
+        windowRef.requestIdleCallback(runner);
+      } else {
+        windowRef.requestAnimationFrame(runner);
+      }
+    }
+
+    function hydrateSkeleton(task) {
+      if (!task) return;
+      const { index, placeholder } = task;
+      if (!placeholder || !placeholder.isConnected) return;
+      const tileData = appListVirtual[index];
+      delete placeholder.dataset.hydrateQueued;
+      if (!tileData) {
+        placeholder.remove();
+        return;
+      }
+      const realTile = buildTile(tileData);
+      realTile.classList.add('hydrated');
+      placeholder.replaceWith(realTile);
+    }
+
+    function disconnectListObservers() {
+      if (lastTileObserver) {
+        lastTileObserver.disconnect();
+        lastTileObserver = null;
+      }
+      if (skeletonObserver) {
+        skeletonObserver.disconnect();
+        skeletonObserver = null;
+      }
+      hydrationQueue = [];
+      hydrationScheduled = false;
+    }
+
+    function dispose() {
+      disconnectListObservers();
+      if (iconObserver) {
+        iconObserver.disconnect();
+        iconObserver = null;
+      }
+      loadedIcons.clear();
+      appListVirtual = [];
+    }
+
     return {
       setAppList,
       renderVirtualList,
       initIconObserver,
       observeIcon,
       prefetchPreloadImages,
+      disconnectObservers: disconnectListObservers,
+      dispose,
       resetLoadedIcons: () => loadedIcons.clear(),
       getLoadedIcons: () => loadedIcons,
       getList: () => appListVirtual.slice()
