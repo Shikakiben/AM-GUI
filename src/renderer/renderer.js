@@ -24,6 +24,8 @@ const VISIBLE_COUNT = typeof appConstants.VISIBLE_COUNT === 'number' ? appConsta
 const CATEGORY_ICON_MAP = appConstants.CATEGORY_ICON_MAP || {};
 const appUtils = window.utils || {};
 const appPreferences = window.preferences || {};
+const AM_INSTALLER_COMMAND = 'wget -q https://raw.githubusercontent.com/ivan-hc/AM/main/AM-INSTALLER && chmod a+x ./AM-INSTALLER && ./AM-INSTALLER && rm ./AM-INSTALLER';
+const PM_DOCS_URL = 'https://github.com/ivan-hc/AM#installation';
 const getThemePref = typeof appPreferences.getThemePref === 'function'
   ? appPreferences.getThemePref
   : () => {
@@ -352,6 +354,9 @@ const state = {
 };
 
 let virtualListApi = null;
+let pmPopupCtrl = null;
+let pmPopupStatus = null;
+let pmAutoInstallRunning = false;
 
 const toast = document.getElementById('toast');
 const toastFallbackApi = (() => {
@@ -829,14 +834,189 @@ function t(key) {
   let str = (translations[lang] && translations[lang][key]) || (translations['en'] && translations['en'][key]) || (translations['fr'] && translations['fr'][key]) || key;
   if (arguments.length > 1 && typeof str === 'string') {
     const vars = arguments[1];
-    Object.entries(vars).forEach(([k, v]) => {
-      str = str.replace(new RegExp(`#?\{${k}\}`, 'g'), v);
-    });
+    if (vars && typeof vars === 'object') {
+      Object.entries(vars).forEach(([k, v]) => {
+        str = str.replace(new RegExp(`#?\{${k}\}`, 'g'), v);
+      });
+    }
   }
   return str;
 }
 
+function setPmPopupStatus(key, vars) {
+  if (!pmPopupStatus) return;
+  const text = t(key, vars);
+  pmPopupStatus.textContent = typeof text === 'string' ? text : key;
+}
+
+function togglePmPopupBusy(isBusy) {
+  if (!pmPopupCtrl) return;
+  const buttons = [pmPopupCtrl.autoBtn, pmPopupCtrl.manualBtn].filter(Boolean);
+  buttons.forEach((btn) => { btn.disabled = !!isBusy; });
+  if (pmPopupCtrl.autoBtn) {
+    pmPopupCtrl.autoBtn.classList.toggle('is-loading', !!isBusy);
+  }
+  if (!isBusy && pmPopupCtrl.manualBtn) {
+    pmPopupCtrl.manualBtn.classList.remove('is-loading');
+  }
+}
+
+async function openPmDocs() {
+  try {
+    if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
+      const res = await window.electronAPI.openExternal(PM_DOCS_URL);
+      if (res && res.ok === false) throw new Error(res.error || 'open failed');
+    } else {
+      window.open(PM_DOCS_URL, '_blank', 'noopener,noreferrer');
+    }
+  } catch (_) {
+    window.open(PM_DOCS_URL, '_blank', 'noopener,noreferrer');
+  }
+}
+
+async function runAutoInstallAppMan() {
+  if (pmAutoInstallRunning) return;
+  const api = window.electronAPI;
+  if (!api || typeof api.installAppManAuto !== 'function') {
+    setPmPopupStatus('missingPm.auto.error', { msg: 'IPC unavailable' });
+    return;
+  }
+  pmAutoInstallRunning = true;
+  togglePmPopupBusy(true);
+  setPmPopupStatus('missingPm.auto.installing');
+  try {
+    const res = await api.installAppManAuto();
+    if (!res || res.ok !== true) {
+      throw new Error(res && res.error ? res.error : 'install failed');
+    }
+    setPmPopupStatus('missingPm.auto.success');
+    showToast(t('missingPm.auto.success'));
+    await loadApps();
+    hideMissingPmPopup();
+  } catch (err) {
+    console.error('Auto AppMan install failed', err);
+    setPmPopupStatus('missingPm.auto.error', { msg: err?.message || 'error' });
+    showToast(t('missingPm.auto.errorShort'));
+  } finally {
+    togglePmPopupBusy(false);
+    pmAutoInstallRunning = false;
+  }
+}
+
+async function handleManualInstallClick() {
+  const command = AM_INSTALLER_COMMAND;
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(command);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = command;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    showToast(t('missingPm.manual.copied'));
+    setPmPopupStatus('missingPm.manual.copied');
+  } catch (err) {
+    console.error('Manual install copy error', err);
+    showToast(t('missingPm.manual.copyError'));
+    setPmPopupStatus('missingPm.manual.copyError');
+  }
+}
+
+function ensureMissingPmPopup() {
+  if (pmPopupCtrl) return pmPopupCtrl;
+  if (!document?.body) return null;
+  const layer = document.createElement('div');
+  layer.className = 'pm-popup-layer';
+  layer.setAttribute('aria-hidden', 'true');
+  layer.innerHTML = `
+    <section class="pm-popup-panel" role="dialog" aria-modal="true">
+      <button class="pm-popup-close" type="button" data-action="dismiss" aria-label="${t('modal.close') || 'Close'}">×</button>
+      <p class="pm-popup-desc pm-popup-desc--intro">${t('missingPm.popup.desc')}</p>
+      <div class="pm-popup-options">
+        <article class="pm-popup-option pm-popup-option--auto">
+          <div>
+            <h3>${t('missingPm.popup.autoTitle')}</h3>
+            <p>${t('missingPm.popup.autoDesc')}</p>
+          </div>
+          <button type="button" class="btn btn-primary" data-action="auto-install">${t('missingPm.popup.autoCta')}</button>
+        </article>
+        <article class="pm-popup-option pm-popup-option--manual">
+          <div>
+            <h3>${t('missingPm.popup.manualTitle')}</h3>
+            <p>${t('missingPm.popup.manualDesc')}</p>
+          </div>
+          <button type="button" class="btn btn-outline" data-action="manual-install">${t('missingPm.popup.manualCta')}</button>
+        </article>
+      </div>
+      <footer class="pm-popup-footer">
+        <button type="button" class="btn-link" data-action="docs-link">${t('missingPm.popup.docs')}</button>
+        <span class="pm-popup-status" data-status>${t('missingPm.popup.statusIdle')}</span>
+      </footer>
+    </section>`;
+  document.body.appendChild(layer);
+  const autoBtn = layer.querySelector('[data-action="auto-install"]');
+  const manualBtn = layer.querySelector('[data-action="manual-install"]');
+  const docsBtn = layer.querySelector('[data-action="docs-link"]');
+  const dismissBtn = layer.querySelector('[data-action="dismiss"]');
+  pmPopupStatus = layer.querySelector('[data-status]');
+
+  layer.addEventListener('click', (ev) => {
+    if (ev.target === layer) hideMissingPmPopup();
+  });
+
+  autoBtn?.addEventListener('click', runAutoInstallAppMan);
+  manualBtn?.addEventListener('click', () => {
+    handleManualInstallClick();
+  });
+  docsBtn?.addEventListener('click', openPmDocs);
+  dismissBtn?.addEventListener('click', hideMissingPmPopup);
+
+  pmPopupCtrl = {
+    layer,
+    autoBtn,
+    manualBtn,
+    show() {
+      layer.classList.add('open');
+      layer.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('pm-popup-open');
+      togglePmPopupBusy(false);
+      setPmPopupStatus('missingPm.popup.statusIdle');
+      setTimeout(() => autoBtn?.focus(), 60);
+    },
+    hide() {
+      layer.classList.remove('open');
+      layer.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('pm-popup-open');
+    }
+  };
+
+  return pmPopupCtrl;
+}
+
+function showMissingPmPopup() {
+  const ctrl = ensureMissingPmPopup();
+  ctrl?.show();
+}
+
+function hideMissingPmPopup() {
+  if (!pmPopupCtrl) return;
+  pmPopupCtrl.hide();
+}
+
 function applyTranslations() {
+  const popupWasOpen = !!(pmPopupCtrl?.layer && pmPopupCtrl.layer.classList.contains('open'));
+  if (pmPopupCtrl?.layer) {
+    try { pmPopupCtrl.layer.remove(); } catch(_) {}
+    document.body?.classList.remove('pm-popup-open');
+    pmPopupCtrl = null;
+    pmPopupStatus = null;
+  }
   // Boutons dynamiques détails (install/uninstall)
   if (detailsInstallBtn) detailsInstallBtn.textContent = t('details.install');
   if (detailsUninstallBtn) detailsUninstallBtn.textContent = t('details.uninstall');
@@ -906,6 +1086,9 @@ function applyTranslations() {
   const tabSecondary = document.querySelector('.tab-secondary');
   if (tabSecondary) {
     tabSecondary.textContent = t('tabs.categories') || 'Catégories';
+  }
+  if (popupWasOpen) {
+    showMissingPmPopup();
   }
 }
 
@@ -1078,13 +1261,15 @@ async function loadApps() {
   if (!detailed.pmFound) {
     state.allApps = [];
     state.filtered = [];
+    showMissingPmPopup();
     if (appsDiv) {
-      appsDiv.innerHTML = `<div class="empty-state"><h3>Aucun gestionnaire détecté</h3><p style='font-size:13px;line-height:1.4;max-width:520px;'>Installez <code>AM</code> ou <code>appman</code> (dans le PATH). Sans cela le catalogue ne peut pas être affiché.</p></div>`;
+      appsDiv.innerHTML = `<div class="empty-state pm-empty-placeholder"><p>${t('missingPm.popup.desc')}</p></div>`;
     }
     if (installedCountEl) installedCountEl.textContent = '0';
     appsDiv?.setAttribute('aria-busy','false');
     return;
   }
+  hideMissingPmPopup();
   if (detailed.error) {
     state.allApps = [];
     state.filtered = [];

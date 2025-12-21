@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   installCancel: (id) => ipcRenderer.invoke('install-cancel', id, id),
   installSendChoice: (id, choice) => ipcRenderer.invoke('install-send-choice', id, choice),
   onInstallProgress: (cb) => ipcRenderer.on('install-progress', (e, msg) => cb && cb(msg)),
+  installAppManAuto: () => ipcRenderer.invoke('install-appman-auto'),
   purgeIconsCache: () => ipcRenderer.invoke('purge-icons-cache'),
   getGpuPref: () => ipcRenderer.invoke('get-gpu-pref'),
   setGpuPref: (val) => ipcRenderer.invoke('set-gpu-pref', val),

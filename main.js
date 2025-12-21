@@ -5,6 +5,7 @@ const { exec, spawn } = require('child_process');
 const { registerCategoryHandlers } = require('./src/main/categories');
 const { detectPackageManager, invalidatePackageManagerCache } = require('./src/main/packageManager');
 const { createIconCacheManager } = require('./src/main/iconCache');
+const { installAppManAuto } = require('./src/main/appManAuto');
 
 const iconCacheManager = createIconCacheManager(app);
 registerCategoryHandlers(ipcMain);
@@ -440,6 +441,16 @@ ipcMain.handle('install-send-choice', async (_event, installId, choice) => {
     return { ok:true };
   } catch (err) {
     return { ok:false, error: err?.message || 'Échec envoi du choix' };
+  }
+});
+
+ipcMain.handle('install-appman-auto', async () => {
+  try {
+    const result = await installAppManAuto();
+    invalidatePackageManagerCache();
+    return { ok: true, result };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Installation AppMan échouée.' };
   }
 });
 
