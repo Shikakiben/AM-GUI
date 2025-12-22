@@ -69,6 +69,6 @@ Thanks to [Ivan](https://github.com/ivan-hc) and the [pkgforge community](https:
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0 (GPLv3)**, the same as the original AM project.
+This project is licensed under the **GNU General Public License v3.0 (GPLv3)**.
 
 See the LICENSE file for details.
