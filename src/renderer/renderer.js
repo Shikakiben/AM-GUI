@@ -702,6 +702,14 @@ const purgeIconsResult = document.getElementById('purgeIconsResult');
 const tabs = document.querySelectorAll('.tab');
 // Mise à jour
 let updateInProgress = false;
+let updatesXterm = null;
+let updatesXtermFit = null;
+let updatesTerminalEl = null;
+let updatesTerminalFallbackMode = false;
+let updatesTerminalExpanded = false;
+let updateSpinnerBusy = false;
+let activeUpdateStreamId = null;
+const updateStreamWaiters = new Map();
 const updatesPanel = document.getElementById('updatesPanel');
 const advancedPanel = document.getElementById('advancedPanel');
 const runUpdatesBtn = document.getElementById('runUpdatesBtn');
@@ -709,6 +717,9 @@ const updateSpinner = document.getElementById('updateSpinner');
 const updateResult = document.getElementById('updateResult');
 const updateFinalMessage = document.getElementById('updateFinalMessage');
 const updatedAppsIcons = document.getElementById('updatedAppsIcons');
+const updatesTerminalWrap = document.getElementById('updatesTerminalWrap');
+const updatesTerminalNode = document.getElementById('updatesTerminal');
+const updatesToggleBtn = document.getElementById('updatesToggleBtn');
 const installedCountEl = document.getElementById('installedCount');
 
 const handleIconCachePurged = () => {
@@ -744,15 +755,6 @@ const searchFeature = window.features?.search?.init?.({
 if (searchFeature && typeof searchFeature.applySearch === 'function') {
   applySearch = searchFeature.applySearch;
 }
-// Modale sortie brute update
-const showRawUpdateBtn = document.getElementById('showRawUpdateBtn');
-const rawUpdateModal = document.getElementById('rawUpdateModal');
-const rawUpdatePre = document.getElementById('rawUpdatePre');
-const rawUpdateClose = document.getElementById('rawUpdateClose');
-const rawUpdateClose2 = document.getElementById('rawUpdateClose2');
-const rawCopyBtn = document.getElementById('rawCopyBtn');
-const rawSaveBtn = document.getElementById('rawSaveBtn');
-let lastUpdateRaw = '';
 // ...existing code...
 // Modale confirmation actions
 const actionConfirmModal = document.getElementById('actionConfirmModal');
@@ -1087,6 +1089,8 @@ function applyTranslations() {
   if (tabSecondary) {
     tabSecondary.textContent = t('tabs.categories') || 'Catégories';
   }
+  setUpdateSpinnerBusy(updateSpinnerBusy);
+  updateUpdatesToggleUi();
   if (popupWasOpen) {
     showMissingPmPopup();
   }
@@ -1623,7 +1627,7 @@ window.addEventListener('keydown', (e) => {
 (async () => {
   await loadApps();
   // Assurer spinner et résultats cachés au démarrage
-  if (updateSpinner) updateSpinner.hidden = true;
+  setUpdateSpinnerBusy(false);
   if (updateResult) updateResult.style.display = 'none';
   // Forcer la vue liste au démarrage
   if (appDetailsSection) appDetailsSection.hidden = true;
@@ -1753,15 +1757,16 @@ tabs.forEach(tab => {
     } else if (virtualListApi?.disconnectObservers) {
       try { virtualListApi.disconnectObservers(); } catch (_) {}
     }
-    if (!isUpdatesTab && updateSpinner) updateSpinner.hidden = true;
     if (isUpdatesTab) {
       if (updateInProgress) {
         runUpdatesBtn.disabled = true;
-        updateSpinner.hidden = false;
+        setUpdateSpinnerBusy(true);
       } else {
         runUpdatesBtn.disabled = false;
-        updateSpinner.hidden = true;
+        setUpdateSpinnerBusy(false);
       }
+    } else {
+      setUpdateSpinnerBusy(false);
     }
     // Pas de terminal dans le mode avancé désormais
     if (document.body.classList.contains('details-mode')) {
@@ -1775,11 +1780,206 @@ tabs.forEach(tab => {
 // Sortie avec ESC
 // (Ancien handler Escape détails fusionné ci-dessus)
 
-// Bouton Mettre à jour: exécution simple (pas de progression heuristique)
+// Bouton Mettre à jour: terminal intégré + flux streaming
+function hasUpdatesStreamingSupport() {
+  return !!(window.electronAPI?.startUpdates && window.electronAPI?.onUpdatesProgress);
+}
+
+function setUpdateSpinnerBusy(isBusy) {
+  if (!updateSpinner) return;
+  updateSpinnerBusy = !!isBusy;
+  updateSpinner.setAttribute('data-busy', updateSpinnerBusy ? 'true' : 'false');
+  const label = updateSpinner.querySelector('.spinner-label');
+  if (label) label.textContent = t(updateSpinnerBusy ? 'updates.loading' : 'updates.ready');
+}
+
+function updateUpdatesToggleUi() {
+  if (!updatesToggleBtn) return;
+  const key = updatesTerminalExpanded ? 'updates.toggleHide' : 'updates.toggleShow';
+  updatesToggleBtn.textContent = t(key);
+  updatesToggleBtn.setAttribute('aria-expanded', updatesTerminalExpanded ? 'true' : 'false');
+}
+
+function applyUpdatesTerminalVisibility() {
+  if (!updatesTerminalWrap) return;
+  updatesTerminalWrap.hidden = !updatesTerminalExpanded;
+  if (updatesTerminalExpanded) {
+    ensureUpdatesTerminal();
+    if (updatesXtermFit) setTimeout(() => updatesXtermFit?.fit(), 30);
+  }
+}
+
+function setUpdatesTerminalExpanded(expanded) {
+  const next = !!expanded;
+  if (next === updatesTerminalExpanded) {
+    updateUpdatesToggleUi();
+    return;
+  }
+  updatesTerminalExpanded = next;
+  applyUpdatesTerminalVisibility();
+  updateUpdatesToggleUi();
+}
+
+function ensureUpdatesTerminal() {
+  if (updatesTerminalFallbackMode) {
+    if (!updatesTerminalEl) updatesTerminalEl = updatesTerminalNode;
+    updatesTerminalEl?.classList.add('updates-terminal-fallback');
+    return null;
+  }
+  if (!updatesTerminalEl) updatesTerminalEl = updatesTerminalNode;
+  if (!updatesTerminalEl) return null;
+  if (updatesXterm) return updatesXterm;
+  try {
+    const { Terminal } = require('@xterm/xterm');
+    const { FitAddon } = require('@xterm/xterm-addon-fit');
+    updatesXterm = new Terminal({
+      fontSize: 12,
+      fontFamily: 'JetBrains Mono, SFMono-Regular, Menlo, Consolas, monospace',
+      convertEol: true,
+      allowTransparency: true,
+      theme: { background: '#050e17', foreground: '#d4e7ff' },
+      scrollback: 2000,
+      disableStdin: true
+    });
+    updatesXtermFit = new FitAddon();
+    updatesXterm.loadAddon(updatesXtermFit);
+    updatesXterm.open(updatesTerminalEl);
+    setTimeout(() => updatesXtermFit?.fit(), 60);
+    window.addEventListener('resize', () => updatesXtermFit?.fit());
+    updatesTerminalEl.classList.remove('updates-terminal-fallback');
+  } catch (err) {
+    console.error('Init updates terminal failed', err);
+    updatesXterm = null;
+    updatesXtermFit = null;
+    updatesTerminalFallbackMode = true;
+    if (updatesTerminalEl) {
+      updatesTerminalEl.classList.add('updates-terminal-fallback');
+      updatesTerminalEl.textContent = '';
+    }
+    return null;
+  }
+  return updatesXterm;
+}
+
+function revealUpdatesTerminal(forceExpand = false) {
+  if (forceExpand) {
+    setUpdatesTerminalExpanded(true);
+    return;
+  }
+  ensureUpdatesTerminal();
+  if (updatesTerminalExpanded && updatesTerminalWrap) {
+    updatesTerminalWrap.hidden = false;
+  }
+}
+
+function resetUpdatesTerminal() {
+  const term = ensureUpdatesTerminal();
+  if (!term) {
+    if (updatesTerminalEl) {
+      updatesTerminalEl.classList.add('updates-terminal-fallback');
+      updatesTerminalEl.textContent = '';
+      updatesTerminalEl.scrollTop = 0;
+    }
+    return;
+  }
+  try { term.reset(); }
+  catch(_) { term.clear?.(); }
+  if (updatesXtermFit) setTimeout(() => updatesXtermFit?.fit(), 30);
+}
+
+function appendUpdatesTerminalChunk(chunk) {
+  if (!chunk) return;
+  const term = ensureUpdatesTerminal();
+  if (!term) {
+    if (!updatesTerminalEl) return;
+    const cleaned = chunk
+      .replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '')
+      .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
+      .replace(/[\x07\x08]/g, '');
+    updatesTerminalEl.classList.add('updates-terminal-fallback');
+    updatesTerminalEl.textContent += cleaned.replace(/\r?\n/g, '\n');
+    updatesTerminalEl.scrollTop = updatesTerminalEl.scrollHeight;
+    return;
+  }
+  term.write(chunk.replace(/\r?\n/g, '\r\n'));
+}
+
+function waitForUpdateJob(id) {
+  return new Promise((resolve, reject) => {
+    updateStreamWaiters.set(id, { resolve, reject });
+  });
+}
+
+async function startUpdatesStream() {
+  revealUpdatesTerminal();
+  resetUpdatesTerminal();
+  const startRes = await window.electronAPI.startUpdates();
+  if (!startRes || startRes.error) {
+    throw new Error(startRes?.error || 'updates start failed');
+  }
+  activeUpdateStreamId = startRes.id;
+  return waitForUpdateJob(startRes.id);
+}
+
+function resolveUpdateWaiter(msg, isError) {
+  if (!msg || !msg.id) return;
+  const waiter = updateStreamWaiters.get(msg.id);
+  if (!waiter) return;
+  try {
+    if (isError) waiter.reject?.(msg);
+    else waiter.resolve?.(msg);
+  } finally {
+    updateStreamWaiters.delete(msg.id);
+  }
+}
+
+updatesToggleBtn?.addEventListener('click', () => {
+  setUpdatesTerminalExpanded(!updatesTerminalExpanded);
+});
+
+window.electronAPI?.onUpdatesProgress?.((msg) => {
+  if (!msg || !msg.id) return;
+  if (activeUpdateStreamId && msg.id !== activeUpdateStreamId) {
+    if (msg.kind === 'done') resolveUpdateWaiter(msg, false);
+    if (msg.kind === 'error') resolveUpdateWaiter(msg, true);
+    return;
+  }
+  switch (msg.kind) {
+    case 'start':
+      activeUpdateStreamId = msg.id;
+      revealUpdatesTerminal();
+      resetUpdatesTerminal();
+      appendUpdatesTerminalChunk(`\x1b[36m${t('updates.logHeader') || 'am -u'}\x1b[0m\r\n`);
+      break;
+    case 'data':
+      appendUpdatesTerminalChunk(typeof msg.chunk === 'string' ? msg.chunk : '');
+      break;
+    case 'done':
+      appendUpdatesTerminalChunk(`\r\n\x1b[32m${t('updates.logCompleted') || 'Terminé'} (code ${typeof msg.code === 'number' ? msg.code : 0})\x1b[0m\r\n`);
+      resolveUpdateWaiter(msg, false);
+      activeUpdateStreamId = null;
+      break;
+    case 'error':
+      appendUpdatesTerminalChunk(`\r\n\x1b[31m${msg.message || (t('updates.error') || 'Erreur')}\x1b[0m\r\n`);
+      resolveUpdateWaiter(msg, true);
+      activeUpdateStreamId = null;
+      break;
+  }
+});
+
+// Bouton Mettre à jour: analyse du log
+function stripAnsiSequences(text = '') {
+  return text
+    .replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '')
+    .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
+    .replace(/[\x07\x08]/g, '');
+}
+
 function parseUpdatedApps(res){
+  const cleanedOutput = stripAnsiSequences(res || '');
   const updated = new Set();
-  if (typeof res !== 'string') return updated;
-  const lines = res.split(/\r?\n/);
+  if (typeof cleanedOutput !== 'string') return updated;
+  const lines = cleanedOutput.split(/\r?\n/);
   for (const raw of lines){
     const line = raw.trim();
     if (!line) continue;
@@ -1805,9 +2005,10 @@ function parseUpdatedApps(res){
 }
 
 function handleUpdateCompletion(fullText){
+  const sanitized = stripAnsiSequences(fullText || '');
   // Chercher la section "The following apps have been updated:" dans le log
   let filteredUpdated = null;
-  const match = fullText && fullText.match(/The following apps have been updated:[^\n]*\n([\s\S]*?)\n[-=]{5,}/i);
+  const match = sanitized && sanitized.match(/The following apps have been updated:[^\n]*\n([\s\S]*?)\n[-=]{5,}/i);
   if (match) {
     // Extraire les noms d'apps de cette section
     filteredUpdated = new Set();
@@ -1818,8 +2019,8 @@ function handleUpdateCompletion(fullText){
       if (m) filteredUpdated.add(m[1].toLowerCase());
     }
   }
-  const updated = parseUpdatedApps(fullText || '');
-  const nothingPhrase = /Nothing to do here!?/i.test(fullText || '');
+  const updated = parseUpdatedApps(sanitized);
+  const nothingPhrase = /Nothing to do here!?/i.test(sanitized || '');
   let toShow = updated;
   if (filteredUpdated && filteredUpdated.size > 0) {
     // Ne garder que les apps détectées ET listées dans la section
@@ -1852,7 +2053,7 @@ function handleUpdateCompletion(fullText){
     }
   } else {
     // Fallback: pas de noms détectés mais sortie non vide et pas de message "rien à faire" => supposer des mises à jour
-    if (!nothingPhrase && (fullText || '').trim()) {
+    if (!nothingPhrase && sanitized.trim()) {
       if (updateFinalMessage) updateFinalMessage.textContent = t('updates.done');
     } else {
       if (updateFinalMessage) updateFinalMessage.textContent = t('updates.none');
@@ -1864,82 +2065,76 @@ function handleUpdateCompletion(fullText){
   setTimeout(() => { loadApps().then(applySearch); }, 400);
 }
 
+async function refreshAfterUpdates(){
+  if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
+    await window.electronAPI.deleteCategoriesCache();
+  }
+  if (window.categories && typeof window.categories.resetCache === 'function') {
+    window.categories.resetCache();
+  }
+  if (window.categories && typeof window.categories.loadCategories === 'function') {
+    await window.categories.loadCategories({ showToast });
+  }
+  showToast(t('toast.refreshing'));
+  await loadApps();
+  applySearch();
+  try {
+    const needs = state.allApps.some(a => a.installed && (!a.version || String(a.version).toLowerCase().includes('unsupported')));
+    if (needs) {
+      await new Promise(r => setTimeout(r, 3000));
+      await loadApps();
+      applySearch();
+    }
+  } catch (_) {}
+}
+
+async function fetchUpdatesOutput(){
+  if (hasUpdatesStreamingSupport()) {
+    try {
+      return await startUpdatesStream();
+    } catch (err) {
+      console.warn('Streaming updates failed, fallback to am-action', err);
+      activeUpdateStreamId = null;
+    }
+  }
+  if (!window.electronAPI?.amAction) return { output: '' };
+  const res = await window.electronAPI.amAction('__update_all__');
+  const output = typeof res === 'string' ? res : (res ? String(res) : '');
+  if (output) {
+    revealUpdatesTerminal();
+    resetUpdatesTerminal();
+    appendUpdatesTerminalChunk(output);
+  }
+  return { output };
+}
+
 runUpdatesBtn?.addEventListener('click', async () => {
   if (runUpdatesBtn.disabled) return;
   updateInProgress = true;
   showToast(t('toast.updating'));
-  updateSpinner.hidden = false;
-  updateResult.style.display = 'none';
-  updateFinalMessage.textContent='';
-  updatedAppsIcons.innerHTML='';
+  setUpdateSpinnerBusy(true);
+  if (updateResult) updateResult.style.display = 'none';
+  if (updateFinalMessage) updateFinalMessage.textContent='';
+  if (updatedAppsIcons) updatedAppsIcons.innerHTML='';
   runUpdatesBtn.disabled = true;
   try {
     const start = performance.now();
-    const res = await window.electronAPI.amAction('__update_all__');
-    lastUpdateRaw = res || '';
-    handleUpdateCompletion(res || '');
-    // --- Synchronisation complète comme le bouton sync ---
-    if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
-      await window.electronAPI.deleteCategoriesCache();
-    }
-    if (window.categories && typeof window.categories.resetCache === 'function') {
-      window.categories.resetCache();
-    }
-    if (window.categories && typeof window.categories.loadCategories === 'function') {
-      await window.categories.loadCategories({ showToast });
-    }
-    const tabApplications = document.querySelector('.tab[data-category="all"]');
-    if (tabApplications) tabApplications.click();
-    showToast(t('toast.refreshing'));
-    await loadApps();
-    applySearch();
-    // --- Fin synchronisation ---
-    try {
-      const needs = state.allApps.some(a => a.installed && (!a.version || String(a.version).toLowerCase().includes('unsupported')));
-      if (needs) {
-        await new Promise(r => setTimeout(r, 3000));
-        await loadApps();
-        applySearch();
-      }
-    } catch (_) {}
+    const result = await fetchUpdatesOutput();
+    const raw = typeof result?.output === 'string' ? result.output : '';
+    handleUpdateCompletion(raw);
+    await refreshAfterUpdates();
     const dur = Math.round((performance.now()-start)/1000);
     if (updateFinalMessage && updateFinalMessage.textContent) updateFinalMessage.textContent += t('updates.duration', {dur});
-  } catch (_err) {
-    // (Sortie supprimée)
+  } catch (err) {
+    console.error('Updates failed', err);
+    showToast(t('toast.updateFailed') || 'Échec des mises à jour');
+    if (updateFinalMessage) updateFinalMessage.textContent = t('updates.error') || 'Erreur pendant la mise à jour.';
+    if (updateResult) updateResult.style.display = 'block';
   } finally {
     updateInProgress = false;
-    updateSpinner.hidden = true;
+    setUpdateSpinnerBusy(false);
     runUpdatesBtn.disabled = false;
   }
-});
-
-// --- Modale sortie brute ---
-function openRawModal(){
-  if (!rawUpdateModal) return;
-  if (rawUpdatePre) rawUpdatePre.textContent = lastUpdateRaw || '(vide)';
-  rawUpdateModal.hidden = false;
-  setTimeout(()=> rawUpdatePre?.focus(), 30);
-}
-function closeRawModal(){ if (rawUpdateModal) rawUpdateModal.hidden = true; }
-
-showRawUpdateBtn?.addEventListener('click', () => { if (!lastUpdateRaw) { showToast(t('toast.noUpdateLog')); return; } openRawModal(); });
-rawUpdateClose?.addEventListener('click', closeRawModal);
-rawUpdateClose2?.addEventListener('click', closeRawModal);
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !rawUpdateModal?.hidden) closeRawModal(); }, { capture:true });
-rawCopyBtn?.addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(lastUpdateRaw || ''); showToast(t('toast.copied')); } catch(_) { showToast(t('toast.copyError')); }
-});
-rawSaveBtn?.addEventListener('click', () => {
-  try {
-    const blob = new Blob([lastUpdateRaw || ''], { type:'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const ts = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
-    a.download = 'update-log-'+ ts + '.txt';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=> URL.revokeObjectURL(url), 2000);
-  } catch (_err) { showToast(t('toast.saveError')); }
 });
 
 // ...existing code...

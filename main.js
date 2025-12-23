@@ -259,6 +259,7 @@ ipcMain.handle('am-action', async (event, action, software) => {
 // { id, kind:'error', message }
 // Ajout : gestion du prompt mot de passe sudo
 const activeInstalls = new Map();
+const activeUpdates = new Map();
 const passwordWaiters = new Map();
 ipcMain.on('password-response', (event, payload) => {
   if (!payload || !payload.id) return;
@@ -424,6 +425,82 @@ ipcMain.handle('install-cancel', async (event, installId) => {
   } catch(e){
     return { ok:false, error: e.message || 'Annulation échouée' };
   }
+});
+
+ipcMain.handle('updates-start', async (event) => {
+  const pm = await detectPackageManager();
+  if (!pm) return { error: "Aucun gestionnaire 'am' ou 'appman' trouvé" };
+  const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+  let child;
+  let output = '';
+  const pty = require('node-pty');
+  const env = Object.assign({}, process.env, {
+    TERM: 'xterm',
+    COLS: '80',
+    ROWS: '30',
+    FORCE_COLOR: '1'
+  });
+  try {
+    child = pty.spawn(pm, ['-u'], {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 30,
+      cwd: process.cwd(),
+      env
+    });
+  } catch (err) {
+    invalidatePackageManagerCache();
+    return { error: err?.message || 'Impossible de démarrer la mise à jour.' };
+  }
+  activeUpdates.set(id, child);
+  const wc = event.sender;
+  const send = (payload) => {
+    try { wc.send('updates-progress', Object.assign({ id }, payload)); }
+    catch(_) {}
+  };
+  send({ kind: 'start' });
+  const killTimer = setTimeout(() => { try { child.kill('SIGTERM'); } catch(_){} }, 10 * 60 * 1000);
+  passwordWaiters.set(id, (password) => {
+    if (typeof password === 'string') {
+      try { child.write(password + '\n'); } catch(_) {}
+    } else {
+      try { child.kill('SIGKILL'); } catch(_) {}
+    }
+  });
+  child.onData((txt) => {
+    output += txt;
+    send({ kind: 'data', chunk: txt });
+    if (/mot de passe.*:|password.*:/i.test(txt)) {
+      try { wc.send('password-prompt', { id }); }
+      catch(_) {}
+    }
+  });
+  const cleanup = () => {
+    clearTimeout(killTimer);
+    activeUpdates.delete(id);
+    passwordWaiters.delete(id);
+  };
+  child.onExit((evt) => {
+    cleanup();
+    send({ kind: 'done', code: evt?.exitCode ?? evt?.code ?? null, signal: evt?.signal ?? null, success: (evt?.exitCode ?? evt?.code ?? 0) === 0, output });
+  });
+  child.on?.('error', (err) => {
+    cleanup();
+    invalidatePackageManagerCache();
+    send({ kind: 'error', message: err?.message || 'Erreur inconnue', output });
+  });
+  return { id };
+});
+
+ipcMain.handle('updates-cancel', async (_event, id) => {
+  if (!id) return { ok: false, error: 'missing-id' };
+  const proc = activeUpdates.get(id);
+  if (!proc) return { ok: false, error: 'not-found' };
+  try { proc.kill('SIGTERM'); }
+  catch(_) {}
+  activeUpdates.delete(id);
+  passwordWaiters.delete(id);
+  return { ok: true };
 });
 
 ipcMain.handle('install-send-choice', async (_event, installId, choice) => {
