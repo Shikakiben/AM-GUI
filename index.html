@@ -104,16 +104,21 @@
         <div class="updates-actions-row">
           <button id="runUpdatesBtn" class="btn btn-primary updates-run" data-i18n="updates.run">Mettre à jour</button>
         </div>
-        <div id="updateSpinner" class="update-spinner" role="status" aria-live="polite" hidden>
-          <div class="spinner" aria-hidden="true"></div>
-          <div class="spinner-label" data-i18n="updates.loading">Recherche de mises à jour et installation si nécessaire…</div>
+        <div id="updateSpinner" class="update-spinner" role="status" aria-live="polite" data-busy="false">
+          <div class="spinner-info">
+            <div class="spinner-status-row">
+              <div class="spinner" aria-hidden="true"></div>
+              <div class="spinner-label" data-i18n="updates.ready">Aucune mise à jour en cours.</div>
+            </div>
+            <button id="updatesToggleBtn" class="updates-toggle-btn" type="button" aria-controls="updatesTerminalWrap" aria-expanded="false" data-i18n="updates.toggleShow">Voir les détails ⌄</button>
+          </div>
+        </div>
+        <div id="updatesTerminalWrap" class="updates-terminal" hidden>
+          <div id="updatesTerminal" class="updates-terminal-body" role="log" aria-live="polite"></div>
         </div>
         <div id="updateResult" class="update-result" style="display:none;">
           <div id="updateFinalMessage" class="update-final-message"></div>
           <div id="updatedAppsIcons" class="icons-row updated-icons"></div>
-          <div class="raw-link-row">
-            <button id="showRawUpdateBtn" class="mini-btn-link" type="button" data-i18n="updates.details">Voir les détails…</button>
-          </div>
         </div>
       </section>
       <section id="advancedPanel" class="panel-lite advanced-panel" hidden>
@@ -178,26 +183,6 @@
   </div>
 
   <!-- Lightbox supprimé : plus de galerie séparée -->
-
-  <!-- Modale sortie brute mises à jour -->
-  <div id="rawUpdateModal" class="modal" role="dialog" aria-modal="true" aria-label="Sortie de la mise à jour" hidden>
-    <div class="modal-dialog">
-      <div class="modal-header">
-    <h3 class="modal-title" data-i18n="modal.updateTitle">Détails de la mise à jour</h3>
-    <button id="rawUpdateClose" class="modal-close" aria-label="Fermer" data-i18n-aria-label="modal.close">✕</button>
-      </div>
-      <div class="modal-body">
-        <pre id="rawUpdatePre" class="raw-pre" aria-label="Sortie brute" tabindex="0"></pre>
-      </div>
-      <div class="modal-footer">
-    <button id="rawCopyBtn" class="mini-btn" type="button" data-i18n="modal.copy">Copier</button>
-    <button id="rawSaveBtn" class="mini-btn" type="button" data-i18n="modal.save">Enregistrer…</button>
-    <div class="grow"></div>
-    <button id="rawUpdateClose2" class="btn btn-outline" type="button" data-i18n="modal.closeBtn">Fermer</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Modale confirmation compacte (sans titre ni croix) -->
   <div id="actionConfirmModal" class="modal" role="dialog" aria-modal="true" aria-label="Confirmation" hidden>
     <div class="modal-dialog confirm-dialog" role="document">
