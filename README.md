@@ -4,7 +4,7 @@
 
 ⚠️ **This project is under development and some features may not work or may be incomplete.**
 
-   **ALL credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handel the GUI, learning how to proprely yell at gpt-4.1, to make sur that this little f$@#=¤# piece of s$@# does not mess that much with the code.**
+   **ALL credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handel the GUI, learning how to proprely yell at gpt-4.1, to make sur that this little f$@¤=# does not mess that much with the code.**
    
 ---
 
