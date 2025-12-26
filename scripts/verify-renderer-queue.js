@@ -34,6 +34,19 @@ function createButtonStub(name) {
   };
 }
 
+function createElementStub() {
+  return {
+    hidden: false,
+    textContent: '',
+    scrollTop: 0,
+    scrollHeight: 0,
+    dataset: {},
+    classList: { add() {}, remove() {} },
+    setAttribute() {},
+    addEventListener() {}
+  };
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -48,6 +61,45 @@ function assert(condition, message) {
   const queueIndicatorsUpdates = [];
   const startStreamingCalls = [];
 
+  const sandboxLog = createElementStub();
+  const sandboxLogToggle = createElementStub();
+  const sandboxLogSection = createElementStub();
+  const sandboxState = { info: {}, logBuffer: '', busy: false, currentApp: null };
+  const sandboxRefreshBtn = createElementStub();
+  const sandboxConfigureBtn = createElementStub();
+  const sandboxDisableBtn = createElementStub();
+  const sandboxInstallDepsBtn = createElementStub();
+  const sandboxOpenBtn = createElementStub();
+  const sandboxCloseBtn = createElementStub();
+  const sandboxButtonStatus = createElementStub();
+  const sandboxStatusBadge = createElementStub();
+  const sandboxDepsAlert = createElementStub();
+  const sandboxUnavailable = createElementStub();
+  const sandboxInstallAppBtn = createElementStub();
+  const sandboxCard = createElementStub();
+  const sandboxModal = createElementStub();
+  const sandboxForm = createElementStub();
+  const sandboxCustomPathInput = createElementStub();
+  sandboxCustomPathInput.value = '';
+  const sandboxSummary = createElementStub();
+  const sandboxSummaryList = createElementStub();
+  const sandboxSummaryEmpty = createElementStub();
+  const nonAppimageModal = createElementStub();
+  const nonAppimageCloseBtn = createElementStub();
+  const nonAppimageDismissBtn = createElementStub();
+  const nonAppimageMessage = createElementStub();
+  const SANDBOX_DIR_VALUES = ['desktop','documents','downloads','games','music','pictures','videos'];
+  const SANDBOX_DIR_LABEL_KEYS = {
+    desktop: 'sandbox.dir.desktop',
+    documents: 'sandbox.dir.documents',
+    downloads: 'sandbox.dir.downloads',
+    games: 'sandbox.dir.games',
+    music: 'sandbox.dir.music',
+    pictures: 'sandbox.dir.pictures',
+    videos: 'sandbox.dir.videos'
+  };
+  const SANDBOX_PREFS_KEY = 'sandboxSharePrefs';
+
   const context = {
     console,
     setTimeout,
@@ -57,7 +109,9 @@ function assert(condition, message) {
     window: {
       electronAPI: {
         amAction: () => Promise.resolve()
-      }
+      },
+      addEventListener() {},
+      removeEventListener() {}
     },
     document: createDocumentStub(),
     detailsInstallBtn: createButtonStub('alpha'),
@@ -75,7 +129,36 @@ function assert(condition, message) {
     applySearch: () => {},
     refreshAllInstallButtons: () => {},
     refreshTileBadges: () => {},
-    updateQueueIndicators: () => queueIndicatorsUpdates.push(Date.now())
+    updateQueueIndicators: () => queueIndicatorsUpdates.push(Date.now()),
+    sandboxLog,
+    sandboxLogToggle,
+    sandboxLogSection,
+    sandboxState,
+    sandboxRefreshBtn,
+    sandboxConfigureBtn,
+    sandboxDisableBtn,
+    sandboxInstallDepsBtn,
+    sandboxOpenBtn,
+    sandboxCloseBtn,
+    sandboxButtonStatus,
+    sandboxStatusBadge,
+    sandboxDepsAlert,
+    sandboxUnavailable,
+    sandboxInstallAppBtn,
+    sandboxCard,
+    sandboxModal,
+    sandboxForm,
+    sandboxCustomPathInput,
+    sandboxSummary,
+    sandboxSummaryList,
+    sandboxSummaryEmpty,
+    nonAppimageModal,
+    nonAppimageCloseBtn,
+    nonAppimageDismissBtn,
+    nonAppimageMessage,
+    SANDBOX_DIR_VALUES,
+    SANDBOX_DIR_LABEL_KEYS,
+    SANDBOX_PREFS_KEY
   };
 
   vm.createContext(context);

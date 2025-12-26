@@ -21,10 +21,12 @@
     const t = typeof options.translate === 'function' ? options.translate : (key) => key;
     const enqueueInstall = typeof options.enqueueInstall === 'function' ? options.enqueueInstall : () => {};
     const removeFromQueue = typeof options.removeFromQueue === 'function' ? options.removeFromQueue : () => {};
+    const applyDetailsSandboxBadge = typeof options.applyDetailsSandboxBadge === 'function' ? options.applyDetailsSandboxBadge : null;
     const refreshAllInstallButtons = typeof options.refreshAllInstallButtons === 'function' ? options.refreshAllInstallButtons : () => {};
     const setAppList = typeof options.setAppList === 'function' ? options.setAppList : () => {};
     const loadApps = typeof options.loadApps === 'function' ? options.loadApps : async () => {};
     const openActionConfirm = typeof options.openActionConfirm === 'function' ? options.openActionConfirm : fallbackPromise;
+    const rerenderActiveCategory = typeof options.rerenderActiveCategory === 'function' ? options.rerenderActiveCategory : null;
 
     const scrollShell = options.scrollShell || null;
     const appsContainer = options.appsContainer || null;
@@ -130,25 +132,6 @@
         detailsIcon.onerror = () => {
           detailsIcon.src = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png';
         };
-        const wrapper = detailsIcon.parentElement;
-        if (wrapper && wrapper.classList.contains('details-icon-wrapper')) {
-          wrapper.style.position = 'relative';
-          const oldBadge = wrapper.querySelector('.installed-badge');
-          if (oldBadge) oldBadge.remove();
-          const isActuallyInstalled = app.installed && !isInstallRunningFor(session, app.name);
-          if (isActuallyInstalled) {
-            const badge = document.createElement('span');
-            badge.className = 'installed-badge';
-            badge.setAttribute('aria-label', 'Installée');
-            badge.setAttribute('title', 'Installée');
-            badge.textContent = '✓';
-            badge.style.position = 'absolute';
-            badge.style.top = '0';
-            badge.style.right = '0';
-            badge.style.zIndex = '2';
-            wrapper.appendChild(badge);
-          }
-        }
       }
 
       if (detailsName) {
@@ -160,6 +143,10 @@
       }
 
       if (detailsLong) detailsLong.textContent = t('details.loadingDesc', { name: app.name });
+
+      try {
+        applyDetailsSandboxBadge?.(app.name);
+      } catch (_) {}
 
       if (detailsInstallBtn) {
         detailsInstallBtn.hidden = !!app.installed;
@@ -222,10 +209,15 @@
       const tabsRowSecondary = document.querySelector('.tabs-row-secondary');
       if (tabsRowSecondary) tabsRowSecondary.style.visibility = 'visible';
 
-      if (state.activeCategory === 'installed') {
+      if (rerenderActiveCategory) {
+        rerenderActiveCategory();
+      } else if (state.activeCategory === 'installed') {
         const filtered = (state.allApps || []).filter((app) => app && app.installed && app.hasDiamond === true);
         state.filtered = filtered;
         setAppList(filtered);
+        refreshAllInstallButtons();
+      } else if (typeof setAppList === 'function') {
+        setAppList(state.filtered || state.allApps || []);
         refreshAllInstallButtons();
       }
 

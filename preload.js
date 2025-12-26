@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   installCancel: (id) => ipcRenderer.invoke('install-cancel', id, id),
   installSendChoice: (id, choice) => ipcRenderer.invoke('install-send-choice', id, choice),
   onInstallProgress: (cb) => ipcRenderer.on('install-progress', (e, msg) => cb && cb(msg)),
+  startUpdates: () => ipcRenderer.invoke('updates-start'),
+  cancelUpdates: (id) => ipcRenderer.invoke('updates-cancel', id),
+  onUpdatesProgress: (cb) => ipcRenderer.on('updates-progress', (e, msg) => cb && cb(msg)),
   installAppManAuto: () => ipcRenderer.invoke('install-appman-auto'),
   purgeIconsCache: () => ipcRenderer.invoke('purge-icons-cache'),
   getGpuPref: () => ipcRenderer.invoke('get-gpu-pref'),
@@ -27,7 +30,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCategoriesCache: () => ipcRenderer.invoke('get-categories-cache'),
   // Ajout pour gestion mot de passe sudo
   onPasswordPrompt: (cb) => ipcRenderer.on('password-prompt', (e, data) => cb && cb(data)),
-  sendPassword: (payload) => ipcRenderer.send('password-response', payload)
+  sendPassword: (payload) => ipcRenderer.send('password-response', payload),
+  getSandboxInfo: (appName) => ipcRenderer.invoke('sandbox-info', appName),
+  configureSandbox: (options) => ipcRenderer.invoke('sandbox-configure', options),
+  disableSandbox: (payload) => {
+    if (payload && typeof payload === 'object') {
+      return ipcRenderer.invoke('sandbox-disable', payload);
+    }
+    return ipcRenderer.invoke('sandbox-disable', { appName: payload });
+  },
+  onSandboxProgress: (cb) => ipcRenderer.on('sandbox-progress', (e, data) => cb && cb(data))
 });
 try {
   const lArg = process.argv.find(a => a.startsWith('--locale='));

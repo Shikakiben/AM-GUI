@@ -13,12 +13,29 @@
   let tabs = [];
   let tabAll = null;
   let debounceFn = null;
+  let isSandboxed = () => false;
   let debounceDelay = 140;
   let translateFn = (key) => key;
   let iconMapOverride = null;
 
   let searchMode = false;
   let lastSearchValue = '';
+
+  const normalizeCategoryName = (value) => (value && typeof value === 'string'
+    ? value
+    : (value ?? '')).toString().trim().toLowerCase();
+
+  function resolveCategoryOverride(activeCategory) {
+    if (!stateRef || !stateRef.categoryOverride) return null;
+    const override = stateRef.categoryOverride;
+    if (!override || !Array.isArray(override.apps)) return null;
+    const expected = normalizeCategoryName(activeCategory);
+    if (!expected) return null;
+    const overrideName = normalizeCategoryName(override.name || override.label || override.category);
+    if (overrideName && overrideName === expected) return override;
+    if (override.norm && override.norm === expected) return override;
+    return null;
+  }
 
   function fallbackDebounce(fn, delay) {
     let timer;
@@ -55,6 +72,9 @@
       if (tabAll && !tabAll.classList.contains('active')) {
         tabAll.click();
       }
+    }
+    if (stateRef) {
+      stateRef.categoryOverride = null;
     }
     if (categoriesApi && typeof categoriesApi.updateDropdownLabel === 'function') {
       categoriesApi.updateDropdownLabel(stateRef, translateFn, iconMapOverride);
@@ -134,7 +154,11 @@
     hidePanelsForNonApps();
 
     let base = allApps;
-    if (activeCategory === 'installed') {
+    const override = resolveCategoryOverride(activeCategory);
+    if (override) {
+      resetSearchModeIfNeeded();
+      base = Array.isArray(override.apps) ? override.apps : [];
+    } else if (activeCategory === 'installed') {
       resetSearchModeIfNeeded();
       base = filterInstalled(allApps);
     } else if (activeCategory !== 'all') {
@@ -143,8 +167,26 @@
     }
 
     const filtered = filterByQuery(base);
+    let renderList = filtered;
+    if (activeCategory === 'installed' && typeof isSandboxed === 'function') {
+      const sandboxed = [];
+      const others = [];
+      filtered.forEach(app => {
+        if (isSandboxed(app?.name)) sandboxed.push(app);
+        else others.push(app);
+      });
+      renderList = [];
+      if (sandboxed.length) {
+        renderList.push({ __section: 'sandboxed' });
+        renderList.push(...sandboxed);
+      }
+      if (others.length) {
+        renderList.push({ __section: 'others' });
+        renderList.push(...others);
+      }
+    }
     stateRef.filtered = filtered;
-    setAppList(filtered);
+    setAppList(renderList);
     refreshInstallUi();
     return filtered;
   }
@@ -165,6 +207,7 @@
     tabAll = tabs.find(tab => tab && tab.dataset && tab.dataset.category === 'all') || null;
     debounceFn = options.debounce || options.debounceFn || null;
     debounceDelay = typeof options.debounceDelay === 'number' ? options.debounceDelay : 140;
+    isSandboxed = typeof options.isSandboxed === 'function' ? options.isSandboxed : () => false;
 
     if (searchInput) {
       searchInput.addEventListener('focus', handleFocus);

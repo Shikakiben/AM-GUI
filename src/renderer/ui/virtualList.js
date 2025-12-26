@@ -13,6 +13,10 @@
     const showDetails = options.showDetails || (() => {});
     const documentRef = options.document || document;
     const windowRef = options.window || window;
+    const isSandboxed = typeof options.isSandboxed === 'function' ? options.isSandboxed : () => false;
+    const applySandboxBadge = typeof options.applySandboxBadge === 'function'
+      ? options.applySandboxBadge
+      : () => {};
 
     const loadedIcons = new Set();
     let appListVirtual = [];
@@ -105,7 +109,20 @@
       spacer.style.height = (missing > 0 ? (missing * tileHeight) : 0) + 'px';
     }
 
+    function buildInstalledSection(sectionKey) {
+      const section = documentRef.createElement('div');
+      section.className = 'installed-section';
+      const title = documentRef.createElement('h4');
+      const key = sectionKey === 'sandboxed' ? 'installed.section.sandboxed' : 'installed.section.others';
+      title.textContent = t(key);
+      section.appendChild(title);
+      return section;
+    }
+
     function buildTile(item) {
+      if (item && item.__section) {
+        return buildInstalledSection(item.__section);
+      }
       const { name, installed, desc } = typeof item === 'string' ? { name: item, installed: false, desc: null } : item;
       const label = name.charAt(0).toUpperCase() + name.slice(1);
       const version = item?.version ? String(item.version) : null;
@@ -154,6 +171,9 @@
           <div class="tile-short">${shortDesc}</div>
         </div>
         ${actionsHTML ? actionsHTML : ''}`;
+
+      const iconWrapper = tile.querySelector('.tile-icon');
+      try { applySandboxBadge(iconWrapper, isSandboxed(name), name); } catch (_) {}
 
       const img = tile.querySelector('img');
       if (img) {

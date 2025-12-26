@@ -66,6 +66,15 @@ const debounce = typeof appUtils.debounce === 'function'
       };
     };
 
+function getThemeVar(name, fallback) {
+  try {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name);
+    return value && value.trim() ? value.trim() : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 
 function applyViewModeClass() {
   document.body.classList.remove('view-list','view-grid','view-icons','view-cards');
@@ -73,6 +82,7 @@ function applyViewModeClass() {
   else if (state.viewMode === 'icons') document.body.classList.add('view-icons');
   else if (state.viewMode === 'cards') document.body.classList.add('view-cards');
   else document.body.classList.add('view-grid');
+  try { refreshAllSandboxBadges(); } catch (_) {}
 }
 
 let appListVirtual = [];
@@ -95,8 +105,6 @@ function renderVirtualList() {
   appsDiv.innerHTML = '';
   const useSkeleton = appListVirtual.length > 50;
   if (useSkeleton) {
-    // Génère toutes les tuiles squelettes d’un coup
-    // Squelettes ultra-minimaux, adaptatifs selon la vue
     const viewClass = 'view-' + (state.viewMode || 'grid');
     const fragment = document.createDocumentFragment();
     for (let i = 0; i < appListVirtual.length; i++) {
@@ -106,67 +114,65 @@ function renderVirtualList() {
       fragment.appendChild(skel);
     }
     appsDiv.appendChild(fragment);
-    // Observer les squelettes visibles et les hydrater
     if (window.skeletonObserver) window.skeletonObserver.disconnect();
     window.skeletonObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        if (entry.isIntersecting && !entry.target.classList.contains('hydrated')) {
-          const idx = parseInt(entry.target.dataset.index, 10);
-          const realTile = buildTile(appListVirtual[idx]);
-          realTile.classList.add('hydrated');
-          entry.target.replaceWith(realTile);
-          window.skeletonObserver.observe(realTile); // continue à observer la vraie tuile si besoin
-        }
+        if (!entry.isIntersecting) return;
+        if (entry.target.classList.contains('hydrated')) return;
+        const idx = parseInt(entry.target.dataset.index, 10);
+        if (Number.isNaN(idx)) return;
+        const realTile = buildTile(appListVirtual[idx]);
+        realTile.classList.add('hydrated');
+        entry.target.replaceWith(realTile);
+        try { window.skeletonObserver.observe(realTile); } catch (_) {}
       });
     }, { root: scrollShell, threshold: 0.1 });
-    // Observer les squelettes initialement visibles
     const tiles = appsDiv.querySelectorAll('.app-tile-skeleton');
-    tiles.forEach(tile => window.skeletonObserver.observe(tile));
-  } else {
-    // Cas classique : moins de 50 apps, on rend tout normalement
-    const end = Math.min(currentEndVirtual, appListVirtual.length);
-    const fragment = document.createDocumentFragment();
-    for (let i = 0; i < end; i++) {
-      fragment.appendChild(buildTile(appListVirtual[i]));
-    }
-    appsDiv.appendChild(fragment);
-    if (lastTileObserver) lastTileObserver.disconnect();
-    if (end < appListVirtual.length) {
-      // Observer les 3 dernières tuiles pour une meilleure robustesse au scroll rapide
-      const tiles = appsDiv.querySelectorAll('.app-tile');
-      const toObserve = Array.from(tiles).slice(-3); // 3 dernières
-      if (toObserve.length) {
-        try {
-          lastTileObserver = new IntersectionObserver((entries) => {
-            if (entries.some(e => e.isIntersecting)) {
-              lastTileObserver.disconnect();
-              currentEndVirtual = Math.min(currentEndVirtual + VISIBLE_COUNT, appListVirtual.length);
-              renderVirtualList();
-            }
-          }, { root: scrollShell, threshold: 0.1 });
-          toObserve.forEach(tile => lastTileObserver.observe(tile));
-        } catch(_) {}
-      }
-    }
-    // --- Spacer pour scroll cohérent ---
-    let spacer = appsDiv.querySelector('.app-list-spacer');
-    if (!spacer) {
-      spacer = document.createElement('div');
-      spacer.className = 'app-list-spacer';
-      spacer.style.width = '100%';
-      spacer.style.pointerEvents = 'none';
-      appsDiv.appendChild(spacer);
-    }
-    // Calculer la hauteur moyenne d'une tuile (sur le lot affiché)
-    let tileHeight = 120; // fallback par défaut
-    const firstTile = appsDiv.querySelector('.app-tile');
-    if (firstTile) {
-      tileHeight = firstTile.offsetHeight || tileHeight;
-    }
-    const missing = appListVirtual.length - end;
-    spacer.style.height = (missing > 0 ? (missing * tileHeight) : 0) + 'px';
-    // --- Fin spacer ---
+    tiles.forEach(tile => window.skeletonObserver && window.skeletonObserver.observe(tile));
+    return;
   }
+
+  const end = Math.min(currentEndVirtual, appListVirtual.length);
+  const fragment = document.createDocumentFragment();
+  for (let i = 0; i < end; i++) {
+    fragment.appendChild(buildTile(appListVirtual[i]));
+  }
+  appsDiv.appendChild(fragment);
+  if (lastTileObserver) lastTileObserver.disconnect();
+  if (end < appListVirtual.length) {
+    const tiles = appsDiv.querySelectorAll('.app-tile');
+    const toObserve = Array.from(tiles).slice(-3);
+    if (toObserve.length) {
+      try {
+        lastTileObserver = new IntersectionObserver((entries) => {
+          if (entries.some(e => e.isIntersecting)) {
+            lastTileObserver.disconnect();
+            currentEndVirtual = Math.min(currentEndVirtual + VISIBLE_COUNT, appListVirtual.length);
+            renderVirtualList();
+          }
+        }, { root: scrollShell, threshold: 0.1 });
+        toObserve.forEach(tile => lastTileObserver.observe(tile));
+      } catch(_) {}
+    }
+  }
+  // --- Spacer pour scroll cohérent ---
+  let spacer = appsDiv.querySelector('.app-list-spacer');
+  if (!spacer) {
+    spacer = document.createElement('div');
+    spacer.className = 'app-list-spacer';
+    spacer.style.width = '100%';
+    spacer.style.pointerEvents = 'none';
+    appsDiv.appendChild(spacer);
+  }
+  // Calculer la hauteur moyenne d'une tuile (sur le lot affiché)
+  let tileHeight = 120; // fallback par défaut
+  const firstTile = appsDiv.querySelector('.app-tile');
+  if (firstTile) {
+    tileHeight = firstTile.offsetHeight || tileHeight;
+  }
+  const missing = appListVirtual.length - end;
+  spacer.style.height = (missing > 0 ? (missing * tileHeight) : 0) + 'px';
+  // --- Fin spacer ---
 }
 
 
@@ -181,7 +187,19 @@ if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
 // ...existing code...
 
 
+function createInstalledSection(sectionKey) {
+  const section = document.createElement('div');
+  section.className = 'installed-section';
+  const title = document.createElement('h4');
+  title.textContent = t(sectionKey === 'sandboxed' ? 'installed.section.sandboxed' : 'installed.section.others');
+  section.appendChild(title);
+  return section;
+}
+
 function buildTile(item){
+  if (item && item.__section) {
+    return createInstalledSection(item.__section);
+  }
   const { name, installed, desc } = typeof item === 'string' ? { name: item, installed: false, desc: null } : item;
   const label = name.charAt(0).toUpperCase() + name.slice(1);
   const version = item?.version ? String(item.version) : null;
@@ -220,7 +238,11 @@ function buildTile(item){
   const tile = document.createElement('div');
   tile.className = 'app-tile';
   tile.setAttribute('data-app', name);
-  const badgeHTML = installed ? '<span class="installed-badge" aria-label="Installée" title="Installée" style="position:absolute;top:2px;right:2px;">✓</span>' : '';
+  const isSandboxedTile = installed && isAppSandboxed(name);
+  const badgeSymbol = isSandboxedTile ? '🔒' : '✓';
+  const badgeHTML = installed
+    ? `<span class="installed-badge" aria-label="Installée" title="Installée" style="position:absolute;top:2px;right:2px;">${badgeSymbol}</span>`
+    : '';
   tile.innerHTML = `
     <div class="tile-icon" style="position:relative;display:inline-block;">
       <img data-src="${getIconUrl(name)}" alt="${label}" loading="lazy" decoding="async"${state.viewMode==='icons' ? ' class="icon-mode"' : ''} onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/${name}.png'; setTimeout(()=>{ if(this.naturalWidth<=1) this.src='https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; },1200);">
@@ -231,6 +253,8 @@ function buildTile(item){
       <div class="tile-short">${shortDesc}</div>
     </div>
     ${actionsHTML ? actionsHTML : ''}`;
+
+  applySandboxBadgeToIcon(tile.querySelector('.tile-icon'), isAppSandboxed(name));
 
   const img = tile.querySelector('img');
   if (img) {
@@ -386,7 +410,21 @@ const toastModule = typeof window.ui?.toast?.init === 'function'
   : null;
 const showToast = toastModule?.showToast || toastFallbackApi.showToast;
 
-let applySearch = () => {};
+const defaultApplySearch = () => {};
+let applySearch = defaultApplySearch;
+let scheduledInstalledResort = null;
+
+function scheduleInstalledResort() {
+  if (state.activeCategory !== 'installed') return;
+  if (scheduledInstalledResort !== null) return;
+  scheduledInstalledResort = setTimeout(() => {
+    scheduledInstalledResort = null;
+    if (state.activeCategory !== 'installed') return;
+    try {
+      applySearch();
+    } catch (_) {}
+  }, 150);
+}
 
 // --- (Ré)ajout gestion changement de mode d'affichage ---
 function updateModeMenuUI() {
@@ -437,14 +475,9 @@ if (modeMenuBtn && modeMenu) {
     localStorage.setItem('viewMode', state.viewMode);
     currentViewMode = state.viewMode;
     updateModeMenuUI();
-    // Correction : ne pas afficher de tuiles dans les onglets updates ou avancé
-    if (state.activeCategory === 'updates' || state.activeCategory === 'advanced') {
-      setAppList([]);
-    } else {
-      setAppList(state.filtered);
-    }
-  // Remettre le scroll en haut à chaque changement de mode
-  if (scrollShell) scrollShell.scrollTop = 0;
+    rerenderActiveCategory();
+    // Remettre le scroll en haut à chaque changement de mode
+    if (scrollShell) scrollShell.scrollTop = 0;
     modeMenu.hidden = true;
     modeMenuBtn.setAttribute('aria-expanded','false');
   });
@@ -474,6 +507,56 @@ const installStreamElapsed = document.getElementById('installStreamElapsed');
 const installProgressBar = document.getElementById('installStreamProgressBar');
 const installProgressPercentLabel = document.getElementById('installStreamProgressPercent');
 const installProgressEtaLabel = document.getElementById('installStreamEta');
+const sandboxOpenBtn = document.getElementById('sandboxOpenBtn');
+const sandboxButtonStatus = document.getElementById('sandboxButtonStatus');
+const sandboxModal = document.getElementById('sandboxModal');
+const sandboxCloseBtn = document.getElementById('sandboxCloseBtn');
+const sandboxCard = document.getElementById('sandboxCard');
+const sandboxStatusBadge = document.getElementById('sandboxStatusBadge');
+const sandboxRefreshBtn = document.getElementById('sandboxRefreshBtn');
+const sandboxConfigureBtn = document.getElementById('sandboxConfigureBtn');
+const sandboxDisableBtn = document.getElementById('sandboxDisableBtn');
+const sandboxDepsAlert = document.getElementById('sandboxDepsAlert');
+const sandboxInstallDepsBtn = document.getElementById('sandboxInstallDepsBtn');
+const sandboxUnavailable = document.getElementById('sandboxUnavailable');
+const sandboxInstallAppBtn = document.getElementById('sandboxInstallAppBtn');
+const sandboxForm = document.getElementById('sandboxForm');
+const sandboxCustomPathInput = document.getElementById('sandboxCustomPath');
+const sandboxLog = document.getElementById('sandboxLog');
+const sandboxSummary = document.getElementById('sandboxSummary');
+const sandboxSummaryList = document.getElementById('sandboxSummaryList');
+const sandboxSummaryEmpty = document.getElementById('sandboxSummaryEmpty');
+const sandboxLogSection = document.getElementById('sandboxLogSection');
+const sandboxLogToggle = document.getElementById('sandboxLogToggle');
+const nonAppimageModal = document.getElementById('nonAppimageModal');
+const nonAppimageCloseBtn = document.getElementById('nonAppimageClose');
+const nonAppimageDismissBtn = document.getElementById('nonAppimageDismiss');
+const nonAppimageMessage = document.getElementById('nonAppimageMessage');
+const SANDBOX_DIR_VALUES = ['desktop','documents','downloads','games','music','pictures','videos'];
+const SANDBOX_DIR_LABEL_KEYS = {
+  desktop: 'sandbox.dir.desktop',
+  documents: 'sandbox.dir.documents',
+  downloads: 'sandbox.dir.downloads',
+  games: 'sandbox.dir.games',
+  music: 'sandbox.dir.music',
+  pictures: 'sandbox.dir.pictures',
+  videos: 'sandbox.dir.videos'
+};
+const SANDBOX_PREFS_KEY = 'sandboxSharePrefs';
+let sandboxSharePrefs = loadSandboxSharePrefs();
+const sandboxedApps = new Map();
+let sandboxSweepToken = 0;
+const sandboxState = {
+  currentApp: null,
+  info: null,
+  depsReady: false,
+  busy: false,
+  pendingAction: null,
+  logBuffer: '',
+  supported: true
+};
+
+renderSandboxCard();
 
 // Mémoire de la session d'installation en cours
 let activeInstallSession = {
@@ -506,9 +589,11 @@ function ensureDetailsApi() {
     setAppList,
     loadApps,
     openActionConfirm,
+    rerenderActiveCategory,
     scrollShell,
     appsContainer: appsDiv,
     getActiveInstallSession: () => activeInstallSession,
+    applyDetailsSandboxBadge,
     elements: {
       appDetailsSection,
       backToListBtn,
@@ -525,6 +610,667 @@ function ensureDetailsApi() {
     }
   }) || null;
   return detailsApi;
+}
+
+function resetSandboxLog() {
+  if (!sandboxLog) return;
+  sandboxState.logBuffer = '';
+  sandboxLog.textContent = t('sandbox.logEmpty') || '…';
+}
+
+function appendSandboxLog(chunk) {
+  if (!sandboxLog || typeof chunk !== 'string') return;
+  sandboxState.logBuffer += chunk;
+  const sanitized = stripAnsiSequences(sandboxState.logBuffer || '');
+  const text = sanitized.trim() || t('sandbox.logEmpty') || '…';
+  sandboxLog.textContent = text;
+  sandboxLog.scrollTop = sandboxLog.scrollHeight;
+}
+
+function isSandboxLogExpanded() {
+  return !!(sandboxLog && !sandboxLog.hidden);
+}
+
+function setSandboxLogExpanded(expanded) {
+  if (!sandboxLog || !sandboxLogToggle) return;
+  const next = !!expanded;
+  sandboxLog.hidden = !next;
+  sandboxLogToggle.setAttribute('aria-expanded', String(next));
+  if (sandboxLogSection) {
+    sandboxLogSection.dataset.open = next ? 'true' : 'false';
+  }
+}
+
+setSandboxLogExpanded(false);
+
+function inferAppImageFromInfo(appName, info) {
+  if (!info) return null;
+  // isAppImage est définitif quand c'est un boolean (détecté via magic bytes ou sandboxé)
+  if (typeof info.isAppImage === 'boolean') return info.isAppImage;
+  const target = typeof info.appName === 'string' ? info.appName.toLowerCase() : '';
+  if (target && appName && target !== appName.toLowerCase()) return null;
+  const execPath = typeof info.execPath === 'string' ? info.execPath.toLowerCase() : '';
+  if (!execPath) return null;
+  // Fallback sur l'extension si pas de détection magic bytes
+  return execPath.endsWith('.appimage');
+}
+
+function isSandboxSupported(appName, info = sandboxState.info) {
+  if (!appName) return false;
+  
+  // Si on n'a pas encore d'info (chargement en cours), on ne sait pas encore
+  if (!info || Object.keys(info).length === 0) return true;
+  
+  const inferred = inferAppImageFromInfo(appName, info);
+  
+  // Vérifier si l'app est installée via appman (pas juste si un exécutable existe)
+  const installedViaAppman = isAppInstalledInList(appName);
+  
+  // Si l'app N'EST PAS installée via appman, on ne bloque pas
+  // (un exécutable système du même nom ne devrait pas bloquer le sandboxing futur)
+  if (!installedViaAppman) return true;
+  
+  // Si on a une détection définitive et l'app est installée via appman, on l'utilise
+  if (inferred !== null) return inferred;
+  
+  // App installée via appman mais pas de détection possible → probablement pas un AppImage
+  return false;
+}
+
+function isAppInstalledInList(appName) {
+  if (!appName) return false;
+  const lower = appName.toLowerCase();
+  if (state?.installed instanceof Set && state.installed.has(lower)) return true;
+  if (!Array.isArray(state?.allApps)) return false;
+  const entry = state.allApps.find((app) => app && typeof app.name === 'string' && app.name.toLowerCase() === lower);
+  return !!entry?.installed;
+}
+
+function openSandboxModal() {
+  if (!sandboxModal || !sandboxState.currentApp) return;
+  sandboxModal.hidden = false;
+}
+
+function closeSandboxModal() {
+  if (!sandboxModal || sandboxModal.hidden) return;
+  sandboxModal.hidden = true;
+}
+
+function showNonAppimageModal(appName) {
+  if (!nonAppimageModal) return;
+  if (nonAppimageMessage) {
+    nonAppimageMessage.textContent = t('sandbox.unsupported.desc', { name: appName || '—' });
+  }
+  nonAppimageModal.hidden = false;
+  setTimeout(() => {
+    try { nonAppimageDismissBtn?.focus(); }
+    catch (_) {}
+  }, 30);
+}
+
+function closeNonAppimageModal() {
+  if (!nonAppimageModal || nonAppimageModal.hidden) return;
+  nonAppimageModal.hidden = true;
+}
+
+function setSandboxBusy(flag) {
+  sandboxState.busy = !!flag;
+  renderSandboxCard();
+}
+
+function updateSandboxActionStyles(isSandboxed) {
+  if (!sandboxConfigureBtn || !sandboxDisableBtn) return;
+  if (isSandboxed) {
+    sandboxConfigureBtn.classList.remove('btn-primary');
+    sandboxConfigureBtn.classList.add('btn-outline');
+    sandboxDisableBtn.classList.add('btn-primary');
+    sandboxDisableBtn.classList.remove('btn-outline');
+  } else {
+    sandboxConfigureBtn.classList.add('btn-primary');
+    sandboxConfigureBtn.classList.remove('btn-outline');
+    sandboxDisableBtn.classList.remove('btn-primary');
+    sandboxDisableBtn.classList.add('btn-outline');
+  }
+}
+
+function renderSandboxCard() {
+  if (!sandboxCard) return;
+  if (!sandboxState.currentApp) {
+    sandboxCard.hidden = true;
+    if (sandboxOpenBtn) sandboxOpenBtn.disabled = true;
+    if (sandboxButtonStatus) {
+      sandboxButtonStatus.dataset.status = 'unknown';
+      sandboxButtonStatus.textContent = '—';
+    }
+    return;
+  }
+  sandboxCard.hidden = false;
+  if (sandboxOpenBtn) {
+    sandboxOpenBtn.disabled = false;
+  }
+  const info = sandboxState.info || {};
+  const installedFromInfo = typeof info.installed === 'boolean' ? info.installed : null;
+  const installedFromList = isAppInstalledInList(sandboxState.currentApp);
+  const installedFromDetailsBtn = detailsInstallBtn ? detailsInstallBtn.hidden : null;
+  const installedFlag = (installedFromInfo === true)
+    ? true
+    : (installedFromInfo === false)
+      ? false
+      : (installedFromList || installedFromDetailsBtn === true);
+  const sandboxEligible = isSandboxSupported(sandboxState.currentApp, info);
+  sandboxState.supported = sandboxEligible;
+  if (sandboxOpenBtn) {
+    const titleKey = sandboxEligible ? 'sandbox.title' : 'sandbox.unsupported.title';
+    sandboxOpenBtn.title = t(titleKey);
+  }
+  const statusKey = sandboxState.busy
+    ? 'busy'
+    : (!sandboxEligible
+      ? 'unsupported'
+      : (info.sandboxed ? 'active' : (installedFlag ? 'inactive' : 'unknown')));
+  const statusLabel = t(`sandbox.status.${statusKey}`) || statusKey;
+  if (sandboxStatusBadge) {
+    sandboxStatusBadge.dataset.status = statusKey;
+    sandboxStatusBadge.textContent = statusLabel;
+  }
+  if (sandboxButtonStatus) {
+    sandboxButtonStatus.dataset.status = statusKey;
+    sandboxButtonStatus.textContent = statusLabel;
+  }
+  if (sandboxUnavailable) sandboxUnavailable.hidden = !!installedFlag;
+  if (sandboxInstallAppBtn) {
+    sandboxInstallAppBtn.disabled = sandboxState.busy || installedFlag;
+    sandboxInstallAppBtn.hidden = installedFlag;
+  }
+  if (sandboxDepsAlert) sandboxDepsAlert.hidden = sandboxState.depsReady || !sandboxEligible;
+  const isSandboxed = !!info.sandboxed;
+  if (sandboxInstallDepsBtn) sandboxInstallDepsBtn.disabled = sandboxState.busy || !sandboxEligible;
+  if (sandboxConfigureBtn) sandboxConfigureBtn.disabled = sandboxState.busy || !info.installed || !sandboxState.depsReady || isSandboxed || !sandboxEligible;
+  if (sandboxDisableBtn) sandboxDisableBtn.disabled = sandboxState.busy || !isSandboxed || !sandboxEligible;
+  if (sandboxRefreshBtn) sandboxRefreshBtn.disabled = sandboxState.busy;
+  updateSandboxActionStyles(isSandboxed);
+  renderSandboxSummary();
+}
+
+async function refreshSandboxInfo(appName = sandboxState.currentApp) {
+  if (!sandboxCard) return;
+  if (!appName) {
+    sandboxState.info = null;
+    sandboxCard.hidden = true;
+    return;
+  }
+  sandboxState.currentApp = appName;
+  sandboxCard.hidden = false;
+  setSandboxBusy(true);
+  try {
+    const response = await window.electronAPI.getSandboxInfo(appName);
+    const info = response?.info || { installed: false, sandboxed: false };
+    const depsFromInfo = typeof info?.dependenciesReady === 'boolean' ? info.dependenciesReady : null;
+    const depsFromResponse = !!(response?.dependencies && (response.dependencies.hasSas || response.dependencies.hasAisap));
+    const depsFlag = depsFromInfo !== null ? depsFromInfo : depsFromResponse;
+    const listInstalled = isAppInstalledInList(appName);
+    if (!info.installed && listInstalled) info.installed = true;
+    info.dependenciesReady = depsFlag;
+    sandboxState.info = info;
+    sandboxState.depsReady = !!depsFlag;
+    setAppSandboxState(appName, !!info.sandboxed);
+    renderSandboxCard();
+  } catch (error) {
+    appendSandboxLog(`\n${error?.message || 'IPC error'}\n`);
+  } finally {
+    setSandboxBusy(false);
+  }
+}
+
+function collectSandboxFormValues() {
+  const shareDirs = {};
+  let hasSelection = false;
+  if (sandboxForm) {
+    SANDBOX_DIR_VALUES.forEach((dir) => {
+      const input = sandboxForm.querySelector(`input[value="${dir}"]`);
+      const checked = !!(input && input.checked);
+      shareDirs[dir] = checked;
+      if (checked) hasSelection = true;
+    });
+  }
+  const customPath = (sandboxCustomPathInput?.value || '').trim();
+  const configureDirs = hasSelection || !!customPath;
+  return { shareDirs, customPath, configureDirs };
+}
+
+function loadSandboxSharePrefs() {
+  try {
+    const raw = localStorage.getItem(SANDBOX_PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function persistSandboxSharePrefs() {
+  try {
+    localStorage.setItem(SANDBOX_PREFS_KEY, JSON.stringify(sandboxSharePrefs));
+  } catch (_) {}
+}
+
+function getSandboxSharePrefs(appName) {
+  if (!appName) return null;
+  const key = appName.toLowerCase();
+  return sandboxSharePrefs[key] || null;
+}
+
+function rememberSandboxSharePrefs(appName, data) {
+  if (!appName || !data) return;
+  const key = appName.toLowerCase();
+  const nextPrefs = { shareDirs: {}, customPath: data.customPath || '' };
+  SANDBOX_DIR_VALUES.forEach((dir) => {
+    nextPrefs.shareDirs[dir] = !!data.shareDirs?.[dir];
+  });
+  sandboxSharePrefs[key] = nextPrefs;
+  persistSandboxSharePrefs();
+}
+
+function applySandboxPrefsToForm(appName) {
+  if (!sandboxForm) return;
+  const prefs = getSandboxSharePrefs(appName);
+  SANDBOX_DIR_VALUES.forEach((dir) => {
+    const input = sandboxForm.querySelector(`input[value="${dir}"]`);
+    if (input) input.checked = !!(prefs?.shareDirs?.[dir]);
+  });
+  if (sandboxCustomPathInput) sandboxCustomPathInput.value = prefs?.customPath || '';
+}
+
+function getSandboxSummaryEntries(prefs) {
+  if (!prefs || typeof prefs !== 'object') return [];
+  const entries = [];
+  SANDBOX_DIR_VALUES.forEach((dir) => {
+    if (prefs.shareDirs && prefs.shareDirs[dir]) entries.push({ type: 'dir', value: dir });
+  });
+  if (prefs.customPath) entries.push({ type: 'custom', value: prefs.customPath });
+  return entries;
+}
+
+function renderSandboxSummary() {
+  if (!sandboxSummary) return;
+  const hasApp = !!sandboxState.currentApp;
+  const isSandboxed = !!(sandboxState.info && sandboxState.info.sandboxed);
+  const prefs = getSandboxSharePrefs(sandboxState.currentApp);
+  const entries = getSandboxSummaryEntries(prefs);
+  const shouldShow = hasApp && isSandboxed;
+  sandboxSummary.hidden = !shouldShow;
+  if (!sandboxSummaryList) return;
+  if (!shouldShow) {
+    sandboxSummaryList.innerHTML = '';
+    sandboxSummaryList.hidden = true;
+    if (sandboxSummaryEmpty) sandboxSummaryEmpty.hidden = false;
+    return;
+  }
+  sandboxSummaryList.innerHTML = '';
+  if (!entries.length) {
+    sandboxSummaryList.hidden = true;
+    if (sandboxSummaryEmpty) sandboxSummaryEmpty.hidden = false;
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  entries.forEach((entry) => {
+    const li = document.createElement('li');
+    li.className = 'sandbox-summary-item';
+    if (entry.type === 'dir') {
+      li.textContent = t(SANDBOX_DIR_LABEL_KEYS[entry.value]) || entry.value;
+    } else if (entry.type === 'custom') {
+      const label = document.createElement('span');
+      label.className = 'sandbox-summary-label';
+      label.textContent = t('sandbox.summary.custom');
+      const path = document.createElement('code');
+      path.className = 'sandbox-summary-path';
+      path.textContent = entry.value;
+      li.append(label, path);
+    }
+    fragment.appendChild(li);
+  });
+  sandboxSummaryList.hidden = false;
+  sandboxSummaryList.appendChild(fragment);
+  if (sandboxSummaryEmpty) sandboxSummaryEmpty.hidden = true;
+}
+
+function isAppSandboxed(appName) {
+  if (!appName) return false;
+  return sandboxedApps.get(appName.toLowerCase()) === true;
+}
+
+function setAppSandboxState(appName, active) {
+  if (!appName) return;
+  const key = appName.toLowerCase();
+  const nextState = !!active;
+  const prevState = sandboxedApps.has(key);
+  if (nextState === prevState) {
+    return;
+  }
+  if (nextState) sandboxedApps.set(key, true);
+  else sandboxedApps.delete(key);
+  refreshSandboxBadgesForApp(appName);
+  scheduleInstalledResort();
+}
+
+function cleanupSandboxCache() {
+  if (!sandboxedApps.size || !(state.installed instanceof Set)) return;
+  sandboxedApps.forEach((_, key) => {
+    if (!state.installed.has(key)) sandboxedApps.delete(key);
+  });
+}
+
+function applySandboxBadgeToIcon(iconWrapper, isActive) {
+  if (!iconWrapper) return;
+  const badge = iconWrapper.querySelector('.installed-badge');
+  if (!badge) return;
+  const label = isActive ? t('sandbox.status.active') : 'Installée';
+  const symbol = isActive ? '🔒' : '✓';
+  badge.textContent = symbol;
+  badge.setAttribute('aria-label', label);
+  badge.title = label;
+}
+
+function refreshSandboxBadgesForApp(appName) {
+  if (!appName) return;
+  const lower = appName.toLowerCase();
+  const active = isAppSandboxed(appName);
+  document.querySelectorAll('.app-tile').forEach(tile => {
+    const tileName = (tile.getAttribute('data-app') || '').toLowerCase();
+    if (tileName !== lower) return;
+    const iconWrapper = tile.querySelector('.tile-icon');
+    applySandboxBadgeToIcon(iconWrapper, active);
+  });
+  if (detailsName && detailsName.dataset.app === lower) {
+    applyDetailsSandboxBadge(appName);
+  }
+}
+
+function refreshAllSandboxBadges() {
+  document.querySelectorAll('.app-tile').forEach(tile => {
+    const tileName = tile.getAttribute('data-app');
+    if (!tileName) return;
+    const iconWrapper = tile.querySelector('.tile-icon');
+    applySandboxBadgeToIcon(iconWrapper, isAppSandboxed(tileName));
+  });
+  if (state.currentDetailsApp) {
+    applyDetailsSandboxBadge(state.currentDetailsApp);
+  }
+}
+
+function applyDetailsSandboxBadge(appName) {
+  if (!detailsIcon) return;
+  const wrapper = detailsIcon.parentElement;
+  if (!wrapper || !wrapper.classList.contains('details-icon-wrapper')) return;
+  if (getComputedStyle(wrapper).position === 'static') {
+    wrapper.style.position = 'relative';
+  }
+  const target = appName || state.currentDetailsApp;
+  const entry = state.allApps.find(a => a && a.name === target);
+  const isCurrentlyInstalling = !!(activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === target);
+  let isInstalled = false;
+  if (entry) {
+    isInstalled = !!(entry.installed && entry.hasDiamond !== false);
+  } else if (target) {
+    isInstalled = state.installed instanceof Set && state.installed.has(String(target).toLowerCase());
+  }
+  if (isCurrentlyInstalling) {
+    isInstalled = false;
+  }
+  const badge = wrapper.querySelector('.installed-badge');
+  if (!isInstalled) {
+    if (badge) badge.remove();
+    return;
+  }
+  if (!badge) {
+    const badgeEl = document.createElement('span');
+    badgeEl.className = 'installed-badge';
+    badgeEl.style.position = 'absolute';
+    badgeEl.style.top = '0';
+    badgeEl.style.right = '0';
+    badgeEl.style.zIndex = '2';
+    wrapper.appendChild(badgeEl);
+  }
+  applySandboxBadgeToIcon(wrapper, isAppSandboxed(target));
+}
+
+function scheduleSandboxStateSweep() {
+  if (!window.electronAPI?.getSandboxInfo) return;
+  const token = ++sandboxSweepToken;
+  runSandboxStateSweep(token).catch(() => {});
+}
+
+async function runSandboxStateSweep(token) {
+  const installedApps = (state.allApps || []).filter(app => app && app.installed && app.name).map(app => app.name);
+  for (const appName of installedApps) {
+    if (token !== sandboxSweepToken) return;
+    try {
+      const response = await window.electronAPI.getSandboxInfo(appName);
+      if (token !== sandboxSweepToken) return;
+      const info = response?.info;
+      setAppSandboxState(appName, !!info?.sandboxed);
+    } catch (_) {}
+    await new Promise(resolve => setTimeout(resolve, 65));
+  }
+}
+
+function handleSandboxShow(appName) {
+  if (!sandboxCard) return;
+  const isSameApp = sandboxState.currentApp === appName;
+  sandboxState.pendingAction = null;
+  closeNonAppimageModal();
+  sandboxState.currentApp = appName;
+  sandboxState.info = null;
+  if (!isSameApp) {
+    setSandboxLogExpanded(false);
+  }
+  applySandboxPrefsToForm(appName);
+  resetSandboxLog();
+  renderSandboxSummary();
+  refreshSandboxInfo(appName);
+}
+
+function handleSandboxExit() {
+  sandboxState.currentApp = null;
+  sandboxState.info = null;
+  sandboxState.pendingAction = null;
+  sandboxState.logBuffer = '';
+  sandboxState.supported = true;
+  setSandboxLogExpanded(false);
+  if (sandboxCard) sandboxCard.hidden = true;
+  closeSandboxModal();
+  renderSandboxCard();
+}
+
+sandboxRefreshBtn?.addEventListener('click', () => {
+  if (sandboxState.busy || !sandboxState.currentApp) return;
+  refreshSandboxInfo();
+});
+
+sandboxInstallDepsBtn?.addEventListener('click', async () => {
+  if (sandboxState.busy) return;
+  setSandboxBusy(true);
+  try {
+    await window.electronAPI.amAction('install', 'sas');
+    showToast(t('sandbox.toast.depsInstalled'));
+  } catch (error) {
+    notifySandboxError(error?.code || null);
+  } finally {
+    setSandboxBusy(false);
+    refreshSandboxInfo();
+  }
+});
+
+sandboxConfigureBtn?.addEventListener('click', async () => {
+  if (sandboxState.busy) return;
+  if (!sandboxState.info?.installed) {
+    showToast(t('sandbox.toast.requireInstall'));
+    return;
+  }
+  if (!sandboxState.depsReady) {
+    showToast(t('sandbox.toast.missingDeps'));
+    return;
+  }
+  const payload = collectSandboxFormValues();
+  payload.appName = sandboxState.currentApp;
+  sandboxState.pendingAction = { type: 'configure', id: null };
+  resetSandboxLog();
+  setSandboxBusy(true);
+  try {
+    const result = await window.electronAPI.configureSandbox(payload);
+    const currentLog = stripAnsiSequences(sandboxState.logBuffer || '');
+    if (result?.output && !currentLog.trim()) appendSandboxLog(result.output);
+    if (result?.ok) {
+      rememberSandboxSharePrefs(sandboxState.currentApp, payload);
+      renderSandboxSummary();
+      setAppSandboxState(sandboxState.currentApp, true);
+      showToast(t('sandbox.toast.enabled', { name: sandboxState.currentApp }));
+      refreshSandboxInfo();
+    } else {
+      notifySandboxError(result?.error);
+    }
+  } catch (error) {
+    notifySandboxError(error?.code || null);
+  } finally {
+    sandboxState.pendingAction = null;
+    setSandboxBusy(false);
+  }
+});
+
+sandboxDisableBtn?.addEventListener('click', async () => {
+  if (sandboxState.busy || !sandboxState.info?.sandboxed) return;
+  sandboxState.pendingAction = { type: 'disable', id: null };
+  resetSandboxLog();
+  setSandboxBusy(true);
+  try {
+    const result = await window.electronAPI.disableSandbox({ appName: sandboxState.currentApp });
+    const currentLog = stripAnsiSequences(sandboxState.logBuffer || '');
+    if (result?.output && !currentLog.trim()) appendSandboxLog(result.output);
+    if (result?.ok) {
+      setAppSandboxState(sandboxState.currentApp, false);
+      showToast(t('sandbox.toast.disabled', { name: sandboxState.currentApp }));
+      refreshSandboxInfo();
+    } else {
+      notifySandboxError(result?.error);
+    }
+  } catch (error) {
+    notifySandboxError(error?.code || null);
+  } finally {
+    sandboxState.pendingAction = null;
+    setSandboxBusy(false);
+  }
+});
+
+sandboxInstallAppBtn?.addEventListener('click', () => {
+  if (sandboxState.busy || sandboxState.info?.installed) return;
+  closeSandboxModal();
+  detailsInstallBtn?.click();
+});
+
+sandboxLogToggle?.addEventListener('click', () => {
+  setSandboxLogExpanded(!isSandboxLogExpanded());
+});
+
+sandboxOpenBtn?.addEventListener('click', async () => {
+  if (!sandboxState.currentApp) return;
+  // Si l'info n'est pas encore chargée, attendre le chargement
+  if (!sandboxState.info && !sandboxState.busy) {
+    setSandboxBusy(true);
+    try {
+      const response = await window.electronAPI.getSandboxInfo(sandboxState.currentApp);
+      sandboxState.info = response?.info || { installed: false, sandboxed: false };
+      sandboxState.depsReady = !!(response?.dependencies && (response.dependencies.hasSas || response.dependencies.hasAisap));
+      renderSandboxCard();
+    } catch (_) {}
+    setSandboxBusy(false);
+  }
+  if (!isSandboxSupported(sandboxState.currentApp)) {
+    showNonAppimageModal(sandboxState.currentApp);
+    return;
+  }
+  openSandboxModal();
+});
+
+sandboxCloseBtn?.addEventListener('click', () => {
+  closeSandboxModal();
+});
+
+sandboxModal?.addEventListener('click', (event) => {
+  if (event.target === sandboxModal) {
+    closeSandboxModal();
+  }
+});
+
+nonAppimageCloseBtn?.addEventListener('click', () => {
+  closeNonAppimageModal();
+});
+
+nonAppimageDismissBtn?.addEventListener('click', () => {
+  closeNonAppimageModal();
+});
+
+nonAppimageModal?.addEventListener('click', (event) => {
+  if (event.target === nonAppimageModal) {
+    closeNonAppimageModal();
+  }
+});
+
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (nonAppimageModal && !nonAppimageModal.hidden) {
+    event.stopPropagation();
+    closeNonAppimageModal();
+    return;
+  }
+  if (sandboxModal && !sandboxModal.hidden) {
+    closeSandboxModal();
+  }
+});
+
+if (window.electronAPI?.onSandboxProgress) {
+  window.electronAPI.onSandboxProgress((message) => {
+    if (!message || !sandboxState.currentApp) return;
+    if (message.appName !== sandboxState.currentApp) return;
+    if (!sandboxState.pendingAction) return;
+    if (sandboxState.pendingAction.type !== message.action) return;
+    if (!sandboxState.pendingAction.id && message.id) sandboxState.pendingAction.id = message.id;
+    if (sandboxState.pendingAction.id && message.id && sandboxState.pendingAction.id !== message.id) return;
+    if (message.kind === 'start') {
+      resetSandboxLog();
+      setSandboxBusy(true);
+    } else if (message.kind === 'data' && typeof message.chunk === 'string') {
+      appendSandboxLog(message.chunk);
+    } else if (message.kind === 'error' && message.message) {
+      appendSandboxLog(`\n${message.message}\n`);
+    } else if (message.kind === 'done') {
+      sandboxState.pendingAction = null;
+      setSandboxBusy(false);
+      refreshSandboxInfo();
+    }
+  });
+}
+
+function notifySandboxError(code) {
+  switch (code) {
+    case 'missing-dependency':
+      showToast(t('sandbox.toast.missingDeps'));
+      return;
+    case 'missing-path':
+      showToast(t('sandbox.toast.missingPath'));
+      return;
+    case 'forbidden-path':
+      showToast(t('sandbox.toast.forbiddenPath'));
+      return;
+    case 'invalid-app':
+      showToast(t('sandbox.toast.requireInstall'));
+      return;
+    case 'missing-pm':
+      showToast(t('missingPm.desc'));
+      return;
+    default:
+      showToast(t('sandbox.toast.error'));
+  }
 }
 
 function getQueuePosition(name){
@@ -693,6 +1439,30 @@ function enqueueInstall(name){
   }
   refreshAllInstallButtons();
 }
+
+async function cancelActiveInstall(expectedName = null) {
+  // Toujours fermer les boîtes de dialogue de choix existantes
+  document.querySelectorAll('.choice-dialog').forEach(e => e.remove());
+  if (!activeInstallSession || activeInstallSession.done) return;
+  if (expectedName && activeInstallSession.name !== expectedName) return;
+  if (!activeInstallSession.id) return;
+  const appName = activeInstallSession.name;
+  try {
+    await window.electronAPI.installCancel(activeInstallSession.id);
+    showToast(t('toast.cancelRequested'));
+    try {
+      await window.electronAPI.amAction('uninstall', appName);
+    } catch (_){ }
+    try {
+      await loadApps();
+      applySearch();
+    } catch (_){ }
+  } catch (err) {
+    if (typeof window.showCopiableError === 'function') {
+      window.showCopiableError('Erreur lors de l’annulation : ' + (err?.message || err));
+    }
+  }
+}
 let syncBtn = null;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
@@ -702,6 +1472,14 @@ const purgeIconsResult = document.getElementById('purgeIconsResult');
 const tabs = document.querySelectorAll('.tab');
 // Mise à jour
 let updateInProgress = false;
+let updatesXterm = null;
+let updatesXtermFit = null;
+let updatesTerminalEl = null;
+let updatesTerminalFallbackMode = false;
+let updatesTerminalExpanded = false;
+let updateSpinnerBusy = false;
+let activeUpdateStreamId = null;
+const updateStreamWaiters = new Map();
 const updatesPanel = document.getElementById('updatesPanel');
 const advancedPanel = document.getElementById('advancedPanel');
 const runUpdatesBtn = document.getElementById('runUpdatesBtn');
@@ -709,7 +1487,44 @@ const updateSpinner = document.getElementById('updateSpinner');
 const updateResult = document.getElementById('updateResult');
 const updateFinalMessage = document.getElementById('updateFinalMessage');
 const updatedAppsIcons = document.getElementById('updatedAppsIcons');
+const updatesTerminalWrap = document.getElementById('updatesTerminalWrap');
+const updatesTerminalNode = document.getElementById('updatesTerminal');
+const updatesToggleBtn = document.getElementById('updatesToggleBtn');
 const installedCountEl = document.getElementById('installedCount');
+
+function rerenderActiveCategory() {
+  if (applySearch !== defaultApplySearch) {
+    try {
+      applySearch();
+      return;
+    } catch (err) {
+      console.error('applySearch failed, falling back to direct render', err);
+    }
+  }
+  if (state.activeCategory === 'updates') {
+    if (appsDiv) {
+      appsDiv.innerHTML = '';
+      appsDiv.hidden = true;
+    }
+    if (updatesPanel) updatesPanel.hidden = false;
+    if (advancedPanel) advancedPanel.hidden = true;
+    return;
+  }
+  if (state.activeCategory === 'advanced') {
+    if (appsDiv) {
+      appsDiv.innerHTML = '';
+      appsDiv.hidden = true;
+    }
+    if (advancedPanel) advancedPanel.hidden = false;
+    if (updatesPanel) updatesPanel.hidden = true;
+    return;
+  }
+  setAppList(state.filtered);
+  refreshAllInstallButtons();
+  if (appsDiv) appsDiv.hidden = false;
+  if (updatesPanel) updatesPanel.hidden = true;
+  if (advancedPanel) advancedPanel.hidden = true;
+}
 
 const handleIconCachePurged = () => {
   document.querySelectorAll('.app-tile img').forEach(img => {
@@ -738,21 +1553,13 @@ const searchFeature = window.features?.search?.init?.({
   categoriesApi: window.categories,
   translate: t,
   iconMap: CATEGORY_ICON_MAP,
+  isSandboxed: isAppSandboxed,
   exitDetailsView,
   debounce
 });
 if (searchFeature && typeof searchFeature.applySearch === 'function') {
   applySearch = searchFeature.applySearch;
 }
-// Modale sortie brute update
-const showRawUpdateBtn = document.getElementById('showRawUpdateBtn');
-const rawUpdateModal = document.getElementById('rawUpdateModal');
-const rawUpdatePre = document.getElementById('rawUpdatePre');
-const rawUpdateClose = document.getElementById('rawUpdateClose');
-const rawUpdateClose2 = document.getElementById('rawUpdateClose2');
-const rawCopyBtn = document.getElementById('rawCopyBtn');
-const rawSaveBtn = document.getElementById('rawSaveBtn');
-let lastUpdateRaw = '';
 // ...existing code...
 // Modale confirmation actions
 const actionConfirmModal = document.getElementById('actionConfirmModal');
@@ -1087,6 +1894,10 @@ function applyTranslations() {
   if (tabSecondary) {
     tabSecondary.textContent = t('tabs.categories') || 'Catégories';
   }
+  setUpdateSpinnerBusy(updateSpinnerBusy);
+  updateUpdatesToggleUi();
+  if (!sandboxState.logBuffer) resetSandboxLog();
+  refreshAllSandboxBadges();
   if (popupWasOpen) {
     showMissingPmPopup();
   }
@@ -1112,18 +1923,7 @@ function initLanguagePreferences() {
           try { document.documentElement.setAttribute('lang', getLangPref()); } catch(_){ }
           // Mark handled to avoid delegated double handling
           try { window.__langChangeHandled = true; } catch(_){ }
-          // Correction : n'affiche la liste des applications que si l'onglet actif est un onglet 'application'
-          const appTabs = ['all', 'installed'];
-          if (appTabs.includes(state.activeCategory)) {
-            try { setAppList(state.filtered); refreshAllInstallButtons(); } catch(_){}
-            if (appsDiv) appsDiv.hidden = false;
-            if (updatesPanel) updatesPanel.hidden = true;
-            if (advancedPanel) advancedPanel.hidden = true;
-          } else {
-            if (appsDiv) appsDiv.hidden = true;
-            if (updatesPanel) updatesPanel.hidden = (state.activeCategory !== 'updates');
-            if (advancedPanel) advancedPanel.hidden = (state.activeCategory !== 'advanced');
-          }
+          rerenderActiveCategory();
         });
       } catch(_){}
     });
@@ -1205,13 +2005,10 @@ if (settingsPanelLang) {
     // évite double gestion si un handler direct a déjà traité
     if (window.__langChangeHandled) { window.__langChangeHandled = false; return; }
     if (t.name === 'langPref') {
-      localStorage.setItem('langPref', t.value);
-      applyTranslations();
-      document.documentElement.setAttribute('lang', getLangPref());
-  // Appliquer les traductions dynamiquement sans recharger
-  try { applyTranslations(); } catch(_){}
-  try { document.documentElement.setAttribute('lang', getLangPref()); } catch(_){}
-  try { setAppList(state.filtered); refreshAllInstallButtons(); } catch(_){}
+      try { localStorage.setItem('langPref', t.value); } catch(_){ }
+      try { applyTranslations(); } catch(_){ }
+      try { document.documentElement.setAttribute('lang', getLangPref()); } catch(_){ }
+      rerenderActiveCategory();
     }
   });
 }
@@ -1266,6 +2063,8 @@ async function loadApps() {
       appsDiv.innerHTML = `<div class="empty-state pm-empty-placeholder"><p>${t('missingPm.popup.desc')}</p></div>`;
     }
     if (installedCountEl) installedCountEl.textContent = '0';
+    sandboxedApps.clear();
+    refreshAllSandboxBadges();
     appsDiv?.setAttribute('aria-busy','false');
     return;
   }
@@ -1275,6 +2074,8 @@ async function loadApps() {
     state.filtered = [];
     if (appsDiv) appsDiv.innerHTML = `<div class='empty-state'><h3>Erreur de récupération</h3><p style='font-size:13px;'>${detailed.error}</p></div>`;
     if (installedCountEl) installedCountEl.textContent = '0';
+    sandboxedApps.clear();
+    refreshAllSandboxBadges();
     appsDiv?.setAttribute('aria-busy','false');
     return;
   }
@@ -1296,7 +2097,10 @@ async function loadApps() {
     state.installed = installedNames;
   } catch(_) { state.installed = new Set(); }
   if (installedCountEl) installedCountEl.textContent = String(state.allApps.filter(a => a.installed && a.hasDiamond).length);
-  setAppList(state.filtered);
+  cleanupSandboxCache();
+  rerenderActiveCategory();
+  refreshAllSandboxBadges();
+  scheduleSandboxStateSweep();
   prefetchPreloadImages();
 }
 
@@ -1370,32 +2174,12 @@ function showDetails(appName) {
   // Mémoriser la position de scroll actuelle (shell scrollable)
   if (scrollShell) state.lastScrollY = scrollShell.scrollTop;
   state.currentDetailsApp = app.name;
+  handleSandboxShow(app.name);
   const label = app.name.charAt(0).toUpperCase() + app.name.slice(1);
   const version = app.version ? String(app.version) : null;
   if (detailsIcon) {
     detailsIcon.src = getIconUrl(app.name);
     detailsIcon.onerror = () => { detailsIcon.src = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; };
-    // Ajout du badge installé sur l'icône en vue détaillée
-    const wrapper = detailsIcon.parentElement;
-    if (wrapper && wrapper.classList.contains('details-icon-wrapper')) {
-      wrapper.style.position = 'relative';
-      // Nettoyage du badge existant avant ajout
-      const oldBadge = wrapper.querySelector('.installed-badge');
-      if (oldBadge) oldBadge.remove();
-      const isActuallyInstalled = app.installed && !(activeInstallSession && activeInstallSession.name === app.name && activeInstallSession.id && !activeInstallSession.done);
-      if (isActuallyInstalled) {
-        const badgeEl = document.createElement('span');
-        badgeEl.className = 'installed-badge';
-        badgeEl.setAttribute('aria-label', 'Installée');
-        badgeEl.setAttribute('title', 'Installée');
-        badgeEl.textContent = '✓';
-        badgeEl.style.position = 'absolute';
-        badgeEl.style.top = '0';
-        badgeEl.style.right = '0';
-        badgeEl.style.zIndex = '2';
-        wrapper.appendChild(badgeEl);
-      }
-    }
   }
   if (detailsName) {
     // Correction : si installation annulée, ne pas afficher comme installée
@@ -1405,6 +2189,7 @@ function showDetails(appName) {
       : (version ? `${label} · ${version}` : label);
   }
   if (detailsName) detailsName.dataset.app = app.name.toLowerCase();
+  applyDetailsSandboxBadge(app.name);
   if (detailsLong) detailsLong.textContent = t('details.loadingDesc', {name: app.name});
   if (detailsGallery) detailsGallery.hidden = true;
   // Galerie supprimée : rien à cacher
@@ -1459,6 +2244,7 @@ function showDetails(appName) {
 }
 
 function exitDetailsView() {
+  handleSandboxExit();
   if (appDetailsSection) appDetailsSection.hidden = true;
   document.body.classList.remove('details-mode');
   if (appsDiv) appsDiv.hidden = false;
@@ -1468,13 +2254,7 @@ function exitDetailsView() {
   // Réaffiche la barre d'onglets catégories et le bouton miroir/tout
   const tabsRowSecondary = document.querySelector('.tabs-row-secondary');
   if (tabsRowSecondary) tabsRowSecondary.style.visibility = 'visible';
-  // Réappliquer le filtre si on était dans l’onglet "Installé"
-  if (state.activeCategory === 'installed') {
-    const filtered = state.allApps.filter(a => a.installed && (a.hasDiamond === true));
-    state.filtered = filtered;
-    setAppList(filtered);
-    if (typeof refreshAllInstallButtons === 'function') refreshAllInstallButtons();
-  }
+  rerenderActiveCategory();
   // Nettoyer tous les états busy/spinner sur les tuiles
   document.querySelectorAll('.app-tile.busy').forEach(t => t.classList.remove('busy'));
   // Restaurer scroll
@@ -1490,12 +2270,20 @@ const legacyExitDetailsView = exitDetailsView;
   const api = ensureDetailsApi();
   if (!api) return;
   showDetails = (appName) => {
-    if (api && typeof api.showDetails === 'function') api.showDetails(appName);
-    else legacyShowDetails(appName);
+    if (api && typeof api.showDetails === 'function') {
+      const result = api.showDetails(appName);
+      try { handleSandboxShow(appName); } catch (_) {}
+      return result;
+    }
+    return legacyShowDetails(appName);
   };
   exitDetailsView = () => {
-    if (api && typeof api.exitDetailsView === 'function') api.exitDetailsView();
-    else legacyExitDetailsView();
+    if (api && typeof api.exitDetailsView === 'function') {
+      const result = api.exitDetailsView();
+      try { handleSandboxExit(); } catch (_) {}
+      return result;
+    }
+    return legacyExitDetailsView();
   };
 })();
 
@@ -1511,7 +2299,9 @@ if (window.ui?.virtualList?.init) {
     getActiveInstallSession: () => activeInstallSession,
     showDetails,
     document,
-    window
+    window,
+    isSandboxed: isAppSandboxed,
+    applySandboxBadge: (iconWrapper, active, appName) => applySandboxBadgeToIcon(iconWrapper, active, appName)
   });
   if (api) {
     virtualListApi = api;
@@ -1564,17 +2354,7 @@ appsDiv?.addEventListener('click', (e) => {
         });
       });
     } else if (action === 'cancel-install') {
-      if (activeInstallSession.id && activeInstallSession.name === appName) {
-        window.electronAPI.installCancel(activeInstallSession.id).then(async ()=>{
-          showToast(t('toast.cancelRequested'));
-          // Lancer la désinstallation directement après l'annulation
-          try {
-            await window.electronAPI.amAction('uninstall', appName);
-            await loadApps();
-            applySearch();
-          } catch(_){}
-        });
-      }
+      cancelActiveInstall(appName);
       return;
     } else if (action === 'remove-queue') {
       removeFromQueue(appName);
@@ -1623,7 +2403,7 @@ window.addEventListener('keydown', (e) => {
 (async () => {
   await loadApps();
   // Assurer spinner et résultats cachés au démarrage
-  if (updateSpinner) updateSpinner.hidden = true;
+  setUpdateSpinnerBusy(false);
   if (updateResult) updateResult.style.display = 'none';
   // Forcer la vue liste au démarrage
   if (appDetailsSection) appDetailsSection.hidden = true;
@@ -1647,12 +2427,17 @@ window.addEventListener('keydown', (e) => {
       // Créer un dialogue simple
       const dlg = document.createElement('div');
       dlg.className = 'choice-dialog';
+      const cardColor = getThemeVar('--card', '#ffffff');
+      const fgColor = getThemeVar('--fg', '#0b1320');
+      const borderColor = getThemeVar('--border', '#e5e7eb');
       dlg.style.position = 'fixed';
       dlg.style.top = '50%';
       dlg.style.left = '50%';
       dlg.style.transform = 'translate(-50%, -50%)';
       dlg.style.zIndex = '9999';
-      dlg.style.background = '#fff';
+      dlg.style.background = cardColor;
+      dlg.style.color = fgColor;
+      dlg.style.border = `1px solid ${borderColor}`;
       dlg.style.boxShadow = '0 2px 16px rgba(0,0,0,0.18)';
       dlg.style.borderRadius = '10px';
       dlg.style.padding = '24px 32px';
@@ -1680,8 +2465,22 @@ window.addEventListener('keydown', (e) => {
         // Affichage classique en liste
         optionsHtml = `<ul>${data.options.map((opt,i)=>`<li><button class="multi-choice-item" data-choice="${i+1}">${opt}</button></li>`).join('')}</ul>`;
       }
-      dlg.innerHTML = `<div class="choice-dialog-inner" style="user-select:text;"><h3>${data.prompt}</h3>${optionsHtml}</div>`;
+      const cancelLabel = t('install.cancel') || 'Annuler';
+      dlg.innerHTML = `
+        <div class="choice-dialog-inner">
+          <div class="choice-dialog-head">
+            <h3>${data.prompt}</h3>
+            <button type="button" class="choice-dialog-close" aria-label="${cancelLabel}">✕</button>
+          </div>
+          <div class="choice-dialog-body">${optionsHtml}</div>
+        </div>`;
       document.body.appendChild(dlg);
+      const closeBtn = dlg.querySelector('.choice-dialog-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          cancelActiveInstall();
+        });
+      }
       dlg.querySelectorAll('button[data-choice]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const choice = btn.getAttribute('data-choice');
@@ -1710,12 +2509,17 @@ window.addEventListener('keydown', (e) => {
 // Fonction utilitaire globale pour afficher une erreur copiable
 window.showCopiableError = function(msg) {
   const errDlg = document.createElement('div');
+  const cardColor = getThemeVar('--card', '#ffffff');
+  const fgColor = getThemeVar('--fg', '#0b1320');
+  const borderColor = getThemeVar('--border', '#e5e7eb');
   errDlg.style.position = 'fixed';
   errDlg.style.top = '50%';
   errDlg.style.left = '50%';
   errDlg.style.transform = 'translate(-50%, -50%)';
   errDlg.style.zIndex = '10000';
-  errDlg.style.background = '#fff';
+  errDlg.style.background = cardColor;
+  errDlg.style.color = fgColor;
+  errDlg.style.border = `1px solid ${borderColor}`;
   errDlg.style.boxShadow = '0 2px 16px rgba(0,0,0,0.18)';
   errDlg.style.borderRadius = '10px';
   errDlg.style.padding = '24px 32px';
@@ -1724,6 +2528,9 @@ window.showCopiableError = function(msg) {
   document.body.appendChild(errDlg);
   errDlg.querySelector('button').onclick = () => errDlg.remove();
   const ta = errDlg.querySelector('textarea');
+  ta.style.background = cardColor;
+  ta.style.color = fgColor;
+  ta.style.border = `1px solid ${borderColor}`;
   ta.focus();
   ta.select();
 };
@@ -1734,6 +2541,9 @@ tabs.forEach(tab => {
     tabs.forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     state.activeCategory = tab.getAttribute('data-category') || 'all';
+    if (state.categoryOverride) {
+      state.categoryOverride = null;
+    }
     if (window.categories && typeof window.categories.updateDropdownLabel === 'function') {
       window.categories.updateDropdownLabel(state, t, CATEGORY_ICON_MAP);
     }
@@ -1753,15 +2563,16 @@ tabs.forEach(tab => {
     } else if (virtualListApi?.disconnectObservers) {
       try { virtualListApi.disconnectObservers(); } catch (_) {}
     }
-    if (!isUpdatesTab && updateSpinner) updateSpinner.hidden = true;
     if (isUpdatesTab) {
       if (updateInProgress) {
         runUpdatesBtn.disabled = true;
-        updateSpinner.hidden = false;
+        setUpdateSpinnerBusy(true);
       } else {
         runUpdatesBtn.disabled = false;
-        updateSpinner.hidden = true;
+        setUpdateSpinnerBusy(false);
       }
+    } else {
+      setUpdateSpinnerBusy(false);
     }
     // Pas de terminal dans le mode avancé désormais
     if (document.body.classList.contains('details-mode')) {
@@ -1775,11 +2586,206 @@ tabs.forEach(tab => {
 // Sortie avec ESC
 // (Ancien handler Escape détails fusionné ci-dessus)
 
-// Bouton Mettre à jour: exécution simple (pas de progression heuristique)
+// Bouton Mettre à jour: terminal intégré + flux streaming
+function hasUpdatesStreamingSupport() {
+  return !!(window.electronAPI?.startUpdates && window.electronAPI?.onUpdatesProgress);
+}
+
+function setUpdateSpinnerBusy(isBusy) {
+  if (!updateSpinner) return;
+  updateSpinnerBusy = !!isBusy;
+  updateSpinner.setAttribute('data-busy', updateSpinnerBusy ? 'true' : 'false');
+  const label = updateSpinner.querySelector('.spinner-label');
+  if (label) label.textContent = t(updateSpinnerBusy ? 'updates.loading' : 'updates.ready');
+}
+
+function updateUpdatesToggleUi() {
+  if (!updatesToggleBtn) return;
+  const key = updatesTerminalExpanded ? 'updates.toggleHide' : 'updates.toggleShow';
+  updatesToggleBtn.textContent = t(key);
+  updatesToggleBtn.setAttribute('aria-expanded', updatesTerminalExpanded ? 'true' : 'false');
+}
+
+function applyUpdatesTerminalVisibility() {
+  if (!updatesTerminalWrap) return;
+  updatesTerminalWrap.hidden = !updatesTerminalExpanded;
+  if (updatesTerminalExpanded) {
+    ensureUpdatesTerminal();
+    if (updatesXtermFit) setTimeout(() => updatesXtermFit?.fit(), 30);
+  }
+}
+
+function setUpdatesTerminalExpanded(expanded) {
+  const next = !!expanded;
+  if (next === updatesTerminalExpanded) {
+    updateUpdatesToggleUi();
+    return;
+  }
+  updatesTerminalExpanded = next;
+  applyUpdatesTerminalVisibility();
+  updateUpdatesToggleUi();
+}
+
+function ensureUpdatesTerminal() {
+  if (updatesTerminalFallbackMode) {
+    if (!updatesTerminalEl) updatesTerminalEl = updatesTerminalNode;
+    updatesTerminalEl?.classList.add('updates-terminal-fallback');
+    return null;
+  }
+  if (!updatesTerminalEl) updatesTerminalEl = updatesTerminalNode;
+  if (!updatesTerminalEl) return null;
+  if (updatesXterm) return updatesXterm;
+  try {
+    const { Terminal } = require('@xterm/xterm');
+    const { FitAddon } = require('@xterm/xterm-addon-fit');
+    updatesXterm = new Terminal({
+      fontSize: 12,
+      fontFamily: 'JetBrains Mono, SFMono-Regular, Menlo, Consolas, monospace',
+      convertEol: true,
+      allowTransparency: true,
+      theme: { background: '#050e17', foreground: '#d4e7ff' },
+      scrollback: 2000,
+      disableStdin: true
+    });
+    updatesXtermFit = new FitAddon();
+    updatesXterm.loadAddon(updatesXtermFit);
+    updatesXterm.open(updatesTerminalEl);
+    setTimeout(() => updatesXtermFit?.fit(), 60);
+    window.addEventListener('resize', () => updatesXtermFit?.fit());
+    updatesTerminalEl.classList.remove('updates-terminal-fallback');
+  } catch (err) {
+    console.error('Init updates terminal failed', err);
+    updatesXterm = null;
+    updatesXtermFit = null;
+    updatesTerminalFallbackMode = true;
+    if (updatesTerminalEl) {
+      updatesTerminalEl.classList.add('updates-terminal-fallback');
+      updatesTerminalEl.textContent = '';
+    }
+    return null;
+  }
+  return updatesXterm;
+}
+
+function revealUpdatesTerminal(forceExpand = false) {
+  if (forceExpand) {
+    setUpdatesTerminalExpanded(true);
+    return;
+  }
+  ensureUpdatesTerminal();
+  if (updatesTerminalExpanded && updatesTerminalWrap) {
+    updatesTerminalWrap.hidden = false;
+  }
+}
+
+function resetUpdatesTerminal() {
+  const term = ensureUpdatesTerminal();
+  if (!term) {
+    if (updatesTerminalEl) {
+      updatesTerminalEl.classList.add('updates-terminal-fallback');
+      updatesTerminalEl.textContent = '';
+      updatesTerminalEl.scrollTop = 0;
+    }
+    return;
+  }
+  try { term.reset(); }
+  catch(_) { term.clear?.(); }
+  if (updatesXtermFit) setTimeout(() => updatesXtermFit?.fit(), 30);
+}
+
+function appendUpdatesTerminalChunk(chunk) {
+  if (!chunk) return;
+  const term = ensureUpdatesTerminal();
+  if (!term) {
+    if (!updatesTerminalEl) return;
+    const cleaned = chunk
+      .replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '')
+      .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
+      .replace(/[\x07\x08]/g, '');
+    updatesTerminalEl.classList.add('updates-terminal-fallback');
+    updatesTerminalEl.textContent += cleaned.replace(/\r?\n/g, '\n');
+    updatesTerminalEl.scrollTop = updatesTerminalEl.scrollHeight;
+    return;
+  }
+  term.write(chunk.replace(/\r?\n/g, '\r\n'));
+}
+
+function waitForUpdateJob(id) {
+  return new Promise((resolve, reject) => {
+    updateStreamWaiters.set(id, { resolve, reject });
+  });
+}
+
+async function startUpdatesStream() {
+  revealUpdatesTerminal();
+  resetUpdatesTerminal();
+  const startRes = await window.electronAPI.startUpdates();
+  if (!startRes || startRes.error) {
+    throw new Error(startRes?.error || 'updates start failed');
+  }
+  activeUpdateStreamId = startRes.id;
+  return waitForUpdateJob(startRes.id);
+}
+
+function resolveUpdateWaiter(msg, isError) {
+  if (!msg || !msg.id) return;
+  const waiter = updateStreamWaiters.get(msg.id);
+  if (!waiter) return;
+  try {
+    if (isError) waiter.reject?.(msg);
+    else waiter.resolve?.(msg);
+  } finally {
+    updateStreamWaiters.delete(msg.id);
+  }
+}
+
+updatesToggleBtn?.addEventListener('click', () => {
+  setUpdatesTerminalExpanded(!updatesTerminalExpanded);
+});
+
+window.electronAPI?.onUpdatesProgress?.((msg) => {
+  if (!msg || !msg.id) return;
+  if (activeUpdateStreamId && msg.id !== activeUpdateStreamId) {
+    if (msg.kind === 'done') resolveUpdateWaiter(msg, false);
+    if (msg.kind === 'error') resolveUpdateWaiter(msg, true);
+    return;
+  }
+  switch (msg.kind) {
+    case 'start':
+      activeUpdateStreamId = msg.id;
+      revealUpdatesTerminal();
+      resetUpdatesTerminal();
+      appendUpdatesTerminalChunk(`\x1b[36m${t('updates.logHeader') || 'am -u'}\x1b[0m\r\n`);
+      break;
+    case 'data':
+      appendUpdatesTerminalChunk(typeof msg.chunk === 'string' ? msg.chunk : '');
+      break;
+    case 'done':
+      appendUpdatesTerminalChunk(`\r\n\x1b[32m${t('updates.logCompleted') || 'Terminé'} (code ${typeof msg.code === 'number' ? msg.code : 0})\x1b[0m\r\n`);
+      resolveUpdateWaiter(msg, false);
+      activeUpdateStreamId = null;
+      break;
+    case 'error':
+      appendUpdatesTerminalChunk(`\r\n\x1b[31m${msg.message || (t('updates.error') || 'Erreur')}\x1b[0m\r\n`);
+      resolveUpdateWaiter(msg, true);
+      activeUpdateStreamId = null;
+      break;
+  }
+});
+
+// Bouton Mettre à jour: analyse du log
+function stripAnsiSequences(text = '') {
+  return text
+    .replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '')
+    .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
+    .replace(/[\x07\x08]/g, '');
+}
+
 function parseUpdatedApps(res){
+  const cleanedOutput = stripAnsiSequences(res || '');
   const updated = new Set();
-  if (typeof res !== 'string') return updated;
-  const lines = res.split(/\r?\n/);
+  if (typeof cleanedOutput !== 'string') return updated;
+  const lines = cleanedOutput.split(/\r?\n/);
   for (const raw of lines){
     const line = raw.trim();
     if (!line) continue;
@@ -1805,9 +2811,10 @@ function parseUpdatedApps(res){
 }
 
 function handleUpdateCompletion(fullText){
+  const sanitized = stripAnsiSequences(fullText || '');
   // Chercher la section "The following apps have been updated:" dans le log
   let filteredUpdated = null;
-  const match = fullText && fullText.match(/The following apps have been updated:[^\n]*\n([\s\S]*?)\n[-=]{5,}/i);
+  const match = sanitized && sanitized.match(/The following apps have been updated:[^\n]*\n([\s\S]*?)\n[-=]{5,}/i);
   if (match) {
     // Extraire les noms d'apps de cette section
     filteredUpdated = new Set();
@@ -1818,8 +2825,8 @@ function handleUpdateCompletion(fullText){
       if (m) filteredUpdated.add(m[1].toLowerCase());
     }
   }
-  const updated = parseUpdatedApps(fullText || '');
-  const nothingPhrase = /Nothing to do here!?/i.test(fullText || '');
+  const updated = parseUpdatedApps(sanitized);
+  const nothingPhrase = /Nothing to do here!?/i.test(sanitized || '');
   let toShow = updated;
   if (filteredUpdated && filteredUpdated.size > 0) {
     // Ne garder que les apps détectées ET listées dans la section
@@ -1852,7 +2859,7 @@ function handleUpdateCompletion(fullText){
     }
   } else {
     // Fallback: pas de noms détectés mais sortie non vide et pas de message "rien à faire" => supposer des mises à jour
-    if (!nothingPhrase && (fullText || '').trim()) {
+    if (!nothingPhrase && sanitized.trim()) {
       if (updateFinalMessage) updateFinalMessage.textContent = t('updates.done');
     } else {
       if (updateFinalMessage) updateFinalMessage.textContent = t('updates.none');
@@ -1864,82 +2871,76 @@ function handleUpdateCompletion(fullText){
   setTimeout(() => { loadApps().then(applySearch); }, 400);
 }
 
+async function refreshAfterUpdates(){
+  if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
+    await window.electronAPI.deleteCategoriesCache();
+  }
+  if (window.categories && typeof window.categories.resetCache === 'function') {
+    window.categories.resetCache();
+  }
+  if (window.categories && typeof window.categories.loadCategories === 'function') {
+    await window.categories.loadCategories({ showToast });
+  }
+  showToast(t('toast.refreshing'));
+  await loadApps();
+  applySearch();
+  try {
+    const needs = state.allApps.some(a => a.installed && (!a.version || String(a.version).toLowerCase().includes('unsupported')));
+    if (needs) {
+      await new Promise(r => setTimeout(r, 3000));
+      await loadApps();
+      applySearch();
+    }
+  } catch (_) {}
+}
+
+async function fetchUpdatesOutput(){
+  if (hasUpdatesStreamingSupport()) {
+    try {
+      return await startUpdatesStream();
+    } catch (err) {
+      console.warn('Streaming updates failed, fallback to am-action', err);
+      activeUpdateStreamId = null;
+    }
+  }
+  if (!window.electronAPI?.amAction) return { output: '' };
+  const res = await window.electronAPI.amAction('__update_all__');
+  const output = typeof res === 'string' ? res : (res ? String(res) : '');
+  if (output) {
+    revealUpdatesTerminal();
+    resetUpdatesTerminal();
+    appendUpdatesTerminalChunk(output);
+  }
+  return { output };
+}
+
 runUpdatesBtn?.addEventListener('click', async () => {
   if (runUpdatesBtn.disabled) return;
   updateInProgress = true;
   showToast(t('toast.updating'));
-  updateSpinner.hidden = false;
-  updateResult.style.display = 'none';
-  updateFinalMessage.textContent='';
-  updatedAppsIcons.innerHTML='';
+  setUpdateSpinnerBusy(true);
+  if (updateResult) updateResult.style.display = 'none';
+  if (updateFinalMessage) updateFinalMessage.textContent='';
+  if (updatedAppsIcons) updatedAppsIcons.innerHTML='';
   runUpdatesBtn.disabled = true;
   try {
     const start = performance.now();
-    const res = await window.electronAPI.amAction('__update_all__');
-    lastUpdateRaw = res || '';
-    handleUpdateCompletion(res || '');
-    // --- Synchronisation complète comme le bouton sync ---
-    if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
-      await window.electronAPI.deleteCategoriesCache();
-    }
-    if (window.categories && typeof window.categories.resetCache === 'function') {
-      window.categories.resetCache();
-    }
-    if (window.categories && typeof window.categories.loadCategories === 'function') {
-      await window.categories.loadCategories({ showToast });
-    }
-    const tabApplications = document.querySelector('.tab[data-category="all"]');
-    if (tabApplications) tabApplications.click();
-    showToast(t('toast.refreshing'));
-    await loadApps();
-    applySearch();
-    // --- Fin synchronisation ---
-    try {
-      const needs = state.allApps.some(a => a.installed && (!a.version || String(a.version).toLowerCase().includes('unsupported')));
-      if (needs) {
-        await new Promise(r => setTimeout(r, 3000));
-        await loadApps();
-        applySearch();
-      }
-    } catch (_) {}
+    const result = await fetchUpdatesOutput();
+    const raw = typeof result?.output === 'string' ? result.output : '';
+    handleUpdateCompletion(raw);
+    await refreshAfterUpdates();
     const dur = Math.round((performance.now()-start)/1000);
     if (updateFinalMessage && updateFinalMessage.textContent) updateFinalMessage.textContent += t('updates.duration', {dur});
-  } catch (_err) {
-    // (Sortie supprimée)
+  } catch (err) {
+    console.error('Updates failed', err);
+    showToast(t('toast.updateFailed') || 'Échec des mises à jour');
+    if (updateFinalMessage) updateFinalMessage.textContent = t('updates.error') || 'Erreur pendant la mise à jour.';
+    if (updateResult) updateResult.style.display = 'block';
   } finally {
     updateInProgress = false;
-    updateSpinner.hidden = true;
+    setUpdateSpinnerBusy(false);
     runUpdatesBtn.disabled = false;
   }
-});
-
-// --- Modale sortie brute ---
-function openRawModal(){
-  if (!rawUpdateModal) return;
-  if (rawUpdatePre) rawUpdatePre.textContent = lastUpdateRaw || '(vide)';
-  rawUpdateModal.hidden = false;
-  setTimeout(()=> rawUpdatePre?.focus(), 30);
-}
-function closeRawModal(){ if (rawUpdateModal) rawUpdateModal.hidden = true; }
-
-showRawUpdateBtn?.addEventListener('click', () => { if (!lastUpdateRaw) { showToast(t('toast.noUpdateLog')); return; } openRawModal(); });
-rawUpdateClose?.addEventListener('click', closeRawModal);
-rawUpdateClose2?.addEventListener('click', closeRawModal);
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !rawUpdateModal?.hidden) closeRawModal(); }, { capture:true });
-rawCopyBtn?.addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(lastUpdateRaw || ''); showToast(t('toast.copied')); } catch(_) { showToast(t('toast.copyError')); }
-});
-rawSaveBtn?.addEventListener('click', () => {
-  try {
-    const blob = new Blob([lastUpdateRaw || ''], { type:'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const ts = new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
-    a.download = 'update-log-'+ ts + '.txt';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=> URL.revokeObjectURL(url), 2000);
-  } catch (_err) { showToast(t('toast.saveError')); }
 });
 
 // ...existing code...
