@@ -159,6 +159,10 @@
           <button id="detailsInstallBtn" class="btn btn-primary" data-i18n="details.install">Installer</button>
           <button id="detailsForceCancelBtn" class="btn btn-outline danger" title="Forcer l'annulation" aria-label="Forcer l'annulation" hidden style="padding:6px 10px;">✕</button>
           <button id="detailsUninstallBtn" class="btn btn-outline" data-i18n="details.uninstall">Désinstaller</button>
+          <button id="sandboxOpenBtn" class="btn btn-soft-neutral sandbox-toggle-btn" type="button">
+            <span data-i18n="sandbox.title">Sandbox</span>
+            <span id="sandboxButtonStatus" class="sandbox-pill" data-status="unknown">—</span>
+          </button>
         </div>
         <div id="installStream" class="install-stream" hidden>
           <div class="install-stream-head">
@@ -179,8 +183,9 @@
         <!-- Galerie supprimée : toutes les images sont dans la description -->
       </section>
     </main>
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- Lightbox supprimé : plus de galerie séparée -->
   <!-- Modale confirmation compacte (sans titre ni croix) -->
@@ -192,6 +197,94 @@
           <button id="actionConfirmCancel" class="btn btn-soft-neutral" type="button" data-i18n="confirm.cancel">Annuler</button>
           <button id="actionConfirmOk" class="btn" type="button" data-i18n="confirm.ok">Valider</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandboxModal" class="modal sandbox-modal" role="dialog" aria-modal="true" aria-labelledby="sandboxModalTitle" hidden>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="sandboxModalTitle" class="modal-title" data-i18n="sandbox.title">Sandbox</h3>
+        <button id="sandboxCloseBtn" class="modal-close" type="button" aria-label="Fermer">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="sandboxCard" class="details-card sandbox-card" hidden>
+          <div class="sandbox-card-head">
+            <div>
+              <div class="sandbox-card-title">
+                <h3 data-i18n="sandbox.title">Sandbox</h3>
+                <span id="sandboxStatusBadge" class="sandbox-status" data-status="unknown">—</span>
+              </div>
+              <p class="sandbox-subtitle" data-i18n="sandbox.subtitle">Isolez l'application avec SAS/Aisap et choisissez quels dossiers restent accessibles.</p>
+            </div>
+            <button id="sandboxRefreshBtn" class="btn btn-text" type="button" data-i18n="sandbox.actions.refresh">Actualiser</button>
+          </div>
+          <div id="sandboxDepsAlert" class="sandbox-alert" role="alert" hidden>
+            <div>
+              <strong data-i18n="sandbox.dependencies.missing">Dépendance manquante</strong>
+              <p data-i18n="sandbox.dependencies.description">Installez SAS (ou Aisap) pour activer la sandbox.</p>
+            </div>
+            <button id="sandboxInstallDepsBtn" class="mini-btn" type="button" data-i18n="sandbox.dependencies.install">Installer SAS</button>
+          </div>
+          <div id="sandboxUnavailable" class="sandbox-note" hidden>
+            <span class="sandbox-note-strong" data-i18n="sandbox.notInstalled">Installez l'application avant de configurer la sandbox.</span>
+            <button id="sandboxInstallAppBtn" class="btn btn-primary" type="button" data-i18n="details.install">Installer</button>
+          </div>
+          <form id="sandboxForm" class="sandbox-form" autocomplete="off">
+            <fieldset>
+              <legend data-i18n="sandbox.shareLegend">Dossiers autorisés</legend>
+              <div class="sandbox-grid">
+                <label><input type="checkbox" value="desktop"> <span data-i18n="sandbox.dir.desktop">Bureau</span></label>
+                <label><input type="checkbox" value="documents"> <span data-i18n="sandbox.dir.documents">Documents</span></label>
+                <label><input type="checkbox" value="downloads"> <span data-i18n="sandbox.dir.downloads">Téléchargements</span></label>
+                <label><input type="checkbox" value="games"> <span data-i18n="sandbox.dir.games">Jeux</span></label>
+                <label><input type="checkbox" value="music"> <span data-i18n="sandbox.dir.music">Musique</span></label>
+                <label><input type="checkbox" value="pictures"> <span data-i18n="sandbox.dir.pictures">Images</span></label>
+                <label><input type="checkbox" value="videos"> <span data-i18n="sandbox.dir.videos">Vidéos</span></label>
+              </div>
+              <p class="sandbox-hint" data-i18n="sandbox.shareHint">Seuls les dossiers cochés seront visibles par l'application.</p>
+            </fieldset>
+            <label class="sandbox-custom">
+              <span data-i18n="sandbox.customLabel">Dossier supplémentaire</span>
+              <input id="sandboxCustomPath" type="text" placeholder="~/Documents/Projets" data-i18n-placeholder="sandbox.customPlaceholder" />
+              <small data-i18n="sandbox.customHint">Utilisez un chemin absolu. Évitez / ou l'intégralité de votre $HOME.</small>
+            </label>
+          </form>
+          <div id="sandboxSummary" class="sandbox-summary" hidden>
+            <div class="sandbox-summary-head">
+              <h4 data-i18n="sandbox.summary.title">Autorisations enregistrées</h4>
+            </div>
+            <p class="sandbox-summary-hint" data-i18n="sandbox.summary.hint">Pour modifier les accès, supprimez la sandbox puis relancez la configuration.</p>
+            <ul id="sandboxSummaryList" class="sandbox-summary-list" hidden></ul>
+            <p id="sandboxSummaryEmpty" class="sandbox-summary-empty" data-i18n="sandbox.summary.none" hidden>Aucune autorisation enregistrée pour l'instant.</p>
+          </div>
+          <div class="sandbox-actions">
+            <button id="sandboxConfigureBtn" class="btn btn-primary" type="button" data-i18n="sandbox.actions.enable">Activer la sandbox</button>
+            <button id="sandboxDisableBtn" class="btn btn-outline" type="button" data-i18n="sandbox.actions.disable" disabled>Désactiver</button>
+          </div>
+          <div id="sandboxLogSection" class="sandbox-log-section" data-open="false">
+            <button id="sandboxLogToggle" class="sandbox-log-toggle" type="button" aria-expanded="false" aria-controls="sandboxLog">
+              <span data-i18n="sandbox.logTitle">Terminal (logs)</span>
+              <span class="sandbox-log-caret" aria-hidden="true">▸</span>
+            </button>
+            <pre id="sandboxLog" class="sandbox-log" aria-live="polite" hidden></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="nonAppimageModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="nonAppimageTitle" hidden>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="nonAppimageTitle" class="modal-title" data-i18n="sandbox.unsupported.title">Sandbox indisponible</h3>
+        <button id="nonAppimageClose" class="modal-close" type="button" aria-label="Fermer">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="nonAppimageMessage" data-i18n="sandbox.unsupported.desc">Cette application n'est pas un AppImage et ne peut pas être sandboxée.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="nonAppimageDismiss" class="btn btn-primary" type="button" data-i18n="sandbox.unsupported.ok">Compris</button>
       </div>
     </div>
   </div>

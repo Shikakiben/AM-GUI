@@ -30,7 +30,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCategoriesCache: () => ipcRenderer.invoke('get-categories-cache'),
   // Ajout pour gestion mot de passe sudo
   onPasswordPrompt: (cb) => ipcRenderer.on('password-prompt', (e, data) => cb && cb(data)),
-  sendPassword: (payload) => ipcRenderer.send('password-response', payload)
+  sendPassword: (payload) => ipcRenderer.send('password-response', payload),
+  getSandboxInfo: (appName) => ipcRenderer.invoke('sandbox-info', appName),
+  configureSandbox: (options) => ipcRenderer.invoke('sandbox-configure', options),
+  disableSandbox: (payload) => {
+    if (payload && typeof payload === 'object') {
+      return ipcRenderer.invoke('sandbox-disable', payload);
+    }
+    return ipcRenderer.invoke('sandbox-disable', { appName: payload });
+  },
+  onSandboxProgress: (cb) => ipcRenderer.on('sandbox-progress', (e, data) => cb && cb(data))
 });
 try {
   const lArg = process.argv.find(a => a.startsWith('--locale='));

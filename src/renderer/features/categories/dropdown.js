@@ -47,6 +47,52 @@
     const tabs = Array.isArray(options.tabs) ? options.tabs : Array.from(options.tabs || document.querySelectorAll('.tab'));
     const iconMap = options.iconMap || getIconMap();
 
+    const normalizeName = (value) => (value && typeof value === 'string'
+      ? value
+      : (value ?? '')).toString().trim().toLowerCase();
+
+    const ensureAppList = (apps) => Array.isArray(apps)
+      ? apps.filter(item => !!item)
+      : [];
+
+    const setCategoryOverride = (label, apps) => {
+      const list = ensureAppList(apps);
+      state.categoryOverride = {
+        name: label,
+        norm: normalizeName(label),
+        apps: list
+      };
+      state.filtered = list;
+    };
+
+    const clearCategoryOverride = () => {
+      state.categoryOverride = null;
+    };
+
+    const resetToAppsView = () => {
+      if (appDetailsSection) appDetailsSection.hidden = true;
+      document.body.classList.remove('details-mode');
+      if (appsDiv) appsDiv.hidden = false;
+      state.currentDetailsApp = null;
+    };
+
+    const activateCustomCategory = ({ label, apps, toastMessage }) => {
+      if (!label) return;
+      resetToAppsView();
+      state.activeCategory = label;
+      setCategoryOverride(label, apps);
+      updateLabel();
+      const list = state.filtered || [];
+      setAppList(list);
+      if (showToast) {
+        const count = list.length;
+        const message = typeof toastMessage === 'string'
+          ? toastMessage
+          : `Catégorie "${label}" : ${count} apps`;
+        showToast(message);
+      }
+    };
+
     const cacheApi = categoriesNamespace.categories.cache;
     if (!cacheApi || typeof cacheApi.load !== 'function') {
       console.warn('Categories cache API non disponible.');
@@ -122,23 +168,20 @@
         categories.forEach(({ name, apps }) => {
           const btn = createCategoryButton(name, () => {
             closeCategoriesDropdown();
-            if (appDetailsSection) appDetailsSection.hidden = true;
-            document.body.classList.remove('details-mode');
-            if (appsDiv) appsDiv.hidden = false;
-            state.currentDetailsApp = null;
-            state.activeCategory = name;
-            updateLabel();
-            // Normalisation des noms pour le mapping
-            const normalize = s => (s || '').toLowerCase().trim();
-            const filteredApps = Array.isArray(apps) ? apps.filter(a => typeof a === 'string' && a.length > 0) : [];
+            const filteredApps = Array.isArray(apps)
+              ? apps.filter(appName => typeof appName === 'string' && appName.trim().length > 0)
+              : [];
             const detailedApps = filteredApps.map(appName => {
               const found = Array.isArray(state.allApps)
-                ? state.allApps.find(x => x && normalize(x.name) === normalize(appName))
+                ? state.allApps.find(candidate => candidate && normalizeName(candidate.name) === normalizeName(appName))
                 : null;
               return found ? { ...found } : { name: appName };
             });
-            setAppList(detailedApps);
-            if (showToast) showToast(`Catégorie "${name}" : ${filteredApps.length} apps`);
+            activateCustomCategory({
+              label: name,
+              apps: detailedApps,
+              toastMessage: `Catégorie "${name}" : ${filteredApps.length} apps`
+            });
           }, iconMap);
           categoriesDropdownMenu.appendChild(btn);
         });
@@ -147,29 +190,24 @@
         btnOther.innerHTML += ' <span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">⏳</span>';
         categoriesDropdownMenu.appendChild(btnOther);
         setTimeout(() => {
-          // Normalisation des noms pour éviter les faux "autre"
-          const normalize = s => (s || '').toLowerCase().trim();
           const allCategorizedNames = new Set();
           categories.forEach(cat => {
             if (Array.isArray(cat.apps)) {
-              cat.apps.forEach(name => allCategorizedNames.add(normalize(name)));
+              cat.apps.forEach(name => allCategorizedNames.add(normalizeName(name)));
             }
           });
           const uncategorizedApps = Array.isArray(state.allApps)
-            ? state.allApps.filter(app => app && !allCategorizedNames.has(normalize(app.name)))
+            ? state.allApps.filter(app => app && !allCategorizedNames.has(normalizeName(app.name)))
             : [];
           btnOther.disabled = uncategorizedApps.length === 0;
           btnOther.querySelector('.cat-spinner')?.remove();
           btnOther.onclick = () => {
             closeCategoriesDropdown();
-            if (appDetailsSection) appDetailsSection.hidden = true;
-            document.body.classList.remove('details-mode');
-            if (appsDiv) appsDiv.hidden = false;
-            state.currentDetailsApp = null;
-            state.activeCategory = 'autre';
-            updateLabel();
-            setAppList(uncategorizedApps);
-            if (showToast) showToast(`Autres applications : ${uncategorizedApps.length}`);
+            activateCustomCategory({
+              label: 'autre',
+              apps: uncategorizedApps,
+              toastMessage: `Autres applications : ${uncategorizedApps.length}`
+            });
           };
         }, 0);
       });
@@ -209,14 +247,12 @@
     tabs.forEach(tab => {
       tab.addEventListener('click', async () => {
         setTimeout(updateAppsModeBarVisibility, 0);
+        clearCategoryOverride();
         if (tab.getAttribute('data-category') !== 'all') {
           document.querySelectorAll('.tab-secondary').forEach(t => t.classList.remove('active'));
         }
         if (tab.dataset.category === 'all') {
-          if (appDetailsSection) appDetailsSection.hidden = true;
-          document.body.classList.remove('details-mode');
-          if (appsDiv) appsDiv.hidden = false;
-          state.currentDetailsApp = null;
+          resetToAppsView();
           if (!Array.isArray(state.allApps) || state.allApps.length === 0) {
             setAppList([]);
             if (showToast) showToast('Chargement des applications…');
