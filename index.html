@@ -123,22 +123,56 @@
       </section>
       <section id="advancedPanel" class="panel-lite advanced-panel" hidden>
   <h2 class="panel-heading-sm centered" data-i18n="advanced.title">Mode avancé</h2>
-    <p class="placeholder-strong"><span data-i18n="advanced.waiting">Fonctions avancées encore non disponibles dans l’UI — utilisez le terminal : am -h pour la liste complète des commandes.</span></p>
+    <p class="placeholder-strong"><span data-i18n="advanced.waiting">Fonctions avancées encore indisponibles dans l’UI — utilisez le terminal :</span></p>
+    <p class="note"><em><span data-i18n-html="advanced.note.appman">Les commandes <span class="note-cmd">am</span> ou <span class="note-cmd">appman</span> dépendent de votre installation ; si vous avez choisi l’installation rapide, utilisez <span class="note-cmd">appman</span>.</span></em></p>
+    <p class="placeholder-sub" data-i18n="advanced.basicIntro">Quelques commandes utiles :</p>
 
-    <ul class="commands condensed" aria-label="Commandes AM">
-      <li><code>am -h</code> — <span data-i18n="advanced.cmd.help">aide</span></li>
-      <li><code>am -l</code> — <span data-i18n="advanced.cmd.list">lister les apps disponibles</span></li>
-      <li><code>am -a &lt;PROGRAM&gt;</code> — <span data-i18n="advanced.cmd.about">informations sur l'app</span></li>
-      <li><code>am -i &lt;PROGRAM&gt;</code> — <span data-i18n="advanced.cmd.install">installer (ajouter --user pour local)</span></li>
-      <li><code>am -q &lt;mot-clé&gt;</code> — <span data-i18n="advanced.cmd.query">rechercher</span></li>
-      <li><code>am -u</code> — <span data-i18n="advanced.cmd.update">mettre à jour (ou am -u &lt;PROGRAM&gt;)</span></li>
-      <li><code>am -s</code> — <span data-i18n="advanced.cmd.updatemodules">mettre à jour AM/modules</span></li>
-      <li><code>am -R &lt;PROGRAM&gt;</code> — <span data-i18n="advanced.cmd.remove">supprimer</span></li>
-      <li><code>am -e &lt;git-url&gt; &lt;appname&gt; [keyword]</code> — <span data-i18n="advanced.cmd.extra">installer depuis GitHub</span></li>
-      <li><code>am translate</code> — <span data-i18n="advanced.cmd.translate">gérer traductions</span></li>
+    <ul class="commands condensed advanced-commands" aria-label="Commandes AM/AppMan">
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -h">am -h</button>
+        <button type="button" class="copy-cmd" data-copy="appman -h">appman -h</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.help">aide</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -l">am -l</button>
+        <button type="button" class="copy-cmd" data-copy="appman -l">appman -l</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.list">lister les apps disponibles</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -a &lt;PROGRAM&gt;">am -a &lt;PROGRAM&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -a &lt;PROGRAM&gt;">appman -a &lt;PROGRAM&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.about">informations sur l'app</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -i &lt;PROGRAM&gt;">am -i &lt;PROGRAM&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -i &lt;PROGRAM&gt;">appman -i &lt;PROGRAM&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.install">installer une app</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -q &lt;mot-clé&gt;">am -q &lt;mot-clé&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -q &lt;mot-clé&gt;">appman -q &lt;mot-clé&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.query">rechercher</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -u">am -u</button>
+        <button type="button" class="copy-cmd" data-copy="appman -u">appman -u</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.update">mettre à jour AM et toutes les apps</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -R &lt;PROGRAM&gt;">am -R &lt;PROGRAM&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -R &lt;PROGRAM&gt;">appman -R &lt;PROGRAM&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.remove">supprimer une app</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -e &lt;git-url&gt; &lt;appname&gt; [keyword]">am -e &lt;git-url&gt; &lt;appname&gt; [keyword]</button>
+        <button type="button" class="copy-cmd" data-copy="appman -e &lt;git-url&gt; &lt;appname&gt; [keyword]">appman -e &lt;git-url&gt; &lt;appname&gt; [keyword]</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.extra">installer une app personnalisée depuis GitHub</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am translate">am translate</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.translate">gérer traductions</span>
+      </li>
     </ul>
-
-    <p class="note"><em><span data-i18n-html="advanced.note.appman">Pour la version sans privilèges, remplacez <code>am</code> par <code>appman</code>.</span></em></p>
 
     <p class="docs-link"><a href="https://github.com/ivan-hc/AM" target="_blank" rel="noopener"><span data-i18n="advanced.docs">Documentation complète & guides →</span> AM (GitHub)</a></p>
       </section>

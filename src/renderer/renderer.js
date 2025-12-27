@@ -1681,6 +1681,23 @@ async function openPmDocs() {
   }
 }
 
+async function copyTextToClipboard(text) {
+  if (!text) throw new Error('nothing to copy');
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
 async function runAutoInstallAppMan() {
   if (pmAutoInstallRunning) return;
   const api = window.electronAPI;
@@ -1713,19 +1730,7 @@ async function runAutoInstallAppMan() {
 async function handleManualInstallClick() {
   const command = AM_INSTALLER_COMMAND;
   try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(command);
-    } else {
-      const textarea = document.createElement('textarea');
-      textarea.value = command;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      document.execCommand('copy');
-      textarea.remove();
-    }
+    await copyTextToClipboard(command);
     showToast(t('missingPm.manual.copied'));
     setPmPopupStatus('missingPm.manual.copied');
   } catch (err) {
@@ -2027,6 +2032,23 @@ applyThemePreference();
 if (!localStorage.getItem('defaultMode')) {
   localStorage.setItem('defaultMode', state.viewMode || 'grid');
 }
+
+// Copier une commande (am/appman) au clic
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest && ev.target.closest('.copy-cmd');
+  if (!btn) return;
+  const cmd = btn.getAttribute('data-copy');
+  if (!cmd) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  try {
+    await copyTextToClipboard(cmd);
+    showToast(t('advanced.copySuccess'));
+  } catch (err) {
+    console.error('copy command failed', err);
+    showToast(t('advanced.copyError') || 'Copy failed');
+  }
+}, { capture: true });
 
 // Liens externes
 document.addEventListener('click', (ev) => {
