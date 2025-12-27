@@ -369,6 +369,18 @@ function createWindow () {
     const menu = Menu.buildFromTemplate(template);
     menu.popup({ window: win });
   });
+
+  // Gestion de la fermeture : demander confirmation si une installation est en cours
+  win.on('close', (event) => {
+    // Vérifier s'il y a une installation active
+    if (activeInstalls.size > 0) {
+      event.preventDefault();
+      // Envoyer un message au renderer pour afficher la modale de confirmation
+      win.webContents.send('before-close');
+    }
+  });
+
+  return win;
 }
 
 app.whenReady().then(() => {
@@ -995,6 +1007,12 @@ ipcMain.handle('window-control', (event, action) => {
     case 'max': win.isMaximized() ? win.unmaximize() : win.maximize(); break;
     case 'close': win.close(); break;
   }
+});
+
+// Handler pour fermer la fenêtre (appelé après confirmation)
+ipcMain.handle('close-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.destroy(); // Force la fermeture sans redemander
 });
 
 
