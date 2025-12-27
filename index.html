@@ -103,22 +103,25 @@
     <h2 class="panel-heading-xl" data-i18n="updates.title">Mettre à jour AM et toutes les applications installées</h2>
         <div class="updates-actions-row">
           <button id="runUpdatesBtn" class="btn btn-primary updates-run" data-i18n="updates.run">Mettre à jour</button>
+          <button id="updatesToggleBtn" class="btn btn-outline updates-toggle-icon" type="button" aria-expanded="false" aria-controls="updatesTerminalWrap" title="Afficher/masquer le terminal" data-i18n-title="updates.toggleTerminal">
+            <span class="updates-log-caret" aria-hidden="true">▸</span>
+          </button>
         </div>
         <div id="updateSpinner" class="update-spinner" role="status" aria-live="polite" data-busy="false">
-          <div class="spinner-info">
-            <div class="spinner-status-row">
-              <div class="spinner" aria-hidden="true"></div>
-              <div class="spinner-label" data-i18n="updates.ready">Aucune mise à jour en cours.</div>
-            </div>
-            <button id="updatesToggleBtn" class="updates-toggle-btn" type="button" aria-controls="updatesTerminalWrap" aria-expanded="false" data-i18n="updates.toggleShow">Voir les détails ⌄</button>
+          <div class="spinner-status-row">
+            
+            <div class="update-timer" style="display:none;"></div>
+            <div class="spinner-label" data-i18n="updates.ready">Aucune mise à jour en cours.</div>
           </div>
-        </div>
-        <div id="updatesTerminalWrap" class="updates-terminal" hidden>
-          <div id="updatesTerminal" class="updates-terminal-body" role="log" aria-live="polite"></div>
         </div>
         <div id="updateResult" class="update-result" style="display:none;">
           <div id="updateFinalMessage" class="update-final-message"></div>
           <div id="updatedAppsIcons" class="icons-row updated-icons"></div>
+        </div>
+        <div id="updatesLogSection" class="updates-log-section" data-open="false">
+          <div id="updatesTerminalWrap" class="updates-terminal" hidden>
+            <div id="updatesTerminal" class="updates-terminal-body" role="log" aria-live="polite"></div>
+          </div>
         </div>
       </section>
       <section id="advancedPanel" class="panel-lite advanced-panel" hidden>
@@ -220,6 +223,19 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Modale confirmation de fermeture avec installation en cours -->
+  <div id="closeConfirmModal" class="modal" role="dialog" aria-modal="true" aria-label="Installation en cours" hidden>
+    <div class="modal-dialog confirm-dialog" role="document">
+      <div class="confirm-body">
+        <p class="confirm-message" data-i18n="closeConfirm.message">Une installation est en cours. Si vous quittez maintenant, l'installation sera annulée.</p>
+        <div class="confirm-actions">
+          <button id="closeConfirmStay" class="btn btn-soft-neutral" type="button" data-i18n="closeConfirm.stay">Annuler et rester</button>
+          <button id="closeConfirmQuit" class="btn btn-danger" type="button" data-i18n="closeConfirm.quit">Continuer et quitter</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Lightbox supprimé : plus de galerie séparée -->
   <!-- Modale confirmation compacte (sans titre ni croix) -->

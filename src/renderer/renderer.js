@@ -460,27 +460,32 @@ if (modeMenuBtn && modeMenu) {
     modeMenu.hidden = true;
     modeMenuBtn.setAttribute('aria-expanded','false');
   });
-  window.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && !modeMenu.hidden) {
-      modeMenu.hidden = true; modeMenuBtn.setAttribute('aria-expanded','false');
+}
+
+function startUpdateTimer() {
+  const timer = document.querySelector('.update-timer');
+  if (!timer) return;
+  // Ne pas réinitialiser si déjà en cours
+  if (updateTimerStart === null) updateTimerStart = Date.now();
+  if (updateTimerInterval) return;
+  const updateTimerText = () => {
+    const elapsed = Math.max(0, Math.floor((Date.now() - updateTimerStart) / 1000));
+    if (elapsed < 60) {
+      timer.textContent = `${elapsed}s`;
+    } else {
+      const min = Math.floor(elapsed / 60);
+      const sec = String(elapsed % 60).padStart(2, '0');
+      timer.textContent = `${min}:${sec}`;
     }
-  });
-  modeMenu.addEventListener('click', (ev) => {
-    const opt = ev.target.closest('.mode-option');
-    if (!opt) return;
-    const mode = opt.getAttribute('data-mode');
-    if (!mode || mode === state.viewMode) { modeMenu.hidden = true; modeMenuBtn.setAttribute('aria-expanded','false'); return; }
-    if (!['grid','list','icons','cards'].includes(mode)) return;
-    state.viewMode = mode;
-    localStorage.setItem('viewMode', state.viewMode);
-    currentViewMode = state.viewMode;
-    updateModeMenuUI();
-    rerenderActiveCategory();
-    // Remettre le scroll en haut à chaque changement de mode
-    if (scrollShell) scrollShell.scrollTop = 0;
-    modeMenu.hidden = true;
-    modeMenuBtn.setAttribute('aria-expanded','false');
-  });
+  };
+  updateTimerText();
+  updateTimerInterval = setInterval(updateTimerText, 1000);
+}
+
+function stopUpdateTimer() {
+  if (updateTimerInterval) clearInterval(updateTimerInterval);
+  updateTimerInterval = null;
+  updateTimerStart = null;
 }
 
 updateModeMenuUI();
@@ -2594,7 +2599,8 @@ tabs.forEach(tab => {
         setUpdateSpinnerBusy(false);
       }
     } else {
-      setUpdateSpinnerBusy(false);
+      // Conserver l'état du spinner si une mise à jour tourne encore
+      setUpdateSpinnerBusy(updateInProgress);
     }
     // Pas de terminal dans le mode avancé désormais
     if (document.body.classList.contains('details-mode')) {
@@ -2612,20 +2618,70 @@ tabs.forEach(tab => {
 function hasUpdatesStreamingSupport() {
   return !!(window.electronAPI?.startUpdates && window.electronAPI?.onUpdatesProgress);
 }
+let updateTimerInterval = null;
+let updateTimerStart = null;
 
 function setUpdateSpinnerBusy(isBusy) {
   if (!updateSpinner) return;
   updateSpinnerBusy = !!isBusy;
   updateSpinner.setAttribute('data-busy', updateSpinnerBusy ? 'true' : 'false');
+  const hourglass = updateSpinner.querySelector('.update-hourglass');
+  const timer = updateSpinner.querySelector('.update-timer');
   const label = updateSpinner.querySelector('.spinner-label');
-  if (label) label.textContent = t(updateSpinnerBusy ? 'updates.loading' : 'updates.ready');
+  if (runUpdatesBtn) runUpdatesBtn.classList.toggle('loading', updateSpinnerBusy);
+  if (updateSpinnerBusy) {
+    if (hourglass) hourglass.style.display = 'inline-block';
+    if (timer) timer.style.display = 'inline-block';
+    if (label) {
+      label.textContent = t('updates.loading');
+      label.style.display = '';
+    }
+    startUpdateTimer();
+  } else {
+    if (hourglass) hourglass.style.display = 'none';
+    if (timer) timer.style.display = 'none';
+    if (label) {
+      label.textContent = '';
+      label.style.display = 'none';
+    }
+    stopUpdateTimer();
+  }
+}
+
+function startUpdateTimer() {
+  const timer = document.querySelector('.update-timer');
+  if (!timer) return;
+  // Ne pas réinitialiser si déjà en cours
+  if (updateTimerStart === null) updateTimerStart = Date.now();
+  if (updateTimerInterval) return;
+  const updateTimerText = () => {
+    const elapsed = Math.max(0, Math.floor((Date.now() - updateTimerStart) / 1000));
+    if (elapsed < 60) {
+      timer.textContent = `${elapsed}s`;
+    } else {
+      const min = Math.floor(elapsed / 60);
+      const sec = String(elapsed % 60).padStart(2, '0');
+      timer.textContent = `${min}:${sec}`;
+    }
+  };
+  updateTimerText();
+  updateTimerInterval = setInterval(updateTimerText, 1000);
+}
+
+function stopUpdateTimer() {
+  if (updateTimerInterval) clearInterval(updateTimerInterval);
+  updateTimerInterval = null;
+  updateTimerStart = null;
 }
 
 function updateUpdatesToggleUi() {
   if (!updatesToggleBtn) return;
-  const key = updatesTerminalExpanded ? 'updates.toggleHide' : 'updates.toggleShow';
-  updatesToggleBtn.textContent = t(key);
   updatesToggleBtn.setAttribute('aria-expanded', updatesTerminalExpanded ? 'true' : 'false');
+  const section = document.getElementById('updatesLogSection');
+  if (section) section.setAttribute('data-open', updatesTerminalExpanded ? 'true' : 'false');
+  // Mettre à jour la flèche
+  const caret = updatesToggleBtn.querySelector('.updates-log-caret');
+  if (caret) caret.textContent = updatesTerminalExpanded ? '▾' : '▸';
 }
 
 function applyUpdatesTerminalVisibility() {
@@ -2849,10 +2905,13 @@ function handleUpdateCompletion(fullText){
   }
   const updated = parseUpdatedApps(sanitized);
   const nothingPhrase = /Nothing to do here!?/i.test(sanitized || '');
-  let toShow = updated;
+  let toShow = new Set();
+  // Si on a trouvé la section officielle, on ne montre QUE ces apps
   if (filteredUpdated && filteredUpdated.size > 0) {
-    // Ne garder que les apps détectées ET listées dans la section
-    toShow = new Set([...updated].filter(x => filteredUpdated.has(x)));
+    toShow = filteredUpdated;
+  } else if (!nothingPhrase && updated.size > 0) {
+    // Sinon fallback sur le parsing ligne par ligne, seulement si pas de message "rien à faire"
+    toShow = updated;
   }
   if (toShow.size > 0) {
     if (updateFinalMessage) updateFinalMessage.textContent = t('updates.updatedApps');
@@ -2950,9 +3009,11 @@ runUpdatesBtn?.addEventListener('click', async () => {
     const result = await fetchUpdatesOutput();
     const raw = typeof result?.output === 'string' ? result.output : '';
     handleUpdateCompletion(raw);
-    await refreshAfterUpdates();
     const dur = Math.round((performance.now()-start)/1000);
     if (updateFinalMessage && updateFinalMessage.textContent) updateFinalMessage.textContent += t('updates.duration', {dur});
+    // Arrêter le spinner dès que le résultat est prêt, avant le refresh lourd
+    setUpdateSpinnerBusy(false);
+    await refreshAfterUpdates();
   } catch (err) {
     console.error('Updates failed', err);
     showToast(t('toast.updateFailed') || 'Échec des mises à jour');
@@ -3303,6 +3364,54 @@ function showPopupWarning(msg) {
     modal.style.display = 'block';
   }
 }
+
+// Gestion de la confirmation de fermeture avec installation en cours
+const closeConfirmModal = document.getElementById('closeConfirmModal');
+const closeConfirmStay = document.getElementById('closeConfirmStay');
+const closeConfirmQuit = document.getElementById('closeConfirmQuit');
+
+function showCloseConfirm() {
+  if (!closeConfirmModal) return;
+  closeConfirmModal.hidden = false;
+  applyTranslations(); // Mettre à jour les textes traduits
+  if (closeConfirmQuit) closeConfirmQuit.focus();
+}
+
+function hideCloseConfirm() {
+  if (!closeConfirmModal) return;
+  closeConfirmModal.hidden = true;
+}
+
+closeConfirmStay?.addEventListener('click', () => {
+  hideCloseConfirm();
+});
+
+closeConfirmQuit?.addEventListener('click', async () => {
+  hideCloseConfirm();
+  // Annuler l'installation en cours
+  if (activeInstallSession && !activeInstallSession.done) {
+    try {
+      await cancelActiveInstall();
+    } catch (err) {
+      console.error('Failed to cancel installation', err);
+    }
+  }
+  // Fermer l'application
+  if (window.electronAPI?.closeWindow) {
+    window.electronAPI.closeWindow();
+  }
+});
+
+// Intercepter la tentative de fermeture
+if (window.electronAPI?.onBeforeClose) {
+  window.electronAPI.onBeforeClose(() => {
+    // Vérifier si une installation est en cours
+    if (activeInstallSession && activeInstallSession.id && !activeInstallSession.done) {
+      showCloseConfirm();
+    }
+  });
+}
+
 //# sourceMappingURL=app.js.map
 
 
