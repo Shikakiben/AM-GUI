@@ -39,7 +39,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
     return ipcRenderer.invoke('sandbox-disable', { appName: payload });
   },
-  onSandboxProgress: (cb) => ipcRenderer.on('sandbox-progress', (e, data) => cb && cb(data))
+  onSandboxProgress: (cb) => ipcRenderer.on('sandbox-progress', (e, data) => cb && cb(data)),
+  closeWindow: () => ipcRenderer.invoke('close-window'),
+  onBeforeClose: (cb) => ipcRenderer.on('before-close', () => cb && cb())
 });
 try {
   const lArg = process.argv.find(a => a.startsWith('--locale='));
