@@ -889,16 +889,26 @@ ipcMain.handle('list-apps-detailed', async () => {
           /^TOTAL/i,
           /^\*has/i
         ];
+        let versionColIdx = 2; // par défaut, colonne 3 (0-based)
+        let headerParsed = false;
         for (const raw of lines) {
           let line = raw.trim();
           if (!line) continue;
+          if (line.startsWith('APPNAME') || line.startsWith('- APPNAME')) {
+            // Détecter la colonne version dynamiquement
+            const headerCols = line.replace(/^- /, '').split('|').map(s => s.trim());
+            versionColIdx = headerCols.findIndex(col => col.toLowerCase().startsWith('version'));
+            headerParsed = true;
+            continue;
+          }
+          if (line.startsWith('-------')) continue; // ignorer la ligne de séparation
           if (line.startsWith('\u25c6')) line = line.slice(1).trim();
           if (!line) continue;
-          // Try to parse "name | version | type | size" separated by | if present
+          // Try to parse "name | ... | version | ..." separated by |
           if (line.includes('|')) {
             const cols = line.split('|').map(s => s.trim()).filter(Boolean);
             const name = cols[0] ? cols[0].split(/\s+/)[0].trim() : null;
-            const version = cols[1] ? cols[1] : null;
+            const version = (typeof versionColIdx === 'number' && versionColIdx >= 0 && versionColIdx < cols.length) ? cols[versionColIdx] : null;
             if (name && !ignoreNamePatterns.some(re => re.test(name))) {
               installedSet.add(name);
               if (version) installedDesc.set(name, version);
