@@ -639,6 +639,7 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
   gap: 14px;
   grid-auto-rows: auto;
   align-items: start;
+  align-content: start;
 }
 .app-tile { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; gap:12px; cursor:pointer; align-items:flex-start; box-shadow:var(--shadow); transition:background .15s,border-color .15s; height:auto; min-height:0; max-height:none; }
 .app-tile.busy { opacity:.55; }
@@ -823,7 +824,7 @@ body.view-list .app-tile .actions .inline-action.uninstall:focus-visible { outli
   #detailsUninstallBtn.btn-outline:hover { background:#4a2628; }
   #detailsUninstallBtn.btn-outline:active { background:#431f21; }
 }
-body.view-icons #apps { display:grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap:20px; }
+body.view-icons #apps { display:grid; grid-template-columns: repeat(auto-fill,minmax(140px,1fr)); gap:20px; align-content: start; }
 body.view-icons .app-tile { flex-direction:column; align-items:center; text-align:center; padding:18px 10px; }
 body.view-icons .app-tile img { width:72px; height:72px; border-radius:18px; }
 body.view-icons .app-tile img.img-loading { border-radius:18px; }
@@ -835,7 +836,7 @@ body.view-icons .app-tile .tile-name { white-space:normal; line-height:1.2; }
 body.view-icons .app-tile .tile-short { display:none; }
 
 /* Mode cartes */
-body.view-cards #apps { display:grid; grid-template-columns: repeat(auto-fill,minmax(340px,1fr)); gap:22px; }
+body.view-cards #apps { display:grid; grid-template-columns: repeat(auto-fill,minmax(340px,1fr)); gap:22px; align-content: start; }
 body.view-cards .app-tile { flex-direction:row; align-items:stretch; padding:18px; border-radius:18px; position:relative; }
 body.view-cards .app-tile img { width:96px; height:96px; border-radius:16px; }
 body.view-cards .app-tile img.img-loading { border-radius:16px; }
@@ -1269,6 +1270,20 @@ body.pm-popup-open { overflow: hidden; }
 .modal-footer .grow { flex:1; }
 .modal-footer .mini-btn { cursor:pointer; background:var(--card); border:1px solid var(--border); padding:6px 10px; font-size:12px; border-radius:8px; }
 .modal-footer .mini-btn:hover { background:var(--border); }
+
+/* Modale mot de passe */
+.password-modal { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9999; pointer-events:auto; background:transparent; }
+.password-modal .modal-bg { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); }
+.password-modal .modal-center { position:fixed; top:0; left:0; width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; z-index:2; pointer-events:none; }
+.password-modal .modal-content { background:var(--card); max-width:340px; width:100%; padding:2em 1.5em 1.5em 1.5em; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.18); position:relative; z-index:3; pointer-events:auto; }
+.password-modal .modal-title { margin-top:0; font-size:1.25em; font-weight:600; color:var(--text); }
+.password-modal .modal-desc { margin-bottom:1em; color:var(--text-secondary); }
+.password-modal .password-input { width:100%; padding:0.5em; margin-bottom:1em; font-size:1em; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); }
+.password-modal .password-error { color:#c00; display:none; margin-bottom:1em; }
+.password-modal .modal-actions { display:flex; gap:0.5em; justify-content:flex-end; }
+@media (prefers-color-scheme: dark) {
+  .password-modal .password-error { color:#ff6b6b; }
+}
 
 /* Variante bouton soft-blue générique (réutilisée dans confirmations) */
 .btn-soft-blue { background:#e3f1fd; color:#0b4d85; border:1px solid #b5d7f4; font-weight:600; border-radius:10px; padding:8px 14px; cursor:pointer; }
