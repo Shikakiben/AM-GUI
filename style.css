@@ -555,6 +555,14 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 /* Recherche centrée dans header */
 .header-center .search input { width:clamp(320px, 42vw, 560px); }
 
+/* Focus : recherche atténuée (permanent) */
+.search input:focus, .search input:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 1.5px rgba(90,120,150,0.35) !important;
+  border-color: rgba(90,120,150,0.8) !important;
+  background: var(--card) !important;
+}
+
 .header-actions { display:flex; align-items:center; gap:8px; margin-right:12px; -webkit-app-region:no-drag; }
 .search input {
   min-width: 280px; max-width: 460px; width: 30vw;
@@ -1281,6 +1289,20 @@ body.pm-popup-open { overflow: hidden; }
 .password-modal .password-input { width:100%; padding:0.5em; margin-bottom:1em; font-size:1em; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); }
 .password-modal .password-error { color:#c00; display:none; margin-bottom:1em; }
 .password-modal .modal-actions { display:flex; gap:0.5em; justify-content:flex-end; }
+
+/* Focus: inputs in modals (password, confirmations, etc.) */
+.password-modal .password-input:focus,
+.modal-content input:focus,
+.modal-content textarea:focus,
+.password-modal .password-input:focus-visible,
+.modal-content input:focus-visible,
+.modal-content textarea:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 1.5px rgba(90,120,150,0.35) !important;
+  border-color: rgba(90,120,150,0.8) !important;
+  background: var(--card) !important;
+}
+
 @media (prefers-color-scheme: dark) {
   .password-modal .password-error { color:#ff6b6b; }
 }
