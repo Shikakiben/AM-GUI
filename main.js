@@ -303,7 +303,7 @@ function createWindow () {
   const deTag = detectDesktopEnv();
   const sysLocale = (app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : (process.env.LANG || 'en');
   // Icône PNG
-  const iconPath = path.join(__dirname, 'app-icon.png');
+  const iconPath = path.join(__dirname, 'AM-GUI.png');
   const win = new BrowserWindow({
     width: 1100,
     height: 750,

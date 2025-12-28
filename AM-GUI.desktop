@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=AM-GUI
-Exec=/home/moi/AM-GUI/start-am-gui.sh
-Icon=/home/moi/AM-GUI/app-icon.png
+Exec=start-am-gui.sh
+Icon=AM-GUI.png
 StartupWMClass=AM-GUI
 Terminal=false
 Categories=Utility;
