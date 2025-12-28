@@ -1267,6 +1267,12 @@ body.pm-popup-open { overflow: hidden; }
 
 /* Modale générique */
 .modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.55); z-index:600; padding:40px 30px; backdrop-filter:blur(4px); }
+
+/* Ensure action confirm modal is above missingPm popup layer */
+#actionConfirmModal { z-index: 1601; }
+
+/* Ensure action confirm modal shows above pm popup layer */
+#actionConfirmModal { z-index: 1600; }
 .modal[hidden] { display:none !important; }
 .modal-dialog { background:var(--card); border:1px solid var(--border); border-radius:14px; width: clamp(420px, 70vw, 900px); max-height:80vh; display:flex; flex-direction:column; box-shadow:var(--shadow); }
 .modal-header { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); }
