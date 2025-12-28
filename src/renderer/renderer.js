@@ -311,7 +311,7 @@ function initXtermLog() {
   if (!xterm) {
     try {
       const { Terminal } = require('@xterm/xterm');
-      const { FitAddon } = require('@xterm/xterm-addon-fit');
+      const { FitAddon } = require('@xterm/addon-fit');
       xterm = new Terminal({
         fontSize: 13,
         fontFamily: 'monospace',
@@ -2505,10 +2505,11 @@ window.addEventListener('keydown', (e) => {
         optionsHtml = `<ul>${data.options.map((opt,i)=>`<li><button class="multi-choice-item" data-choice="${i+1}">${opt}</button></li>`).join('')}</ul>`;
       }
       const cancelLabel = t('install.cancel') || 'Annuler';
+      const cleanPrompt = stripAnsiSequences(data.prompt || '');
       dlg.innerHTML = `
         <div class="choice-dialog-inner">
           <div class="choice-dialog-head">
-            <h3>${data.prompt}</h3>
+            <h3>${cleanPrompt}</h3>
             <button type="button" class="choice-dialog-close" aria-label="${cancelLabel}">✕</button>
           </div>
           <div class="choice-dialog-body">${optionsHtml}</div>
@@ -2727,7 +2728,7 @@ function ensureUpdatesTerminal() {
   if (updatesXterm) return updatesXterm;
   try {
     const { Terminal } = require('@xterm/xterm');
-    const { FitAddon } = require('@xterm/xterm-addon-fit');
+    const { FitAddon } = require('@xterm/addon-fit');
     updatesXterm = new Terminal({
       fontSize: 12,
       fontFamily: 'JetBrains Mono, SFMono-Regular, Menlo, Consolas, monospace',
@@ -2868,6 +2869,7 @@ function stripAnsiSequences(text = '') {
   return text
     .replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '')
     .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
+    .replace(/\][0-9]+;[^\\\x07]*(\x07|\\)/g, '')
     .replace(/[\x07\x08]/g, '');
 }
 

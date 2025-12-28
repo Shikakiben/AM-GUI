@@ -15,6 +15,27 @@ const SANDBOX_MARKER = 'aisap-am sandboxing script';
 const iconCacheManager = createIconCacheManager(app);
 registerCategoryHandlers(ipcMain);
 
+// --- Single instance lock ---
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+  process.exit(0);
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Quelqu'un a essayé de lancer une deuxième instance, on focus la fenêtre existante
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      // Forcer au premier plan temporairement
+      mainWindow.setAlwaysOnTop(true);
+      setTimeout(() => {
+        if (mainWindow) mainWindow.setAlwaysOnTop(false);
+      }, 100);
+    }
+  });
+}
+
 // --- Gestion accélération GPU (doit être AVANT app.whenReady) ---
 let disableGpuPref = false;
 try {
@@ -43,6 +64,7 @@ if (app.setName) {
   app.setName('AM-GUI');
 }
 
+let mainWindow = null;
 const activeInstalls = new Map();
 const activeUpdates = new Map();
 const passwordWaiters = new Map();
@@ -380,6 +402,7 @@ function createWindow () {
     }
   });
 
+  mainWindow = win;
   return win;
 }
 
@@ -724,9 +747,15 @@ ipcMain.handle('updates-start', async (event) => {
     send({ kind: 'done', code: evt?.exitCode ?? evt?.code ?? null, signal: evt?.signal ?? null, success: (evt?.exitCode ?? evt?.code ?? 0) === 0, output });
   });
   child.on?.('error', (err) => {
+    const message = err?.message || '';
+    const code = err?.code || '';
+    // node-pty may emit EIO when the PTY closes normally; treat it as benign.
+    if (code === 'EIO' || /EIO/.test(message)) {
+      return;
+    }
     cleanup();
     invalidatePackageManagerCache();
-    send({ kind: 'error', message: err?.message || 'Erreur inconnue', output });
+    send({ kind: 'error', message: message || 'Erreur inconnue', output });
   });
   return { id };
 });
