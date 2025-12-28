@@ -30,24 +30,3 @@ jobs:
 
       - name: Verify renderer queue logic
         run: node scripts/verify-renderer-queue.js
-
-      # Build AppImage (adapter la commande si besoin)
-      - name: Build AppImage
-        run: |
-          npm run build-appimage
-
-      # Upload AppImage as artifact
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: AM-GUI-AppImage
-          path: dist/*.AppImage
-
-      # Create GitHub Release (only on main branch and on tag)
-      - name: Create Release
-        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
