@@ -1750,6 +1750,27 @@ async function handleManualInstallClick() {
     await copyTextToClipboard(command);
     showToast(t('missingPm.manual.copied'));
     setPmPopupStatus('missingPm.manual.copied');
+
+    // Show a confirmation dialog instructing user what to do next
+    const confirmed = await openActionConfirm({
+      message: t('missingPm.manual.confirmDesc'),
+      okLabel: t('missingPm.manual.ok'),
+      intent: 'install'
+    });
+    if (confirmed) {
+      // close the missingPm popup and exit the app so user can follow instructions
+      hideMissingPmPopup();
+      if (window.electronAPI?.closeWindow) {
+        window.electronAPI.closeWindow();
+      }
+    } else {
+      // User cancelled: keep popup open (return to choices)
+      setPmPopupStatus('missingPm.popup.statusIdle');
+      setTimeout(() => {
+        const ctrl = ensureMissingPmPopup();
+        ctrl?.autoBtn?.focus?.();
+      }, 60);
+    }
   } catch (err) {
     console.error('Manual install copy error', err);
     showToast(t('missingPm.manual.copyError'));
