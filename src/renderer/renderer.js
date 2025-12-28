@@ -460,6 +460,18 @@ if (modeMenuBtn && modeMenu) {
     modeMenu.hidden = true;
     modeMenuBtn.setAttribute('aria-expanded','false');
   });
+  // Ajout : gestion du clic sur les options de mode d'affichage
+  modeOptions().forEach(opt => {
+    opt.addEventListener('click', (e) => {
+      const mode = opt.getAttribute('data-mode');
+      if (!mode) return;
+      state.viewMode = mode;
+      localStorage.setItem('viewMode', mode);
+      updateModeMenuUI();
+      modeMenu.hidden = true;
+      modeMenuBtn.setAttribute('aria-expanded','false');
+    });
+  });
 }
 
 function startUpdateTimer() {
