@@ -1559,6 +1559,15 @@ const handleIconCachePurged = () => {
 };
 
 const searchFeature = window.features?.search?.init?.({
+  // ...existing options... 
+});
+
+// Initialize featured banner (compact) feature
+const featuredFeature = window.features?.featured?.init?.({
+  container: document.getElementById('featuredBanner'),
+  items: (window?.require ? window.require('./config/featured') : [])
+});
+
   state,
   searchInput: document.getElementById('searchInput'),
   tabs: Array.from(tabs),

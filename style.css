@@ -1025,6 +1025,31 @@ body.details-mode #appDetails { opacity:1; transform:translateY(0); }
 #updatesPanel { text-align:center; }
 #updatesPanel h2, #updatesPanel p { text-align:center; }
 #updatesPanel .updates-actions-row { margin:32px auto 0 auto; width:fit-content; }
+
+/* Featured banner (compact) */
+.featured-banner { width:100%; margin-bottom:18px; }
+.featured-banner .featured-inner { display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:12px; background:linear-gradient(90deg, rgba(0,0,0,0.03), rgba(0,0,0,0.02)); }
+.featured-banner .featured-prev, .featured-banner .featured-next { background:transparent; border:none; color:var(--fg); font-size:16px; padding:8px; cursor:pointer; }
+.featured-banner .featured-slot { flex:1; min-height:100px; display:flex; align-items:center; }
+.featured-item { display:flex; align-items:center; gap:12px; width:100%; }
+.featured-visual { width:96px; height:96px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+.featured-icon { width:64px; height:64px; object-fit:contain; }
+.featured-body { flex:1; overflow:hidden; }
+.featured-title { font-weight:700; font-size:1rem; color:var(--fg); }
+.featured-desc { color:var(--muted); font-size:0.95rem; opacity:0.95; }
+.featured-dots { display:flex; gap:6px; margin-left:12px; }
+.featured-dots .dot { width:8px; height:8px; border-radius:50%; background:rgba(0,0,0,0.12); border:none; }
+.featured-dots .dot.active { background:var(--primary); }
+@media (prefers-color-scheme: dark){
+  .featured-banner .featured-inner{ background:linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01)); }
+  .featured-dots .dot { background:rgba(255,255,255,0.06); }
+}
+@media (max-width:640px){
+  .featured-item { gap:10px; }
+  .featured-visual { width:72px; height:72px; }
+  .featured-title { font-size:0.95rem; }
+  .featured-desc { display:none; }
+}
 #updatesPanel .update-spinner { justify-content:center; }
 #updatesPanel #updateResult { text-align:center; }
 /* Spinner de mise à jour */
