@@ -1,4 +1,3 @@
 #!/bin/sh
 
-APPDIR="$(cd "$(dirname "$0")/.." && pwd)"
-"$APPDIR/node_modules/electron/dist/electron" "$APPDIR/main.js"
+"/home/moi/AM-GUI/node_modules/electron/dist/electron" "/home/moi/AM-GUI/main.js"
