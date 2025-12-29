@@ -212,14 +212,18 @@ body.view-cards .app-tile-skeleton {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 30px;
-  margin-bottom: 0;
+  /* Reduced gap below the main tabs for a tighter layout */
+  margin-top: 19px;
+  margin-bottom: 5px;
   max-width: 1200px;
   margin-left: auto;
   margin-right: auto;
   width: 100%;
   z-index: 110;
   position: relative;
+}
+@media (max-width:640px){
+  .tabs-row-secondary { margin-top: 10px; }
 }
 .tabs-secondary {
   display: flex;
@@ -1025,6 +1029,61 @@ body.details-mode #appDetails { opacity:1; transform:translateY(0); }
 #updatesPanel { text-align:center; }
 #updatesPanel h2, #updatesPanel p { text-align:center; }
 #updatesPanel .updates-actions-row { margin:32px auto 0 auto; width:fit-content; }
+
+/* Featured banner (compact) */
+.featured-banner { width:100%; margin:6px 0 32px; padding: 12px 38px 12px 48px; }
+.featured-banner .featured-inner { display:flex; flex-direction:column; align-items:center; gap:8px; padding:10px 14px; border-radius:12px; background:linear-gradient(90deg, rgba(0,0,0,0.03), rgba(0,0,0,0.02)); box-sizing:border-box; width:100%; max-width:1200px; margin:0 auto; transition: background .35s ease, color .2s ease; }
+@media (max-width:640px){ .featured-banner { margin:6px 0 12px; padding:8px 16px; } }
+.featured-controls { display:flex; align-items:center; gap:12px; width:100%; }
+/* ensure hidden in details mode (defensive) */
+body.details-mode #featuredBanner { display:none !important; }
+/* Controls (more discrete) */
+.featured-banner .featured-prev, .featured-banner .featured-next {
+  background:transparent; border:none; color:var(--muted); font-size:16px; cursor:pointer; opacity:0.55; border-radius:999px;
+  width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; padding:0; transition:opacity .15s ease, transform .12s ease, color .12s ease, box-shadow .12s ease;
+}
+.featured-banner .featured-prev:hover, .featured-banner .featured-next:hover { opacity:1; transform:scale(1.03); color:var(--fg); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+.featured-controls .featured-slot { flex:1; min-height:120px; display:flex; align-items:center; justify-content:center; }
+/* make sure the prev/next don't shrink when space is tight */
+.featured-controls .featured-prev, .featured-controls .featured-next { flex:0 0 auto; }
+/* Dots: keep them circular and not stretched */
+.featured-dots { display:flex; gap:8px; margin-left:0; margin-top:12px; justify-content:center; width:auto; }
+.featured-dots .dot { width:10px; height:10px; border-radius:50%; background:rgba(0,0,0,0.12); border:none; display:inline-block; }
+.featured-dots .dot.active { width:12px; height:12px; background:var(--primary); box-shadow:0 0 0 4px rgba(0,0,0,0.04) inset; }
+/* Stack content vertically and center */
+.featured-item { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; text-align:center; }
+.featured-visual { width:96px; height:96px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+.featured-icon { width:64px; height:64px; object-fit:contain; }
+.featured-body { display:flex; flex-direction:column; align-items:center; gap:6px; width:100%; }
+.featured-title { display:block; font-weight:700; font-size:1.05rem; color:var(--fg); max-width:90%; }
+.featured-desc { margin-top:4px; color:var(--muted); font-size:0.95rem; opacity:0.95; max-width:64ch; width:100%; text-align:center; margin-left:auto; margin-right:auto; }
+/* Center dots under content */
+.featured-dots { display:flex; gap:6px; margin-left:0; margin-top:8px; justify-content:center; width:100%; }
+.featured-dots .dot { width:8px; height:8px; border-radius:50%; background:rgba(0,0,0,0.12); border:none; }
+.featured-dots .dot.active { background:var(--primary); }
+
+/* when an item provides a color, use it on the whole banner and ensure text/dots contrast */
+.featured-inner.has-color { position:relative; }
+.featured-inner.has-color.dark-text .featured-title,
+.featured-inner.has-color.dark-text .featured-desc { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
+.featured-inner.has-color.dark-text .featured-dots .dot { background: rgba(255,255,255,0.5); }
+.featured-inner.has-color.dark-text .featured-dots .dot.active { background: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.12) inset; }
+
+.featured-inner.has-color.light-text .featured-title,
+.featured-inner.has-color.light-text .featured-desc { color: #000; text-shadow: 0 1px 0 rgba(255,255,255,0.65); }
+.featured-inner.has-color.light-text .featured-dots .dot { background: rgba(0,0,0,0.18); }
+.featured-inner.has-color.light-text .featured-dots .dot.active { background: #000; box-shadow: 0 0 0 2px rgba(0,0,0,0.06) inset; }
+
+@media (prefers-color-scheme: dark){
+  .featured-banner .featured-inner{ background:linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01)); }
+  .featured-dots .dot { background:rgba(255,255,255,0.06); }
+}
+@media (max-width:640px){
+  .featured-item { gap:8px; }
+  .featured-visual { width:72px; height:72px; }
+  .featured-title { font-size:1rem; }
+  .featured-desc { display:block; font-size:0.95rem; max-width:90%; }
+}
 #updatesPanel .update-spinner { justify-content:center; }
 #updatesPanel #updateResult { text-align:center; }
 /* Spinner de mise à jour */

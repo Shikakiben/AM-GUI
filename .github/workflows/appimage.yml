@@ -5,7 +5,7 @@ concurrency:
 on:
   push:
     branches:
-      - build
+      - main
   schedule:
     - cron: "0 7 1/21 * *" # We default to rebuilding every 21 days, change this to your liking
   workflow_dispatch: {}

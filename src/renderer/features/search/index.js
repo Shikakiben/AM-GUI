@@ -80,6 +80,18 @@
       categoriesApi.updateDropdownLabel(stateRef, translateFn, iconMapOverride);
     }
     applySearchInternal();
+    // ensure banner visibility reacts immediately when the user focuses search
+    try { updateBannerVisibility(); } catch(e) {}
+    // If the user clicked into the search field and there's already a query,
+    // hide the banner immediately (defensive: the focus may be briefly lost
+    // during the tab switch flow, so force hiding here).
+    try {
+      const q = (searchInput && String(searchInput.value || '').trim()) || '';
+      if (q.length) {
+        const banner = document.getElementById('featuredBanner');
+        if (banner) banner.hidden = true;
+      }
+    } catch (e) {}
   }
 
   function hidePanelsForNonApps() {
@@ -99,6 +111,8 @@
 
   function resetSearchModeIfNeeded() {
     if (!searchMode) return;
+    // If the user is currently focused on the search input, don't blur it — they are actively interacting
+    if (searchInput && document.activeElement === searchInput) return;
     searchMode = false;
     if (searchInput) {
       lastSearchValue = searchInput.value || '';
@@ -209,17 +223,36 @@
     debounceDelay = typeof options.debounceDelay === 'number' ? options.debounceDelay : 140;
     isSandboxed = typeof options.isSandboxed === 'function' ? options.isSandboxed : () => false;
 
+    function updateBannerVisibility() {
+      try {
+        const banner = document.getElementById('featuredBanner');
+        if (!banner) return;
+        const q = (searchInput && String(searchInput.value || '').trim()) || '';
+        // Hide the banner only when the search is active OR the input is focused with non-empty query.
+        // If the input simply holds previous text but isn't active, keep the banner visible.
+        const shouldHideBecauseOfSearch = q.length && (searchMode === true || (searchInput && document.activeElement === searchInput));
+        if (shouldHideBecauseOfSearch) {
+          banner.hidden = true;
+          return;
+        }
+        // otherwise follow normal rules (only visible on Applications tab and not in details-mode)
+        banner.hidden = !(stateRef && (stateRef.activeCategory === 'all')) || document.body.classList.contains('details-mode');
+      } catch (e) { /* defensive: ignore DOM issues */ }
+    }
+
     if (searchInput) {
       searchInput.addEventListener('focus', handleFocus);
       const debouncer = getDebounce();
-      const onInput = debouncer(() => applySearchInternal(), debounceDelay);
+      const onInput = debouncer(() => { applySearchInternal(); updateBannerVisibility(); }, debounceDelay);
       searchInput.addEventListener('input', onInput);
+      // ensure initial state
+      updateBannerVisibility();
     }
 
     return Object.freeze({
       applySearch: () => applySearchInternal(),
       getSearchState: () => ({ searchMode, lastSearchValue }),
-      resetSearch: () => { searchMode = false; lastSearchValue = ''; }
+      resetSearch: () => { searchMode = false; lastSearchValue = ''; if (searchInput) { searchInput.value = ''; } try { const b = document.getElementById('featuredBanner'); if (b) b.hidden = !(stateRef && stateRef.activeCategory === 'all'); } catch(e){} }
     });
   }
 

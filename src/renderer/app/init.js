@@ -28,12 +28,13 @@
     errorHandlersInstalled = true;
     window.addEventListener('error', (ev) => {
       const toast = document.getElementById('toast');
+      const location = ev.filename ? ` at ${ev.filename}:${ev.lineno || 0}:${ev.colno || 0}` : '';
       if (toast) {
         toast.hidden = false;
-        toast.textContent = 'Erreur: ' + ev.message;
-        setTimeout(() => { toast.hidden = true; }, 5000);
+        toast.textContent = 'Erreur: ' + ev.message + (location ? (' ' + location) : '');
+        setTimeout(() => { toast.hidden = true; }, 8000);
       }
-      console.error('Erreur globale', ev.error || ev.message);
+      console.error('Erreur globale', ev.error || ev.message, location, ev.error && ev.error.stack ? ev.error.stack : '');
     });
 
     window.addEventListener('unhandledrejection', (ev) => {
