@@ -27,6 +27,7 @@ npm -v # Doit afficher "10.9.4".
 
 
 git clone --branch test --single-branch --depth 1 https://github.com/Shikakiben/AM-GUI.git
+#git clone --depth 1 https://github.com/Shikakiben/AM-GUI.git
 cd AM-GUI
 npm install
 npx electron-rebuild
