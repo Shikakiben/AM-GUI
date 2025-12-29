@@ -5,14 +5,14 @@
   "scripts": {
     "start": "electron .",
     "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
-    "lint": "eslint main.js preload.js src/**/*.js"
+    "lint": "eslint main.js preload.js src/**/*.js",
+    "dist": "npx electron-builder --linux dir",
+    "postinstall": "electron-builder install-app-deps"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
-    "@eslint/js": "^9.39.2",
     "electron": "^35.7.5",
-    "eslint": "^9.39.2",
-    "globals": "^16.5.0"
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -20,6 +20,36 @@
     "node-pty": "^1.0.0",
     "undici": "^7.16.0"
   },
+  "build": {
+    "appId": "io.shikakiben.am-gui",
+    "productName": "AM-GUI",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "AM-GUI.png",
+      "src/**",
+      "node_modules/**",
+      "categories-cache.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "node_modules/**/build/Release/**"
+    ],
+    "directories": {
+      "output": "dist"    
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Utility"
+    }
+  },
+  "description": "AM-GUI — gestionnaire d'apps pour AppMan",
+  "author": "Shikakiben <noreply@example.com>",
   "engines": {
     "node": ">=20 <23"
   }
