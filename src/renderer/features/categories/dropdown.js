@@ -182,6 +182,8 @@
               apps: detailedApps,
               toastMessage: `Catégorie "${name}" : ${filteredApps.length} apps`
             });
+            // notify other parts (renderer) that a custom category was activated so they can refresh UI such as featured
+            try { document.dispatchEvent(new CustomEvent('category.override', { detail: { name, count: detailedApps.length } })); } catch(_) {}
           }, iconMap);
           categoriesDropdownMenu.appendChild(btn);
         });
