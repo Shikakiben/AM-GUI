@@ -12,7 +12,8 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
     "electron": "^35.7.5",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "eslint": "^9.39.2"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -39,7 +40,7 @@
       "node_modules/**/build/Release/**"
     ],
     "directories": {
-      "output": "dist"    
+      "output": "dist"
     },
     "linux": {
       "target": [
