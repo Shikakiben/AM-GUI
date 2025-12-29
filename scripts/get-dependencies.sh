@@ -26,7 +26,7 @@ node -v # Doit afficher "v22.21.1".
 npm -v # Doit afficher "10.9.4".
 
 
-git clone https://github.com/Shikakiben/AM-GUI.git
+git clone --branch test --single-branch --depth 1 https://github.com/Shikakiben/AM-GUI.git
 cd AM-GUI
 npm install
 npx electron-rebuild
