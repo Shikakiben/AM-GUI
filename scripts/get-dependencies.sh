@@ -30,10 +30,11 @@ git clone https://github.com/Shikakiben/AM-GUI.git
 cd AM-GUI
 npm install
 npx electron-rebuild
-rm -rf scripts AM-GUI.code-workspace AM-GUI2.png eslint.config.js LICENSE package-lock.json README.md
+npm run dist
 cd ..
-mkdir -p ./AppDir
-cp -rv AM-GUI/* ./AppDir
-cp -v  AM-GUI/AM-GUI.png    ./AppDir/.DirIcon
+mkdir -p ./AppDir/bin
+cp -rv AM-GUI/dist/linux-unpacked* ./AppDir/bin
+cp -v  AM-GUI/AM-GUI.png           ./AppDir/.DirIcon
+cp -v  AM-GUI/AM-GUI.desktop       ./AppDir
 
 

@@ -1,3 +1,7 @@
+// Fixe les variables d'environnement terminal si absentes (utile pour AppImage)
+if (!process.env.TERM) process.env.TERM = 'xterm-256color';
+if (!process.env.COLORTERM) process.env.COLORTERM = 'truecolor';
+
 const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
