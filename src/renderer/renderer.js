@@ -1559,15 +1559,6 @@ const handleIconCachePurged = () => {
 };
 
 const searchFeature = window.features?.search?.init?.({
-  // ...existing options... 
-});
-
-// Initialize featured banner (compact) feature
-const featuredFeature = window.features?.featured?.init?.({
-  container: document.getElementById('featuredBanner'),
-  items: (window?.require ? window.require('./config/featured') : [])
-});
-
   state,
   searchInput: document.getElementById('searchInput'),
   tabs: Array.from(tabs),
@@ -1586,6 +1577,12 @@ const featuredFeature = window.features?.featured?.init?.({
 if (searchFeature && typeof searchFeature.applySearch === 'function') {
   applySearch = searchFeature.applySearch;
 }
+
+// Initialize featured banner (compact) feature
+const featuredFeature = window.features?.featured?.init?.({
+  container: document.getElementById('featuredBanner'),
+  items: (window?.require ? window.require('./config/featured') : [])
+});
 // ...existing code...
 // Modale confirmation actions
 const actionConfirmModal = document.getElementById('actionConfirmModal');
