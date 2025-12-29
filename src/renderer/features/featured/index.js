@@ -83,10 +83,10 @@
       { name: 'vlc', title: 'VLC', desc: 'A free and open source cross-platform multimedia player.', color: '#E02525' },
       { name: 'jellyfin', title: 'Jellyfin', desc: 'A personal media server that puts you in control.', color: '#F58A25' }
     ];
-    // allow passing a static featured config; else try require; else default
+    // allow passing a static featured config; fallback to DEFAULT_ITEMS if not provided
     const featuredConfig = (Array.isArray(options.featuredConfig) && options.featuredConfig.length)
       ? options.featuredConfig
-      : (window?.require ? (function(){ try { return window.require('./config/featured') || []; } catch(_) { return []; } })() : []);
+      : DEFAULT_ITEMS;
     let items = [];
     // initialize empty to avoid flash of static items; updateFromState will later populate
     if (!container) return null;
