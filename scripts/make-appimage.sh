@@ -11,7 +11,8 @@ export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}
 
 # Deploy dependencies
 quick-sharun \
-	./AppDir/bin/start-am-gui.sh
+	./AppDir/bin/start-am-gui.sh \
+	./AppDir/node_modules/node-pty/build/Release/pty.node
 
 # Additional changes can be done in between here
 

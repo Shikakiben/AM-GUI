@@ -1577,6 +1577,37 @@ const searchFeature = window.features?.search?.init?.({
 if (searchFeature && typeof searchFeature.applySearch === 'function') {
   applySearch = searchFeature.applySearch;
 }
+
+// Initialize featured banner (compact) feature
+// initialize featured with empty items to avoid showing the static fallback briefly at startup
+const featuredFeature = window.features?.featured?.init?.({
+  container: document.getElementById('featuredBanner'),
+  items: [],
+  state: state
+});
+// defensive initial visibility: show only on Applications tab and when not in details view
+const featuredBannerInitEl = document.getElementById('featuredBanner');
+if (featuredBannerInitEl) featuredBannerInitEl.hidden = !(state.activeCategory === 'all') || document.body.classList.contains('details-mode');
+
+// Featured computation is handled by the featured module now.
+function updateFeaturedItems() {
+  try {
+    if (!featuredFeature || typeof featuredFeature.updateFromState !== 'function') return;
+    featuredFeature.updateFromState();
+  } catch (e) {}
+}
+
+// wrap existing applySearch (if any) so featured refreshes after searches
+if (typeof applySearch === 'function') {
+  const __origApplySearch = applySearch;
+  applySearch = () => { __origApplySearch(); try { setTimeout(() => { if (featuredFeature && typeof featuredFeature.updateFromState === 'function') featuredFeature.updateFromState(); }, 0); } catch(e) {} };
+}
+
+// Listen for category override events triggered by the categories dropdown
+try { document.addEventListener('category.override', () => { try { setTimeout(() => { if (featuredFeature && typeof featuredFeature.updateFromState === 'function') featuredFeature.updateFromState(); }, 0); } catch(_){} }); } catch(_) {}
+
+// initial population of the banner
+if (featuredFeature && typeof featuredFeature.updateFromState === 'function') featuredFeature.updateFromState();
 // ...existing code...
 // Modale confirmation actions
 const actionConfirmModal = document.getElementById('actionConfirmModal');
@@ -2294,6 +2325,9 @@ function showDetails(appName) {
   if (tabsRowSecondary) tabsRowSecondary.style.visibility = 'hidden';
   // Suppression de la barre : rien à faire
   document.body.classList.add('details-mode');
+  // hide featured banner when entering details
+  const featuredBannerEl = document.getElementById('featuredBanner');
+  if (featuredBannerEl) featuredBannerEl.hidden = true;
   if (virtualListApi?.disconnectObservers) {
     try { virtualListApi.disconnectObservers(); } catch (_) {}
   }
@@ -2307,6 +2341,12 @@ function exitDetailsView() {
   handleSandboxExit();
   if (appDetailsSection) appDetailsSection.hidden = true;
   document.body.classList.remove('details-mode');
+  // restore featured banner only if on Applications tab
+  const featuredBannerEl = document.getElementById('featuredBanner');
+  if (featuredBannerEl) {
+    featuredBannerEl.hidden = !(state.activeCategory === 'all');
+    if (!featuredBannerEl.hidden && featuredFeature && typeof featuredFeature.updateFromState === 'function') featuredFeature.updateFromState();
+  }
   if (appsDiv) appsDiv.hidden = false;
   if (virtualListApi?.renderVirtualList) {
     try { virtualListApi.renderVirtualList(); } catch (_) {}
@@ -2617,6 +2657,12 @@ tabs.forEach(tab => {
     if (advancedPanel) advancedPanel.hidden = !isAdvancedTab;
     const showingApps = !(isUpdatesTab || isAdvancedTab);
     if (appsDiv) appsDiv.hidden = !showingApps;
+    // featured banner: show only when we're on the main Applications tab ('all') and not in details mode
+    const featuredBannerEl = document.getElementById('featuredBanner');
+    const shouldShowBanner = (state.activeCategory === 'all') && !document.body.classList.contains('details-mode');
+    if (featuredBannerEl) featuredBannerEl.hidden = !shouldShowBanner;
+    // update items to reflect the currently visible category (if the banner is visible)
+    if (featuredFeature && typeof featuredFeature.updateFromState === 'function') setTimeout(() => { try { featuredFeature.updateFromState(); } catch(_){} }, 0);
     if (showingApps) {
       if (virtualListApi?.renderVirtualList) {
         try { virtualListApi.renderVirtualList(); } catch (_) {}
