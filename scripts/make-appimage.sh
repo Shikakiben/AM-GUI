@@ -13,7 +13,7 @@ export DESKTOP=AM-GUI.desktop
 
 # Deploy dependencies
 quick-sharun \
-	dist/linux-unpacked/am-gui 
+	dist/linux-unpacked/*
 	
 # Additional changes can be done in between here
 
