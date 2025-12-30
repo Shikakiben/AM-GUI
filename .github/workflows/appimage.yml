@@ -10,20 +10,42 @@ on:
     - cron: "0 7 1/21 * *" # We default to rebuilding every 21 days, change this to your liking
   workflow_dispatch: {}
 
+
 jobs:
+  build-linux-unpacked:
+    name: Build linux-unpacked
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: make linux-unpacked
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+          . "$HOME/.nvm/nvm.sh"
+          nvm install 22
+          node -v
+          npm -v
+          npm install
+          npm run dist
+      - name: Upload linux-unpacked artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-unpacked
+          path: dist/linux-unpacked
+
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
     strategy:
       matrix:
         include:
-          - runs-on: ubuntu-latest
+          - runs-on: ubuntu-20.04
             name: Build AppImage
             arch: x86_64
           # comment out these 3 lines if aarch64 is not wanted
 #          - runs-on: ubuntu-24.04-arm
 #            name: Build AppImage
-#            arch: aarch64
+#            arch: aarch64 
+        
     container: ghcr.io/pkgforge-dev/archlinux:latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -31,6 +53,11 @@ jobs:
         uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1
       - name: Install Dependencies
         run: /bin/sh ./scripts/get-dependencies.sh
+      - name: Download linux-unpacked artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-unpacked
+          path: dist/linux-unpacked
       - name: Make AppImage
         run: /bin/sh ./scripts/make-appimage.sh
       - name: Upload artifact
