@@ -24,19 +24,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 nvm install 22
 node -v # Doit afficher "v22.21.1".
 npm -v # Doit afficher "10.9.4".
-
-
-git clone --branch test --single-branch --depth 1 https://github.com/Shikakiben/AM-GUI.git
-#git clone --depth 1 https://github.com/Shikakiben/AM-GUI.git
-cd AM-GUI
 npm install
-npx electron-rebuild
 npm run dist
-cd ..
-mkdir -p ./AppDir/bin
-cp -rv AM-GUI/dist/linux-unpacked/resources ./AppDir/bin
-cp -rv AM-GUI/dist/linux-unpacked/am-gui ./AppDir/bin
-cp -v  AM-GUI/AM-GUI.png           ./AppDir/.DirIcon
-cp -v  AM-GUI/AM-GUI.desktop       ./AppDir
 
 
