@@ -34,7 +34,8 @@ npx electron-rebuild
 npm run dist
 cd ..
 mkdir -p ./AppDir/bin
-cp -rv AM-GUI/dist/linux-unpacked/* ./AppDir/bin
+cp -rv AM-GUI/dist/linux-unpacked/resources ./AppDir/bin
+cp -rv AM-GUI/dist/linux-unpacked/am-gui ./AppDir/bin
 cp -v  AM-GUI/AM-GUI.png           ./AppDir/.DirIcon
 cp -v  AM-GUI/AM-GUI.desktop       ./AppDir
 
