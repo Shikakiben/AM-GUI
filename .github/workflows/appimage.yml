@@ -14,7 +14,7 @@ on:
 jobs:
   build-linux-unpacked:
     name: Build linux-unpacked
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v5
       - name: make linux-unpacked
@@ -38,7 +38,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - runs-on: ubuntu-20.04
+          - runs-on: ubuntu-22.04
             name: Build AppImage
             arch: x86_64
           # comment out these 3 lines if aarch64 is not wanted
