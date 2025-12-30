@@ -27,7 +27,7 @@ jobs:
           npm install
           npm run dist
       - name: Upload linux-unpacked artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
         with:
           name: linux-unpacked
           path: dist/linux-unpacked
@@ -54,14 +54,14 @@ jobs:
       - name: Install Dependencies
         run: /bin/sh ./scripts/get-dependencies.sh
       - name: Download linux-unpacked artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
         with:
           name: linux-unpacked
           path: dist/linux-unpacked
       - name: Make AppImage
         run: /bin/sh ./scripts/make-appimage.sh
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: AppImage-${{ matrix.arch }}
           path: dist
@@ -72,7 +72,7 @@ jobs:
     permissions: write-all
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           pattern: AppImage-*
           merge-multiple: true
