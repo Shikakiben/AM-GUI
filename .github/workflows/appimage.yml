@@ -44,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install build tools
-        run: apk add --no-cache python3 make g++ linux-headers
+        run: apk add --no-cache python3 make g++ linux-headers curl bash
       - name: Setup Node
         run: |
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
