@@ -7,13 +7,14 @@
     "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
     "lint": "eslint main.js preload.js src/**/*.js",
     "dist": "npx electron-builder --linux dir",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "patch-package && electron-builder install-app-deps"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
     "electron": "^35.7.5",
     "electron-builder": "^26.0.12",
-    "eslint": "^9.39.2"
+    "eslint": "^9.39.2",
+    "patch-package": "^8.0.1"
   },
   "dependencies": {
     "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
