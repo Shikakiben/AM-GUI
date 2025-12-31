@@ -7,7 +7,7 @@
     "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
     "lint": "eslint main.js preload.js src/**/*.js",
     "dist": "npx electron-builder --linux dir",
-    "postinstall": "patch-package && [ \"$CI\" != \"true\" ] && electron-builder install-app-deps"
+    "postinstall": "patch-package && if [ \"$CI\" != \"true\" ]; then electron-builder install-app-deps; fi"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.1",
