@@ -52,13 +52,13 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Preparing Container
         uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1
-      - name: Install Dependencies
-        run: /bin/sh ./scripts/get-dependencies.sh
       - name: Download linux-unpacked artifact
         uses: actions/download-artifact@v5
         with:
           name: linux-unpacked
           path: dist/linux-unpacked
+      - name: Install Dependencies
+        run: /bin/sh ./scripts/get-dependencies.sh
       - name: Make AppImage
         run: /bin/sh ./scripts/make-appimage.sh
       - name: Upload artifact
