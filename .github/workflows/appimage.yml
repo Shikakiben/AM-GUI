@@ -12,30 +12,60 @@ on:
 
 
 jobs:
-  build-linux-unpacked:
-    name: Build linux-unpacked
-    runs-on: ubuntu-22.04
+  build-prebuild-glibc:
+    name: Build prebuild glibc
+    runs-on: ubuntu-latest
+    container: ubuntu:18.04
     steps:
       - uses: actions/checkout@v5
-      - name: make linux-unpacked
+      - name: Install build tools
+        run: apt-get update && apt-get install -y build-essential python3
+      - name: Setup Node
         run: |
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           . "$HOME/.nvm/nvm.sh"
           nvm install 22
           node -v
           npm -v
-          npm install
-          npm run dist
-      - name: Upload linux-unpacked artifact
+      - name: Install dependencies
+        run: npm install
+      - name: Rebuild native module
+        run: npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
+      - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
-          name: linux-unpacked
-          path: dist/linux-unpacked
+          name: prebuild-glibc
+          path: node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node
+
+  build-prebuild-musl:
+    name: Build prebuild musl
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools
+        run: apk add --no-cache python3 make g++ linux-headers
+      - name: Setup Node
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+          . "$HOME/.nvm/nvm.sh"
+          nvm install 22
+          node -v
+          npm -v
+      - name: Install dependencies
+        run: npm install
+      - name: Rebuild native module
+        run: npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
+      - name: Upload prebuild
+        uses: actions/upload-artifact@v5
+        with:
+          name: prebuild-musl
+          path: node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node
 
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
-    needs: build-linux-unpacked
+    needs: [build-prebuild-glibc, build-prebuild-musl]
     strategy:
       matrix:
         include:
@@ -52,11 +82,32 @@ jobs:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Preparing Container
         uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1
-      - name: Download linux-unpacked artifact
+      - name: Setup Node
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+          . "$HOME/.nvm/nvm.sh"
+          nvm install 22
+          node -v
+          npm -v
+      - name: Install dependencies
+        run: npm install
+      - name: Download prebuilds glibc
         uses: actions/download-artifact@v5
         with:
-          name: linux-unpacked
-          path: dist/linux-unpacked
+          name: prebuild-glibc
+          path: temp-glibc
+      - name: Download prebuilds musl
+        uses: actions/download-artifact@v5
+        with:
+          name: prebuild-musl
+          path: temp-musl
+      - name: Place prebuilds
+        run: |
+          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64
+          cp temp-glibc/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty.node
+          cp temp-musl/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty-musl.node
+      - name: Run dist
+        run: npm run dist
       - name: Install Dependencies
         run: /bin/sh ./scripts/get-dependencies.sh
       - name: Make AppImage
