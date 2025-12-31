@@ -29,7 +29,8 @@ jobs:
           node -v
           npm -v      -
           npm install    
-          npx electron-rebuild
+          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug) || true
+          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
       - name: Validate prebuild
         run: |
           if [ ! -s node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node ]; then
@@ -55,7 +56,9 @@ jobs:
       - name: build AM-GUI
         run: |          
           npm install
-          npx electron-rebuild
+          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug) || true
+          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || truemebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug) || true
+          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
       - name: Validate prebuild
         run: |
           if [ ! -s node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node ]; then
