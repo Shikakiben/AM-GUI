@@ -39,18 +39,13 @@ jobs:
   build-prebuild-musl:
     name: Build prebuild musl
     runs-on: ubuntu-latest
-    container: alpine:latest
+    container: node:22-alpine
     steps:
       - uses: actions/checkout@v5
       - name: Install build tools
-        run: apk add --no-cache python3 make g++ linux-headers curl bash
+        run: apk add --no-cache python3 make g++ linux-headers
       - name: build AM-GUI
-        run: |
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-          . "$HOME/.nvm/nvm.sh"
-          nvm install 22
-          node -v
-          npm -v             
+        run: |          
           npm install
           npx electron-rebuild
       - name: Upload prebuild
