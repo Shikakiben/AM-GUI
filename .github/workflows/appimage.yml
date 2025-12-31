@@ -29,7 +29,7 @@ jobs:
           node -v
           npm -v      -
           npm install    
-          npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
+          npx electron-rebuild
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -52,7 +52,7 @@ jobs:
           node -v
           npm -v             
           npm install
-          npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
+          npx electron-rebuild
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -86,8 +86,7 @@ jobs:
           nvm install 22
           node -v
           npm -v      
-          npm install
-          npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
+          npm install         
       - name: Download prebuilds glibc
         uses: actions/download-artifact@v5
         with:
