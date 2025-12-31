@@ -19,9 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install build tools
-        run: apt-get update && apt-get install -y build-essential python3 curl
+        run: apt-get update && apt-get install -y build-essential python3
       - name: Setup Node
         run: |
+          apt-get update && apt-get install -y curl
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           . "$HOME/.nvm/nvm.sh"
           nvm install 22
