@@ -119,9 +119,11 @@ jobs:
         run: |
           for f in node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty*; do
             if [ ! -s "$f" ]; then
-              echo "$f missing or empty, attempting fallback rebuild" >&2
-              . "$HOME/.nvm/nvm.sh" || true
-              npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch || exit 1
+              echo "ERROR: $f missing or empty. Aborting — prebuild artifact missing." >&2
+              echo "---- temp-glibc contents ----" && ls -la temp-glibc || true
+              echo "---- temp-musl contents ----" && ls -la temp-musl || true
+              echo "Check the prebuild job logs (build-prebuild-glibc / build-prebuild-musl) and artifact uploads." >&2
+              exit 1
             fi
           done
           node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuilds OK'); } catch (e) { console.error(e); process.exit(1) }"
