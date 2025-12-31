@@ -29,9 +29,13 @@ jobs:
           node -v
           npm -v
       - name: Install dependencies
-        run: npm install
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npm install
       - name: Rebuild native module
-        run: npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -54,9 +58,13 @@ jobs:
           node -v
           npm -v
       - name: Install dependencies
-        run: npm install
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npm install
       - name: Rebuild native module
-        run: npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -91,7 +99,9 @@ jobs:
           node -v
           npm -v
       - name: Install dependencies
-        run: npm install
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npm install
       - name: Download prebuilds glibc
         uses: actions/download-artifact@v5
         with:
@@ -108,7 +118,9 @@ jobs:
           cp temp-glibc/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty.node
           cp temp-musl/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty-musl.node
       - name: Run dist
-        run: npm run dist
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npm run dist
       - name: Install Dependencies
         run: /bin/sh ./scripts/get-dependencies.sh
       - name: Make AppImage
