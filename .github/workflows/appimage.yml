@@ -27,9 +27,12 @@ jobs:
           . "$HOME/.nvm/nvm.sh"
           nvm install 22
           node -v
-          npm -v      -
-          npm install    
-          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug) || true
+          npm -v
+          npm install
+          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug)
+          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release
+          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
+          if [ -n "$FOUND" ]; then cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node; fi
           ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
       - name: Validate prebuild
         run: |
@@ -56,8 +59,10 @@ jobs:
       - name: build AM-GUI
         run: |          
           npm install
-          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug) || true
-          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || truemebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug) || true
+          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug)
+          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release
+          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
+          if [ -n "$FOUND" ]; then cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node; fi
           ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
       - name: Validate prebuild
         run: |
