@@ -35,6 +35,7 @@ jobs:
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
+    needs: build-linux-unpacked
     strategy:
       matrix:
         include:
