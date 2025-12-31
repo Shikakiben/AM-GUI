@@ -12,8 +12,9 @@ export ICON=AM-GUI.png
 export DESKTOP=AM-GUI.desktop
 
 # Deploy dependencies
-
-	
+	quick-sharun \
+	./AppDir/bin/am-gui
+    
 # Additional changes can be done in between here
 
 # Turn AppDir into AppImage
