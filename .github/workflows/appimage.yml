@@ -19,7 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install build tools
-        run: apt-get update && apt-get install -y build-essential python3
+        run: |
+          apt-get update
+          apt-get install -y build-essential python3 software-properties-common ca-certificates apt-transport-https || true
+          add-apt-repository -y ppa:ubuntu-toolchain-r/test || true
+          apt-get update
+          apt-get install -y gcc-11 g++-11 || true
       - name: build AM-GUI
         run: |
           apt-get update && apt-get install -y curl
@@ -28,19 +33,22 @@ jobs:
           nvm install 22
           node -v
           npm -v
+          export CC=gcc-11 CXX=g++-11
+          g++ --version || true
           npm install
           (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug)
-          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release
-          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
-          if [ -n "$FOUND" ]; then cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node; fi
           ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/obj.target || true
       - name: Validate prebuild
         run: |
-          if [ ! -s node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node ]; then
-            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
+          if [ -z "$FOUND" ]; then
+            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch || true
             echo "Prebuild missing or empty" >&2
             exit 1
           fi
+          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+          cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node || true
           node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuild ok'); } catch (e) { console.error(e); process.exit(1) }"
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
@@ -60,17 +68,18 @@ jobs:
         run: |          
           npm install
           (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug)
-          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release
-          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
-          if [ -n "$FOUND" ]; then cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node; fi
           ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/obj.target || true
       - name: Validate prebuild
         run: |
-          if [ ! -s node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node ]; then
-            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
+          if [ -z "$FOUND" ]; then
+            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch || true
             echo "Prebuild missing or empty" >&2
             exit 1
           fi
+          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+          cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node || true
           node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuild ok'); } catch (e) { console.error(e); process.exit(1) }"
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
