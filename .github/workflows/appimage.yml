@@ -30,6 +30,14 @@ jobs:
           npm -v      -
           npm install    
           npx electron-rebuild
+      - name: Validate prebuild
+        run: |
+          if [ ! -s node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node ]; then
+            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+            echo "Prebuild missing or empty" >&2
+            exit 1
+          fi
+          node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuild ok'); } catch (e) { console.error(e); process.exit(1) }"
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -48,6 +56,14 @@ jobs:
         run: |          
           npm install
           npx electron-rebuild
+      - name: Validate prebuild
+        run: |
+          if [ ! -s node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node ]; then
+            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
+            echo "Prebuild missing or empty" >&2
+            exit 1
+          fi
+          node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuild ok'); } catch (e) { console.error(e); process.exit(1) }"
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -94,9 +110,21 @@ jobs:
           path: temp-musl
       - name: Place prebuilds
         run: |
+          rm -rf node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/* || true
           mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64
           cp temp-glibc/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty.node
           cp temp-musl/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty-musl.node
+          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds
+      - name: Validate placed prebuilds
+        run: |
+          for f in node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty*; do
+            if [ ! -s "$f" ]; then
+              echo "$f missing or empty, attempting fallback rebuild" >&2
+              . "$HOME/.nvm/nvm.sh" || true
+              npx electron-rebuild -m @homebridge/node-pty-prebuilt-multiarch || exit 1
+            fi
+          done
+          node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuilds OK'); } catch (e) { console.error(e); process.exit(1) }"
       - name: Run dist
         run: |
           . "$HOME/.nvm/nvm.sh"
