@@ -27,5 +27,6 @@ get-debloated-pkgs --add-common --prefer-nano
 #npm install
 #npm run dist
 mkdir -p ./AppDir
-cp -rv dist/linux-unpacked/* ./AppDir/
-
+cp -rv dist/linux-unpacked/*    ./AppDir/
+cp -v  AM-GUI.png               ./AppDir/.DirIcon
+cp -v  AM-GUI.desktop           ./AppDir/
