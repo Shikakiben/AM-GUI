@@ -2,6 +2,10 @@ name: Anylinux-AppImage
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  VERSION: beta-0.${{ github.run_number }}
+
 on:
   push:
     branches:
@@ -87,10 +91,7 @@ jobs:
           node -v
           npm -v      
           npm install
-      - name: Apply patch
-        run: |
-          . "$HOME/.nvm/nvm.sh"
-          npx patch-package         
+          npx patch-package      
       - name: Download prebuilds glibc
         uses: actions/download-artifact@v5
         with:

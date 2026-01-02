@@ -26,6 +26,6 @@ get-debloated-pkgs --add-common --prefer-nano
 #npm -v # Doit afficher "10.9.4".
 #npm install
 #npm run dist
-mkdir -p ./AppDir/bin
-cp -rv dist/linux-unpacked/* ./AppDir/bin
+mkdir -p ./AppDir
+cp -rv dist/linux-unpacked/* ./AppDir/
 

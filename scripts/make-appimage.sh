@@ -3,21 +3,14 @@
 set -eu
 
 ARCH=$(uname -m)
-VERSION="beta-$(date +'%y.%m.%d')"
+VERSION="${VERSION:-beta-0.1}"
 export ARCH VERSION
 export OUTPATH=./dist
 export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
-export ICON=AM-GUI.png
-export DESKTOP=AM-GUI.desktop
-export DEPLOY_OPENGL=1
-export DEPLOY_VULKAN=1
+# Skip automatic dependency detection to avoid bloat
+export SKIP_DEPS=1
 
-# Deploy dependencies
-	quick-sharun \
-	./AppDir/bin/am-gui
-    
-# Additional changes can be done in between here
-
-# Turn AppDir into AppImage
+# Use linux-unpacked directly without scanning for dependencies
+# Just create AppImage from existing AppDir structure
 quick-sharun --make-appimage
