@@ -11,7 +11,7 @@ export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}
 
 # Deploy dependencies
 quick-sharun \
-	./AppDir/am-gui
+	./AppDir/bin/am-gui
 
 # Additional changes can be done in between here
 
