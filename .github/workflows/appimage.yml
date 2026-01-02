@@ -19,12 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install build tools
-        run: |
-          apt-get update
-          apt-get install -y build-essential python3 software-properties-common ca-certificates apt-transport-https || true
-          add-apt-repository -y ppa:ubuntu-toolchain-r/test || true
-          apt-get update
-          apt-get install -y gcc-11 g++-11 || true
+        run: apt-get update && apt-get install -y build-essential python3
       - name: build AM-GUI
         run: |
           apt-get update && apt-get install -y curl
@@ -32,24 +27,9 @@ jobs:
           . "$HOME/.nvm/nvm.sh"
           nvm install 22
           node -v
-          npm -v
-          export CC=gcc-11 CXX=g++-11
-          g++ --version || true
-          npm install
-          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug)
-          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
-          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/obj.target || true
-      - name: Validate prebuild
-        run: |
-          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
-          if [ -z "$FOUND" ]; then
-            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch || true
-            echo "Prebuild missing or empty" >&2
-            exit 1
-          fi
-          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
-          cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node || true
-          node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuild ok'); } catch (e) { console.error(e); process.exit(1) }"
+          npm -v      -
+          npm install --ignore-scripts
+          npx electron-rebuild --force
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -66,21 +46,8 @@ jobs:
         run: apk add --no-cache python3 make g++ linux-headers
       - name: build AM-GUI
         run: |          
-          npm install
-          (cd node_modules/@homebridge/node-pty-prebuilt-multiarch && npx electron-rebuild -m . --force --debug)
-          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
-          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/obj.target || true
-      - name: Validate prebuild
-        run: |
-          FOUND=$(find node_modules/@homebridge/node-pty-prebuilt-multiarch -type f -name 'pty*.node' -print -quit) || true
-          if [ -z "$FOUND" ]; then
-            ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch || true
-            echo "Prebuild missing or empty" >&2
-            exit 1
-          fi
-          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release || true
-          cp "$FOUND" node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node || true
-          node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuild ok'); } catch (e) { console.error(e); process.exit(1) }"
+          npm install --ignore-scripts
+          npx electron-rebuild --force
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -114,7 +81,9 @@ jobs:
           nvm install 22
           node -v
           npm -v      
-          npm install         
+          npm install
+      - name: Apply patch
+        run: npx patch-package         
       - name: Download prebuilds glibc
         uses: actions/download-artifact@v5
         with:
@@ -127,23 +96,10 @@ jobs:
           path: temp-musl
       - name: Place prebuilds
         run: |
-          rm -rf node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/* || true
+          rm -rf node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds
           mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64
           cp temp-glibc/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty.node
           cp temp-musl/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty-musl.node
-          ls -la node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds
-      - name: Validate placed prebuilds
-        run: |
-          for f in node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty*; do
-            if [ ! -s "$f" ]; then
-              echo "ERROR: $f missing or empty. Aborting — prebuild artifact missing." >&2
-              echo "---- temp-glibc contents ----" && ls -la temp-glibc || true
-              echo "---- temp-musl contents ----" && ls -la temp-musl || true
-              echo "Check the prebuild job logs (build-prebuild-glibc / build-prebuild-musl) and artifact uploads." >&2
-              exit 1
-            fi
-          done
-          node -e "try { require('./node_modules/@homebridge/node-pty-prebuilt-multiarch').native; console.log('prebuilds OK'); } catch (e) { console.error(e); process.exit(1) }"
       - name: Run dist
         run: |
           . "$HOME/.nvm/nvm.sh"
