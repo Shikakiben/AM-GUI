@@ -15,7 +15,7 @@ jobs:
   build-prebuild-glibc:
     name: Build prebuild glibc
     runs-on: ubuntu-latest
-    container: ubuntu:20.04
+    container: ubuntu:18.04
     steps:
       - uses: actions/checkout@v5
       - name: Install build tools
