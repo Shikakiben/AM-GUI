@@ -9,5 +9,11 @@ export OUTPATH=./dist
 export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
 
-# Analyze main binary and create AppImage
-quick-sharun ./AppDir/am-gui --make-appimage
+# Deploy dependencies
+quick-sharun \
+	./AppDir/am-gui
+
+# Additional changes can be done in between here
+
+# Turn AppDir into AppImage
+quick-sharun --make-appimage
