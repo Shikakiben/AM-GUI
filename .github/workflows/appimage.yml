@@ -88,7 +88,9 @@ jobs:
           npm -v      
           npm install
       - name: Apply patch
-        run: npx patch-package         
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npx patch-package         
       - name: Download prebuilds glibc
         uses: actions/download-artifact@v5
         with:
