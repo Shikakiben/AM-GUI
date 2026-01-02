@@ -10,8 +10,8 @@ export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
 
 # Deploy dependencies
-#quick-sharun \
-	#./AppDir/bin/am-gui
+quick-sharun \
+	./AppDir/bin/am-gui
 
 # Additional changes can be done in between here
 
