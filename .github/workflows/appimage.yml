@@ -2,6 +2,10 @@ name: Anylinux-AppImage
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  VERSION: beta-0.${{ github.run_number }}
+
 on:
   push:
     branches:
@@ -10,10 +14,57 @@ on:
     - cron: "0 7 1/21 * *" # We default to rebuilding every 21 days, change this to your liking
   workflow_dispatch: {}
 
+
 jobs:
+  build-prebuild-glibc:
+    name: Build prebuild glibc
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update && apt-get install -y build-essential python3 gcc-10 g++-10 curl
+          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
+          update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
+      - name: build AM-GUI
+        run: |     
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+          . "$HOME/.nvm/nvm.sh"
+          nvm install 22
+          node -v
+          npm -v
+          npm install --ignore-scripts
+          npx electron-rebuild --force
+      - name: Upload prebuild
+        uses: actions/upload-artifact@v5
+        with:
+          name: prebuild-glibc
+          path: node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node
+
+  build-prebuild-musl:
+    name: Build prebuild musl
+    runs-on: ubuntu-latest
+    container: node:22-alpine
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools
+        run: apk add --no-cache python3 make g++ linux-headers
+      - name: build AM-GUI
+        run: |          
+          npm install --ignore-scripts
+          npx electron-rebuild --force
+      - name: Upload prebuild
+        uses: actions/upload-artifact@v5
+        with:
+          name: prebuild-musl
+          path: node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node
+
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
+    needs: [build-prebuild-glibc, build-prebuild-musl]
     strategy:
       matrix:
         include:
@@ -23,12 +74,42 @@ jobs:
           # comment out these 3 lines if aarch64 is not wanted
 #          - runs-on: ubuntu-24.04-arm
 #            name: Build AppImage
-#            arch: aarch64
+#            arch: aarch64 
+        
     container: ghcr.io/pkgforge-dev/archlinux:latest
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@v5
       - name: Preparing Container
         uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1
+      - name: Setup Node
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+          . "$HOME/.nvm/nvm.sh"
+          nvm install 22
+          node -v
+          npm -v      
+          npm install
+          npx patch-package      
+      - name: Download prebuilds glibc
+        uses: actions/download-artifact@v5
+        with:
+          name: prebuild-glibc
+          path: temp-glibc
+      - name: Download prebuilds musl
+        uses: actions/download-artifact@v5
+        with:
+          name: prebuild-musl
+          path: temp-musl
+      - name: Place prebuilds
+        run: |
+          rm -rf node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds
+          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64
+          cp temp-glibc/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty.node
+          cp temp-musl/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty-musl.node
+      - name: Run dist
+        run: |
+          . "$HOME/.nvm/nvm.sh"
+          npm run dist
       - name: Install Dependencies
         run: /bin/sh ./scripts/get-dependencies.sh
       - name: Make AppImage

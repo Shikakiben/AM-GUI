@@ -31,9 +31,13 @@
       if (!electronAPI?.setGpuPref) return;
       await electronAPI.setGpuPref(!!checked);
       showToast(checked ? t('toast.gpuDisabled') : t('toast.gpuEnabled'));
-      setTimeout(() => {
+      setTimeout(async () => {
         if (confirm(t('confirm.gpuRestart'))) {
-          window.location.reload();
+          if (electronAPI?.restartApp) {
+            await electronAPI.restartApp();
+          } else {
+            window.location.reload(); // fallback
+          }
         }
       }, 1200);
     }
