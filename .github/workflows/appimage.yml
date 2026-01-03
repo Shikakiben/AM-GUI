@@ -25,13 +25,11 @@ jobs:
       - name: Install build tools
         run: |
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update && apt-get install -y build-essential python3 gcc-10 g++-10
+          apt-get update && apt-get install -y build-essential python3 gcc-10 g++-10 curl
           update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
           update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
       - name: build AM-GUI
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update && apt-get install -y curl
+        run: |     
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           . "$HOME/.nvm/nvm.sh"
           nvm install 22
