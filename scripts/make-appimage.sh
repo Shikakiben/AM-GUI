@@ -3,16 +3,14 @@
 set -eu
 
 ARCH=$(uname -m)
-VERSION="beta-$(date +'%y.%m.%d')"
+VERSION="${VERSION:-beta-0.1}"
 export ARCH VERSION
 export OUTPATH=./dist
 export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
 
 # Deploy dependencies
-quick-sharun \
-	./AppDir/bin/start-am-gui.sh \
-	./AppDir/node_modules/node-pty/build/Release/pty.node
+quick-sharun  ./AppDir/.DirIcon
 
 # Additional changes can be done in between here
 

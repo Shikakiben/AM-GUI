@@ -1,3 +1,7 @@
+// Fixe les variables d'environnement terminal si absentes (utile pour AppImage)
+if (!process.env.TERM) process.env.TERM = 'xterm-256color';
+if (!process.env.COLORTERM) process.env.COLORTERM = 'truecolor';
+
 const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -37,16 +41,32 @@ if (!gotTheLock) {
 }
 
 // --- Gestion accélération GPU (doit être AVANT app.whenReady) ---
+// Vérifier d'abord les arguments de ligne de commande
+const hasDisableGpuFlag = process.argv.includes('--disable-gpu');
+
 let disableGpuPref = false;
 try {
   const prefPath = path.join(app.getPath('userData'), 'gpu-pref.json');
+  console.log('[GPU DEBUG] Checking GPU pref file at:', prefPath);
   if (fs.existsSync(prefPath)) {
     const raw = fs.readFileSync(prefPath, 'utf8');
+    console.log('[GPU DEBUG] File content:', raw);
     disableGpuPref = JSON.parse(raw).disableGpu === true;
+    console.log('[GPU DEBUG] disableGpuPref parsed to:', disableGpuPref);
+  } else {
+    console.log('[GPU DEBUG] File does not exist');
   }
-} catch(_){ }
-if (disableGpuPref && typeof app.disableHardwareAcceleration === 'function') {
+} catch(e){ 
+  console.log('[GPU DEBUG] Error reading GPU pref:', e);
+}
+
+// Désactiver GPU si demandé par flag CLI ou par préférence
+const shouldDisableGpu = hasDisableGpuFlag || disableGpuPref;
+if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
+  console.log('[GPU DEBUG] Calling app.disableHardwareAcceleration() - reason:', hasDisableGpuFlag ? 'CLI flag' : 'user preference');
   app.disableHardwareAcceleration();
+} else {
+  console.log('[GPU DEBUG] NOT calling app.disableHardwareAcceleration(), shouldDisable:', shouldDisableGpu, 'function exists:', typeof app.disableHardwareAcceleration === 'function');
 }
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
@@ -209,7 +229,7 @@ function buildSandboxAnswerScript(shouldConfigure, dirSelections, customPath) {
 
 function runSandboxTask(sender, { pm, action, args, stdinScript, appName }) {
   return new Promise((resolve) => {
-    const pty = require('node-pty');
+    const pty = require('@homebridge/node-pty-prebuilt-multiarch');
     const id = `${action}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const env = Object.assign({}, process.env, {
       TERM: 'xterm',
@@ -307,6 +327,12 @@ ipcMain.handle('set-gpu-pref', async (_event, val) => {
     fs.writeFileSync(prefPath, JSON.stringify({ disableGpu: !!val }));
     return { ok:true };
   } catch(e){ return { ok:false, error: e.message||String(e) }; }
+});
+
+// IPC pour redémarrer l'application (utilisé après changement GPU)
+ipcMain.handle('restart-app', async () => {
+  app.relaunch();
+  app.quit();
 });
 
 function createWindow () {
@@ -463,7 +489,7 @@ ipcMain.handle('am-action', async (event, action, software) => {
 
   return new Promise((resolve) => {
     try {
-      const pty = require('node-pty');
+      const pty = require('@homebridge/node-pty-prebuilt-multiarch');
       const env = Object.assign({}, process.env, {
         TERM: 'xterm',
         COLS: '80',
@@ -543,7 +569,7 @@ ipcMain.handle('install-start', async (event, name) => {
   const startedAt = Date.now();
   let stdoutRemainder = '';
   let stderrRemainder = '';
-  const pty = require('node-pty');
+  const pty = require('@homebridge/node-pty-prebuilt-multiarch');
   const env = Object.assign({}, process.env, {
     TERM: 'xterm',
     COLS: '80',
@@ -695,7 +721,7 @@ ipcMain.handle('updates-start', async (event) => {
   const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
   let child;
   let output = '';
-  const pty = require('node-pty');
+  const pty = require('@homebridge/node-pty-prebuilt-multiarch');
   const env = Object.assign({}, process.env, {
     TERM: 'xterm',
     COLS: '80',

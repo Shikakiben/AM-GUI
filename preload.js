@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   purgeIconsCache: () => ipcRenderer.invoke('purge-icons-cache'),
   getGpuPref: () => ipcRenderer.invoke('get-gpu-pref'),
   setGpuPref: (val) => ipcRenderer.invoke('set-gpu-pref', val),
+  restartApp: () => ipcRenderer.invoke('restart-app'),
   fetchAllCategories: () => ipcRenderer.invoke('fetch-all-categories'),
   getCategoriesCache: () => ipcRenderer.invoke('get-categories-cache'),
   // Ajout pour gestion mot de passe sudo
