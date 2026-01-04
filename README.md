@@ -1,25 +1,30 @@
-
-# AM-GUI <img src="https://github.com/Shikakiben/AM-GUI/blob/main/AM-GUI.png?raw=true" width="48" /> 
-
+<div align="center">
+  <img src="https://github.com/Shikakiben/AM-GUI/blob/main/AM-GUI.png?raw=true" width="55">
+  <h1 align="center">AM-GUI</h1>
+  <p align="center">A simple graphical front to easily install, update, and manage AppImage and other portable formats on Linux, powered by <a href="https://github.com/ivan-hc/AM">AM</a>.</p>
+  
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 [![CI Build Status](https://github.com//Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 
-
-
-
-<p align="center">
+<br>
+  
   <img src="screenshots/light.png" width="800"/>
-</p>
 
+</div>
+<br>
+<br>
+<br>
 
-
-* [Latest Stable Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  AppImage, Beta, it will be helpful to report issues. Alpine Linux needs more testing.
-
+  
+* [Latest Stable Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  AppImage, Beta,it will be helpful to report issues. Alpine Linux needs more testing.
+<br>
+<br>
+  
 
 
 ---
 
-**AM-GUI** is an Electron-based application that serves as a graphical Front for [AM](https://github.com/ivan-hc/AM). “AM”/“AppMan” is a set of scripts and modules for installing, updating, and managing AppImage packages and other portable formats on Linux.
+
 
 ⚠️ **This project is under development and some features may not work or may be incomplete.**
 
