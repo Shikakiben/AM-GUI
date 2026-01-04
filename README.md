@@ -1,19 +1,17 @@
-<p align="center">
-  <img src="https://github.com/Shikakiben/AM-GUI/blob/main/AM-GUI.png?raw=true" width="64" /> 
-</p>
 
-
-
-
-<h1 align="center">AM-GUI</h1>
+# AM-GUI <img src="https://github.com/Shikakiben/AM-GUI/blob/main/AM-GUI.png?raw=true" width="48" /> 
 
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 [![CI Build Status](https://github.com//Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 
 
+
+
 <p align="center">
-  <img src="screenshots/light.png" width="400"/>
+  <img src="screenshots/light.png" width="800"/>
 </p>
+
+
 
 * [Latest Stable Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  AppImage, Beta, it will be helpful to report issues. Alpine Linux needs more testing.
 
@@ -38,7 +36,7 @@
 
 If you don't have it in your package manager, see: https://nodejs.org/fr/download
 
-  You may need to install the following build tools:
+&nbsp;you may need to install the following build tools:
 
 *Debian/Ubuntu*:
    ```bash
