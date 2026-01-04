@@ -1496,6 +1496,7 @@ let updatesTerminalFallbackMode = false;
 let updatesTerminalExpanded = false;
 let updateSpinnerBusy = false;
 let activeUpdateStreamId = null;
+let updatesStreamBuffer = ''; // Buffer pour accumuler la sortie du streaming
 const updateStreamWaiters = new Map();
 const updatesPanel = document.getElementById('updatesPanel');
 const advancedPanel = document.getElementById('advancedPanel');
@@ -2911,21 +2912,26 @@ window.electronAPI?.onUpdatesProgress?.((msg) => {
   switch (msg.kind) {
     case 'start':
       activeUpdateStreamId = msg.id;
+      updatesStreamBuffer = ''; // Reset le buffer au début
       revealUpdatesTerminal();
       resetUpdatesTerminal();
       appendUpdatesTerminalChunk(`\x1b[36m${t('updates.logHeader') || 'am -u'}\x1b[0m\r\n`);
       break;
     case 'data':
-      appendUpdatesTerminalChunk(typeof msg.chunk === 'string' ? msg.chunk : '');
+      if (typeof msg.chunk === 'string') {
+        updatesStreamBuffer += msg.chunk; // Accumule la sortie
+        appendUpdatesTerminalChunk(msg.chunk);
+      }
       break;
     case 'done':
       appendUpdatesTerminalChunk(`\r\n\x1b[32m${t('updates.logCompleted') || 'Terminé'} (code ${typeof msg.code === 'number' ? msg.code : 0})\x1b[0m\r\n`);
-      resolveUpdateWaiter(msg, false);
+      // Passe la sortie accumulée dans le message résolu
+      resolveUpdateWaiter({ ...msg, output: updatesStreamBuffer }, false);
       activeUpdateStreamId = null;
       break;
     case 'error':
       appendUpdatesTerminalChunk(`\r\n\x1b[31m${msg.message || (t('updates.error') || 'Erreur')}\x1b[0m\r\n`);
-      resolveUpdateWaiter(msg, true);
+      resolveUpdateWaiter({ ...msg, output: updatesStreamBuffer }, true);
       activeUpdateStreamId = null;
       break;
   }
@@ -2971,17 +2977,35 @@ function parseUpdatedApps(res){
 
 function handleUpdateCompletion(fullText){
   const sanitized = stripAnsiSequences(fullText || '');
+  // Map pour stocker les nouvelles versions extraites du log
+  const newVersions = new Map();
   // Chercher la section "The following apps have been updated:" dans le log
   let filteredUpdated = null;
   const match = sanitized && sanitized.match(/The following apps have been updated:[^\n]*\n([\s\S]*?)\n[-=]{5,}/i);
   if (match) {
-    // Extraire les noms d'apps de cette section
+    // Extraire les noms d'apps et leurs nouvelles versions de cette section
     filteredUpdated = new Set();
     const lines = match[1].split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
     for (const line of lines) {
       // ligne du type: ◆ citron-nightly 8f38c83a2
-      const m = line.match(/^◆\s*([A-Za-z0-9._-]+)/);
-      if (m) filteredUpdated.add(m[1].toLowerCase());
+      const m = line.match(/^◆\s*([A-Za-z0-9._-]+)\s+(.+)?/);
+      if (m) {
+        const appName = m[1].toLowerCase();
+        filteredUpdated.add(appName);
+        if (m[2]) newVersions.set(appName, m[2].trim());
+      }
+    }
+  }
+  // Parser aussi les lignes du type: appname (oldversion -> newversion)
+  const lines = sanitized.split(/\r?\n/);
+  for (const raw of lines) {
+    const line = raw.trim();
+    // Format: appname (1.0 -> 2.0) ou appname (old -> new)
+    const arrowMatch = line.match(/^([A-Za-z0-9._-]+)\s*\([^)]*->\s*([^)]+)\)/);
+    if (arrowMatch) {
+      const appName = arrowMatch[1].toLowerCase();
+      const newVer = arrowMatch[2].trim();
+      if (newVer && !newVersions.has(appName)) newVersions.set(appName, newVer);
     }
   }
   const updated = parseUpdatedApps(sanitized);
@@ -3001,10 +3025,11 @@ function handleUpdateCompletion(fullText){
       toShow.forEach(nameLower => {
         const wrapper = document.createElement('div'); wrapper.className = 'updated-item';
         const img = document.createElement('img');
-        // nameLower comes from parsed output (lowercased). Try to find matching app object for proper casing and version
+        // nameLower comes from parsed output (lowercased). Try to find matching app object for proper casing
         const appObj = state.allApps.find(a => String(a.name).toLowerCase() === String(nameLower).toLowerCase());
         const displayName = appObj ? (appObj.name) : nameLower;
-        const displayVersion = appObj && appObj.version ? appObj.version : null;
+        // Utiliser la nouvelle version extraite du log, sinon fallback sur l'ancienne
+        const displayVersion = newVersions.get(nameLower) || (appObj && appObj.version ? appObj.version : null);
         img.src = getIconUrl(displayName);
         img.alt = displayName;
         img.onerror = () => { img.src = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; };
