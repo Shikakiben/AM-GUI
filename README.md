@@ -1,52 +1,59 @@
-<p align="center">
-  <img src="https://github.com/Shikakiben/AM-GUI/blob/main/AM-GUI.png?raw=true" width="128" /> 
-</p>
-
-
-
-# AM-GUI
-
+<div align="center">
+  <img src="https://github.com/Shikakiben/AM-GUI/blob/main/AM-GUI.png?raw=true" width="60">
+  <h1 align="center">AM-GUI</h1>
+  <p align="center">A simple graphical frontend to easily install, update, and manage AppImage and other portable formats on Linux, powered by <a href="https://github.com/ivan-hc/AM">AM</a>.</p>
+  
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 [![CI Build Status](https://github.com//Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 
+<br>
+  
+  <img src="screenshots/light.png" width="800"/>
 
+</div>
+<br>
+<br>
+<br>
 
-* [Latest Stable Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  AppImage , Beta , it will be helpfull to reporte  issues , Alpine linux need more testing 
-
+  
+* [Latest Stable Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  AppImage, Beta,it will be helpful to report issues. Alpine Linux needs more testing.
+<br>
+<br>
+  
 
 
 ---
 
-**AM-GUI** is an Electron-based application that serves as a graphical Front for [AM](https://github.com/ivan-hc/AM). “AM”/“AppMan” is a set of scripts and modules for installing, updating, and managing AppImage packages and other portable formats on Linux.
+
 
 ⚠️ **This project is under development and some features may not work or may be incomplete.**
 
-   **ALL credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handel the GUI, learning how to proprely yell at gpt-4.1, to make sur that this little f$@¤=# does not mess that much with the code.**
+  **ALL credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handle the GUI, learning how to properly yell at gpt-4.1, to make sure that this little f$@¤=# does not mess that much with the code.**
    
 ---
 
 
-## developemen installation
+## Development installation
 
-- requirement:
+- Requirements:
 
   [Node.js](https://nodejs.org/) (>=20, 22 recommended)
 
-if you d'ont have it on your package manager see: https://nodejs.org/fr/download
+If you don't have it in your package manager, see: https://nodejs.org/fr/download
 
-  you may need to install the following build tools 
+&nbsp;you may need to install the following build tools:
 
- *Debian/Ubuntu*:
+*Debian/Ubuntu*:
    ```bash
    sudo apt install build-essential python3 make gcc g++
    ```
- *Fedora*:
+*Fedora*:
    ```bash
    sudo dnf install @development-tools python3
    ```
 
 
-- Clone repository and install:
+- Clone the repository and install:
 
 ```bash
 git clone https://github.com/Shikakiben/AM-GUI.git
