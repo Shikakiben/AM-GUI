@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://github.com/Shikakiben/AM-GUI/blob/main/AM-GUI.png?raw=true" width="55">
   <h1 align="center">AM-GUI</h1>
-  <p align="center">A simple graphical front to easily install, update, and manage AppImage and other portable formats on Linux, powered by <a href="https://github.com/ivan-hc/AM">AM</a>.</p>
+  <p align="center">A simple graphical frontend to easily install, update, and manage AppImage and other portable formats on Linux, powered by <a href="https://github.com/ivan-hc/AM">AM</a>.</p>
   
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 [![CI Build Status](https://github.com//Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
