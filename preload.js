@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   desktopEnv: () => desktopEnv,
   systemLocale: () => systemLocale,
+  envLang: () => process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || null,
   installStart: (name) => ipcRenderer.invoke('install-start', name),
   installCancel: (id) => ipcRenderer.invoke('install-cancel', id, id),
   installSendChoice: (id, choice) => ipcRenderer.invoke('install-send-choice', id, choice),

@@ -349,7 +349,7 @@ function createWindow () {
     return 'generic';
   }
   const deTag = detectDesktopEnv();
-  const sysLocale = (app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : (process.env.LANG || 'en');
+  const sysLocale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || ((app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : 'en');
   // Icône PNG
   const iconPath = path.join(__dirname, 'AM-GUI.png');
   const win = new BrowserWindow({
