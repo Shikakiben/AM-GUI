@@ -14,6 +14,7 @@ export DEPLOY_VULKAN=0
 export DEPLOY_P11KIT=0
 export DEPLOY_PULSE=0
 export DEPLOY_LOCALE=0
+export ANYLINUX_LIB=1
 
 # Deploy dependencies
 quick-sharun  ./AppDir/bin/am-gui
