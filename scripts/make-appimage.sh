@@ -10,10 +10,15 @@ export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
 
 # Télécharger sharun
+echo "Téléchargement de sharun..."
 curl -s https://github.com/VHSgunzo/sharun/releases/latest/download/sharun-x86_64-aio -o /tmp/sharun-aio
 chmod +x /tmp/sharun-aio
-# Utiliser sharun lib4bin pour compatibilité musl sans déploiement de bibliothèques
-/tmp/sharun-aio lib4bin --hard-links --dst-dir ./AppDir ./AppDir/bin/am-gui
+echo "Sharun téléchargé, exécution de lib4bin..."
+
+
+# Utiliser sharun l (lib4bin) pour compatibilité musl sans déploiement de bibliothèques
+/tmp/sharun-aio l --hard-links -d ./AppDir ./AppDir/bin/am-gui
+echo "Lib4bin terminé"
 
 # Additional changes can be done in between here
 
