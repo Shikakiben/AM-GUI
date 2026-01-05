@@ -8,27 +8,12 @@ export ARCH VERSION
 export OUTPATH=./dist
 export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
-#Disable auto-deployment to avoid duplicating Electron libs and errors
-export DEPLOY_GTK=0
-export DEPLOY_QT=0
-export DEPLOY_OPENGL=0
-export DEPLOY_VULKAN=0
-export DEPLOY_SDL=0
-export DEPLOY_GSTREAMER=0
-export DEPLOY_PIPEWIRE=0
-export DEPLOY_LOCALE=0
-export DEPLOY_GDK=0
-export DEPLOY_IMAGEMAGICK=0
-export DEPLOY_GEGL=0
-export DEPLOY_BABL=0
-export DEPLOY_P11KIT=0
-export DEPLOY_ELECTRON=0
-export DEPLOY_CHROMIUM=0
-export STRIP=0
 
-# Deploy dependencies
-
-quick-sharun ./AppDir/bin/am-gui
+# Télécharger sharun
+curl -s https://github.com/VHSgunzo/sharun/releases/latest/download/sharun-x86_64-aio -o /tmp/sharun-aio
+chmod +x /tmp/sharun-aio
+# Utiliser sharun lib4bin pour compatibilité musl sans déploiement de bibliothèques
+/tmp/sharun-aio lib4bin --hard-links --dst-dir ./AppDir ./AppDir/bin/am-gui
 
 # Additional changes can be done in between here
 
