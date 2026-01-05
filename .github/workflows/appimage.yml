@@ -70,7 +70,7 @@ jobs:
           nvm install 22
           node -v
           npm -v      
-          npm install
+          npm install --ignore-scripts
       - name: Download prebuild glibc
         uses: actions/download-artifact@v5
         with:
