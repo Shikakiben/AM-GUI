@@ -21,6 +21,9 @@ export DEPLOY_GDK=0
 export DEPLOY_IMAGEMAGICK=0
 export DEPLOY_GEGL=0
 export DEPLOY_BABL=0
+export DEPLOY_P11KIT=0
+export DEPLOY_ELECTRON=0
+export DEPLOY_CHROMIUM=0
 export STRIP=0
 
 # Deploy dependencies
