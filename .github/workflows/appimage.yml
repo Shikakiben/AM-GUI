@@ -41,30 +41,12 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: prebuild-glibc
-          path: node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node
-
-  build-prebuild-musl:
-    name: Build prebuild musl
-    runs-on: ubuntu-latest
-    container: node:22-alpine
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install build tools
-        run: apk add --no-cache python3 make g++ linux-headers
-      - name: build AM-GUI
-        run: |          
-          npm install --ignore-scripts
-          npx electron-rebuild --force
-      - name: Upload prebuild
-        uses: actions/upload-artifact@v5
-        with:
-          name: prebuild-musl
-          path: node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/pty.node
+          path: node_modules/node-pty/build/Release/pty.node
 
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
-    needs: [build-prebuild-glibc, build-prebuild-musl]
+    needs: [build-prebuild-glibc]
     strategy:
       matrix:
         include:
@@ -90,22 +72,15 @@ jobs:
           npm -v      
           npm install
           npx patch-package      
-      - name: Download prebuilds glibc
+      - name: Download prebuild glibc
         uses: actions/download-artifact@v5
         with:
           name: prebuild-glibc
           path: temp-glibc
-      - name: Download prebuilds musl
-        uses: actions/download-artifact@v5
-        with:
-          name: prebuild-musl
-          path: temp-musl
-      - name: Place prebuilds
+      - name: Place prebuild
         run: |
-          rm -rf node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds
-          mkdir -p node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64
-          cp temp-glibc/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty.node
-          cp temp-musl/pty.node node_modules/@homebridge/node-pty-prebuilt-multiarch/prebuilds/linux-x64/pty-musl.node
+          mkdir -p node_modules/node-pty/build/Release
+          cp temp-glibc/pty.node node_modules/node-pty/build/Release/pty.node
       - name: Run dist
         run: |
           . "$HOME/.nvm/nvm.sh"

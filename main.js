@@ -229,7 +229,7 @@ function buildSandboxAnswerScript(shouldConfigure, dirSelections, customPath) {
 
 function runSandboxTask(sender, { pm, action, args, stdinScript, appName }) {
   return new Promise((resolve) => {
-    const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+    const pty = require('node-pty');
     const id = `${action}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const env = Object.assign({}, process.env, {
       TERM: 'xterm',
@@ -489,7 +489,7 @@ ipcMain.handle('am-action', async (event, action, software) => {
 
   return new Promise((resolve) => {
     try {
-      const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+      const pty = require('node-pty');
       const env = Object.assign({}, process.env, {
         TERM: 'xterm',
         COLS: '80',
@@ -569,7 +569,7 @@ ipcMain.handle('install-start', async (event, name) => {
   const startedAt = Date.now();
   let stdoutRemainder = '';
   let stderrRemainder = '';
-  const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+  const pty = require('node-pty');
   const env = Object.assign({}, process.env, {
     TERM: 'xterm',
     COLS: '80',
@@ -721,7 +721,7 @@ ipcMain.handle('updates-start', async (event) => {
   const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
   let child;
   let output = '';
-  const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+  const pty = require('node-pty');
   const env = Object.assign({}, process.env, {
     TERM: 'xterm',
     COLS: '80',
