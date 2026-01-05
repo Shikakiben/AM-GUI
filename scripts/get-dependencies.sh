@@ -17,4 +17,7 @@ echo "---------------------------------------------------------------"
 #make-aur-package PACKAGENAME
 
 # If the application needs to be manually built that has to be done down here
-
+mkdir -p ./AppDir/bin
+cp -rv dist/linux-unpacked/*    ./AppDir/bin
+cp -v  AM-GUI.png               ./AppDir/.DirIcon
+cp -v  AM-GUI.desktop           ./AppDir
