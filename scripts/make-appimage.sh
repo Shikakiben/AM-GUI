@@ -35,6 +35,13 @@ rm -f ./AppDir/shared/lib/libblkid* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libmount* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libudev* 2>/dev/null || true
 
+# Supprimer fichiers inutiles d'Electron
+rm -f ./AppDir/bin/LICENSES.chromium.html 2>/dev/null || true
+rm -f ./AppDir/bin/LICENSE.electron.txt 2>/dev/null || true
+
+# Garder seulement en-US.pak dans locales (minimum requis)
+find ./AppDir/bin/locales -type f ! -name 'en-US.pak' -delete 2>/dev/null || true
+
 # Ajouter unset des variables problématiques dans .env pour sharun
 cat >> ./AppDir/.env << 'EOF'
 GIO_MODULE_DIR=/nonexistent
