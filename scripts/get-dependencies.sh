@@ -22,3 +22,4 @@ mkdir -p ./AppDir/bin
 cp -rv dist/linux-unpacked/*    ./AppDir/bin
 cp -v  AM-GUI.png               ./AppDir/.DirIcon
 cp -v  AM-GUI.desktop           ./AppDir
+cp -v  AppRun                   ./AppDir
