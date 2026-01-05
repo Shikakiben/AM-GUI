@@ -13,8 +13,7 @@
     "@electron/rebuild": "^4.0.1",
     "electron": "^35.7.5",
     "electron-builder": "^26.0.12",
-    "eslint": "^9.39.2",
-    "patch-package": "^8.0.1"
+    "eslint": "^9.39.2"
   },
   "dependencies": {
     "node-pty": "^1.0.0",

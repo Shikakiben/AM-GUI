@@ -35,8 +35,8 @@ jobs:
           nvm install 22
           node -v
           npm -v
-          npm install --ignore-scripts
-          npx electron-rebuild --force
+          npm install
+          npx electron-rebuild
       - name: Upload prebuild
         uses: actions/upload-artifact@v5
         with:
@@ -71,7 +71,6 @@ jobs:
           node -v
           npm -v      
           npm install
-          npx patch-package      
       - name: Download prebuild glibc
         uses: actions/download-artifact@v5
         with:
