@@ -10,7 +10,6 @@ export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
 export DEPLOY_ELECTRON=0
 export DEPLOY_PULSE=0
-export DEPLOY_LOCALE=0
 export ANYLINUX_LIB=1
 
 # Deploy dependencies
@@ -21,6 +20,7 @@ quick-sharun  ./AppDir/bin/am-gui
 # Supprimer les bibliothèques inutiles/problématiques 
 rm -rf ./AppDir/shared/lib/gbm 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/gconv 2>/dev/null || true
+rm -rf ./AppDir/shared/lib/locale 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libopus* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libsndfile* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libvorbis* 2>/dev/null || true
@@ -37,7 +37,7 @@ rm -f ./AppDir/shared/lib/libudev* 2>/dev/null || true
 
 # Ajouter unset des variables problématiques dans .env pour sharun
 cat >> ./AppDir/.env << 'EOF'
-unset GIO_MODULE_DIR
+GIO_MODULE_DIR=/nonexistent
 unset GBM_BACKENDS_PATH
 unset LIBGL_DRIVERS_PATH
 EOF
