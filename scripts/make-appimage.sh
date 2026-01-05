@@ -12,15 +12,15 @@ export DEPLOY_ELECTRON=0
 export DEPLOY_OPENGL=0
 export DEPLOY_VULKAN=0
 export DEPLOY_P11KIT=0
+export DEPLOY_PULSE=0
+export DEPLOY_LOCALE=0
 
 # Deploy dependencies
 quick-sharun  ./AppDir/bin/am-gui
 
-# Supprimer les bibliothèques inutiles/problématiques
+# Supprimer les bibliothèques inutiles/problématiques (déployées par lib4bin via ldd)
 rm -rf ./AppDir/shared/lib/gbm 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/gconv 2>/dev/null || true
-rm -rf ./AppDir/shared/lib/locale 2>/dev/null || true
-rm -rf ./AppDir/shared/lib/pulseaudio 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libopus* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libsndfile* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libvorbis* 2>/dev/null || true
