@@ -31,6 +31,13 @@ rm -f ./AppDir/shared/lib/libmpg123* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libsystemd* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libogg* 2>/dev/null || true
 
+# Ajouter unset des variables problématiques dans .env pour sharun
+cat >> ./AppDir/.env << 'EOF'
+unset GIO_MODULE_DIR
+unset GBM_BACKENDS_PATH
+unset LIBGL_DRIVERS_PATH
+EOF
+
 # Additional changes can be done in between here
 
 # Turn AppDir into AppImage
