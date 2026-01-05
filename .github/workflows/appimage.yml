@@ -63,6 +63,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Preparing Container
         uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1
+      - name: Install Python for node-gyp
+        run: pacman -Sy --noconfirm python
       - name: Setup Node
         run: |
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
@@ -70,7 +72,7 @@ jobs:
           nvm install 22
           node -v
           npm -v      
-          npm install --ignore-scripts
+          npm install
       - name: Download prebuild glibc
         uses: actions/download-artifact@v5
         with:
