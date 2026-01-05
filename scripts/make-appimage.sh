@@ -21,6 +21,7 @@ export DST_DIR="./AppDir"
 export HARD_LINKS=1
 export GEN_LIB_PATH=1
 export WITH_HOOKS=1
+export STRACE_MODE=1
 export VERBOSE=1
 
 # Debug: vérifier que le binaire existe
