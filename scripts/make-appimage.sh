@@ -16,8 +16,18 @@ chmod +x /tmp/sharun-aio
 echo "Sharun téléchargé, exécution de lib4bin..."
 
 
-# Utiliser sharun l (lib4bin) pour compatibilité musl sans déploiement de bibliothèques
-/tmp/sharun-aio l --hard-links -d ./AppDir ./AppDir/bin/am-gui
+# Debug: vérifier que le binaire existe
+echo "=== DEBUG: Contenu de ./AppDir/bin/ ==="
+ls -la ./AppDir/bin/ | head -10
+echo "=== DEBUG: Type du binaire am-gui ==="
+file ./AppDir/bin/am-gui || echo "am-gui introuvable"
+
+# Utiliser sharun l (lib4bin) pour compatibilité musl
+echo "=== Exécution de sharun lib4bin ==="
+/tmp/sharun-aio l --hard-links -d ./AppDir ./AppDir/bin/am-gui 2>&1 || echo "sharun lib4bin a échoué avec code $?"
+
+echo "=== DEBUG: Contenu de ./AppDir après lib4bin ==="
+ls -la ./AppDir/ | head -10
 echo "Lib4bin terminé"
 
 # Additional changes can be done in between here
