@@ -16,17 +16,20 @@
 <br>
 
   
-* [Latest Stable Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  AppImage, Beta,it will be helpful to report issues. Alpine Linux needs more testing.
-<br>
-<br>
-  
+* [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  (AppImage — Beta)
 
+If you already have AM: use `am -i am-gui` or `appman -i am-gui` (depending on your configuration).
+
+If not, download the latest release and follow the installation steps.  
+To integrate AM-GUI into your system, reinstall it via the app (search "AM-GUI") and you may remove the downloaded release afterward.
+<br>
+<br>
+
+
+⚠️ **This project is under development — some features may be incomplete or may not work.**  
+Please report issues on GitHub: https://github.com/Shikakiben/AM-GUI/issues — your reports are very helpful.
 
 ---
-
-
-
-⚠️ **This project is under development and some features may not work or may be incomplete.**
 
   **ALL credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handle the GUI, learning how to properly yell at gpt-4.1, to make sure that this little f$@¤=# does not mess that much with the code.**
    
