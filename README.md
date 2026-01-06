@@ -16,19 +16,22 @@
 <br>
 
   
-* [Latest Stable Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  AppImage, Beta,it will be helpful to report issues. Alpine Linux needs more testing.
-<br>
-<br>
-  
+* [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  (AppImage — Beta)
 
+If you already have [AM](https://github.com/ivan-hc/AM): use `am -i am-gui` or `appman -i am-gui` (depending on your configuration).
+
+If not, download the latest release and follow the installation steps.  
+To integrate AM-GUI into your system, reinstall it via the app (search "AM-GUI") and you may remove the downloaded release afterward.
+<br>
+<br>
+
+
+⚠️ **This project is under development — some features may be incomplete or may not work.**  
+Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-GUI/issues) — your feedback is very helpful!
 
 ---
 
-
-
-⚠️ **This project is under development and some features may not work or may be incomplete.**
-
-  **ALL credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handle the GUI, learning how to properly yell at gpt-4.1, to make sure that this little f$@¤=# does not mess that much with the code.**
+  **All credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handle the GUI, learning how to properly yell at GPT-4.1 to make sure that little f$@¤=# doesn't mess too much with the code.**
    
 ---
 
@@ -39,9 +42,9 @@
 
   [Node.js](https://nodejs.org/) (>=20, 22 recommended)
 
-If you don't have it in your package manager, see: https://nodejs.org/fr/download
+If it's not available in your package manager, see: https://nodejs.org/en/download
 
-&nbsp;you may need to install the following build tools:
+You may also need to install the following build tools:
 
 *Debian/Ubuntu*:
    ```bash
@@ -59,6 +62,7 @@ If you don't have it in your package manager, see: https://nodejs.org/fr/downloa
 git clone https://github.com/Shikakiben/AM-GUI.git
 cd AM-GUI
 npm install
+npx electron-rebuild
 ```
 
 
