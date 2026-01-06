@@ -21,7 +21,7 @@
 If you already have [AM](https://github.com/ivan-hc/AM): use `am -i am-gui` or `appman -i am-gui` (depending on your configuration).
 
 If not, download the latest release and follow the installation steps.  
-To integrate AM-GUI into your system, reinstall it via the app (search "AM-GUI") and you may remove the downloaded release afterward.
+To integrate AM-GUI into your system, reinstall it via the app (search "am-gui") and you may remove the downloaded release afterward.
 <br>
 <br>
 
