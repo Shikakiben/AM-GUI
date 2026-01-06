@@ -33,12 +33,6 @@ rm -f ./AppDir/shared/lib/libmpg123* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libogg* 2>/dev/null || true
 rm -f ./AppDir/bin/LICENSES.chromium.html 2>/dev/null || true
 rm -f ./AppDir/bin/LICENSE.electron.txt 2>/dev/null || true
-rm -rf ./AppDir/share/licenses 2>/dev/null || true
-rm -rf ./AppDir/shared/share/licenses 2>/dev/null || true
-rm -rf ./AppDir/share/readline 2>/dev/null || true
-rm -rf ./AppDir/shared/share/readline 2>/dev/null || true
-rm -rf ./AppDir/share/tc 2>/dev/null || true
-rm -rf ./AppDir/shared/share/tc 2>/dev/null || true
 find ./AppDir/bin/locales -type f ! -name 'en-US.pak' -delete 2>/dev/null || true
 
 # Ajouter unset des variables problématiques dans .env pour sharun

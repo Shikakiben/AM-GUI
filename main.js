@@ -71,7 +71,7 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.commandLine.appendSwitch('disable-gpu-vsync');
   app.commandLine.appendSwitch('disable-frame-rate-limit');
 }
-}
+
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 
