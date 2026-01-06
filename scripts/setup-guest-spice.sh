@@ -1,1 +1,2 @@
-/tmp/.mount_AM-GUremp10012857443989859772/bin/am-gui: Relink `/usr/lib/libpixman-1.so.0' with `/tmp/.mount_AM-GUremp10012857443989859772/shared/lib/libm.so.6' for IFUNC symbol `ceil'
+[10616:0106/023359.247722:ERROR:viz_main_impl.cc(183)] Exiting GPU process due to errors during initialization
+[10682:0106/023359.395935:ERROR:viz_main_impl.cc(183)] Exiting GPU process due to errors during initialization
