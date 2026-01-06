@@ -41,10 +41,6 @@ rm -f ./AppDir/bin/LICENSES.chromium.html 2>/dev/null || true
 rm -f ./AppDir/bin/LICENSE.electron.txt 2>/dev/null || true
 find ./AppDir/bin/locales -type f ! -name 'en-US.pak' -delete 2>/dev/null || true
 
-# Supprimer seulement les libs optionnelles (ffmpeg et vulkan si non utilisés)
-rm -f ./AppDir/bin/libffmpeg.so ./AppDir/shared/lib/bin/libffmpeg.so 2>/dev/null || true
-rm -f ./AppDir/bin/libvulkan.so* ./AppDir/bin/libvk_swiftshader.so ./AppDir/bin/libGLESv2.so 2>/dev/null || true
-
 # Ajouter unset des variables problématiques dans .env pour sharun
 cat >> ./AppDir/.env << 'EOF'
 GIO_MODULE_DIR=/nonexistent
