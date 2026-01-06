@@ -67,6 +67,10 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.disableHardwareAcceleration();
 } else {
   console.log('[GPU DEBUG] NOT calling app.disableHardwareAcceleration(), shouldDisable:', shouldDisableGpu, 'function exists:', typeof app.disableHardwareAcceleration === 'function');
+  // Supprimer les erreurs VSync bénignes quand le GPU est activé
+  app.commandLine.appendSwitch('disable-gpu-vsync');
+  app.commandLine.appendSwitch('disable-frame-rate-limit');
+}
 }
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
