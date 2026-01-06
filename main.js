@@ -72,6 +72,9 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.commandLine.appendSwitch('disable-frame-rate-limit');
 }
 
+// Réduire le bruit des logs Chromium (niveau 3 = erreurs fatales seulement)
+app.commandLine.appendSwitch('enable-logging', 'stderr');
+app.commandLine.appendSwitch('log-level', '3');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 
