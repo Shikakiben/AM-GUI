@@ -41,12 +41,9 @@ rm -f ./AppDir/bin/LICENSES.chromium.html 2>/dev/null || true
 rm -f ./AppDir/bin/LICENSE.electron.txt 2>/dev/null || true
 find ./AppDir/bin/locales -type f ! -name 'en-US.pak' -delete 2>/dev/null || true
 
-# Supprimer les libs volumineuses non nécessaires pour réduire la taille
+# Supprimer seulement les libs optionnelles (ffmpeg et vulkan si non utilisés)
 rm -f ./AppDir/bin/libffmpeg.so ./AppDir/shared/lib/bin/libffmpeg.so 2>/dev/null || true
 rm -f ./AppDir/bin/libvulkan.so* ./AppDir/bin/libvk_swiftshader.so ./AppDir/bin/libGLESv2.so 2>/dev/null || true
-rm -f ./AppDir/shared/lib/libgtk-3.so* 2>/dev/null || true
-rm -rf ./AppDir/shared/lib/gtk-3.0 ./AppDir/shared/lib/gdk-pixbuf-* 2>/dev/null || true
-rm -f ./AppDir/shared/lib/libp11-kit.so* 2>/dev/null || true
 
 # Ajouter unset des variables problématiques dans .env pour sharun
 cat >> ./AppDir/.env << 'EOF'
