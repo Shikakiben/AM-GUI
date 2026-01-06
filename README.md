@@ -59,6 +59,7 @@ If you don't have it in your package manager, see: https://nodejs.org/fr/downloa
 git clone https://github.com/Shikakiben/AM-GUI.git
 cd AM-GUI
 npm install
+npx electron-rebuild
 ```
 
 
