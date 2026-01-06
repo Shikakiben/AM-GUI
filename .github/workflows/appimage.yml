@@ -16,39 +16,10 @@ on:
 
 
 jobs:
-  prebuild-pty:
-    name: prebuild pty.node
-    runs-on: ubuntu-latest
-    container: ubuntu:20.04
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install build tools
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update && apt-get install -y build-essential python3 gcc-10 g++-10 curl
-          update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
-          update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-      - name: Build prebuild artifacts (Ubuntu 20.04)
-        run: |
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-          . "$HOME/.nvm/nvm.sh"
-          nvm install 22
-          node -v
-          npm -v
-          npm install
-          npx electron-rebuild
-
-      - name: Upload prebuilt pty.node
-        uses: actions/upload-artifact@v5
-        with:
-          name: prebuild-pty
-          path: node_modules/node-pty/build/Release/pty.node
-          if-no-files-found: error
-
+  
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
-    needs: [prebuild-pty]
     strategy:
       matrix:
         include:
@@ -64,13 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Preparing Container
-        uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1
-      - name: Download prebuilt pty.node
-        uses: actions/download-artifact@v5
-        with:
-          name: prebuild-pty
-          path: prebuild-pty
-      
+        uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1      -       
       - name: Install Dependencies
         run: /bin/sh ./scripts/get-dependencies.sh
       - name: Make AppImage
