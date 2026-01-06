@@ -28,8 +28,8 @@ jobs:
           apt-get update && apt-get install -y build-essential python3 gcc-10 g++-10 curl
           update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100
           update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-      - name: build AM-GUI
-        run: |     
+      - name: Build linux-unpacked (Ubuntu 20.04)
+        run: |
           curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           . "$HOME/.nvm/nvm.sh"
           nvm install 22
@@ -37,11 +37,12 @@ jobs:
           npm -v
           npm install
           npx electron-rebuild
-      - name: Upload prebuild
+          npm run dist
+      - name: Upload linux-unpacked
         uses: actions/upload-artifact@v5
         with:
-          name: prebuild-glibc
-          path: node_modules/node-pty/build/Release/pty.node
+          name: linux-unpacked
+          path: dist/linux-unpacked
 
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
@@ -63,29 +64,11 @@ jobs:
       - uses: actions/checkout@v5
       - name: Preparing Container
         uses: pkgforge-dev/anylinux-setup-action@8872fabe63f9a00b35e25b2f46da62a05afc9a7d # v1
-      - name: Install Python for node-gyp
-        run: pacman -Sy --noconfirm python
-      - name: Setup Node
-        run: |
-          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-          . "$HOME/.nvm/nvm.sh"
-          nvm install 22
-          node -v
-          npm -v      
-          npm install
-      - name: Download prebuild glibc
+      - name: Download linux-unpacked
         uses: actions/download-artifact@v5
         with:
-          name: prebuild-glibc
-          path: temp-glibc
-      - name: Place prebuild
-        run: |
-          mkdir -p node_modules/node-pty/build/Release
-          cp temp-glibc/pty.node node_modules/node-pty/build/Release/pty.node
-      - name: Run dist
-        run: |
-          . "$HOME/.nvm/nvm.sh"
-          npm run dist
+          name: linux-unpacked
+          path: dist/linux-unpacked
       - name: Install Dependencies
         run: /bin/sh ./scripts/get-dependencies.sh
       - name: Make AppImage
