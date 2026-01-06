@@ -16,8 +16,8 @@ on:
 
 
 jobs:
-  build-prebuild-glibc:
-    name: Build prebuild glibc
+  build-linux-unpacked:
+    name: Build linux-unpacked 
     runs-on: ubuntu-latest
     container: ubuntu:20.04
     steps:
@@ -47,7 +47,7 @@ jobs:
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
-    needs: [build-prebuild-glibc]
+    needs: [build-linux-unpacked]
     strategy:
       matrix:
         include:
