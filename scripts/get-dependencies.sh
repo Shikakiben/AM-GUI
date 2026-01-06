@@ -23,8 +23,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           nvm install 22
           node -v
           npm -v
-          npm install          
-          cp -av ./prebuild-pty/*  node_modules/node-pty/build/Release
+          npm install         
           npm run dist
 
 mkdir -p ./AppDir/bin
