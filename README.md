@@ -27,6 +27,7 @@ To integrate AM-GUI into your system, reinstall it via the app (search "AM-GUI")
 
 
 ⚠️ **This project is under development — some features may be incomplete or may not work.**  
+
 Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-GUI/issues) — your feedback is very helpful!
 
 ---
