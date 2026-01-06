@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=AM-GUI
+Exec=am-gui %U
+Icon=AM-GUI.png
+StartupWMClass=AM-GUI
+Terminal=false
+Categories=Utility;

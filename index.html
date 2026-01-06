@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AM-GUI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%233584e4'/%3E%3C/svg%3E">
+  <meta name="color-scheme" content="light dark" />
+  <!-- Mise à jour CSP: autoriser les requêtes (fetch) vers portable-linux-apps.github.io pour récupérer les descriptions -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' appicon: https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://portable-linux-apps.github.io https://raw.githubusercontent.com;">
+</head>
+<body>
+  <!-- Lightbox ultra-légère pour images Markdown -->
+  <div id="mdLightbox" style="display:none;position:fixed;z-index:9999;inset:0;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;">
+    <img id="mdLightboxImg" src="" alt="Image grand format" style="max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 4px 30px rgba(0,0,0,.4);background:#111;" />
+  </div>
+  <div class="dropdown-overlay" id="categoriesDropdownOverlay" hidden></div>
+  <div class="dropdown-menu-categories" id="categoriesDropdownMenu" role="menu" aria-labelledby="categoriesDropdownBtn" hidden></div>
+  <header class="app-header" data-tauri-drag-region>
+    <div class="brand">
+  <img class="brand-icon" src="AM-GUI.png" alt="AM-GUI Icon" aria-hidden="true">
+  <div class="brand-title" data-i18n="main.title">AM-GUI</div>
+    </div>
+    <div class="header-center" role="search" aria-label="Recherche">
+      <div class="search">
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input id="searchInput" type="search" placeholder="Rechercher des applications…" data-i18n-placeholder="search.placeholder" autocomplete="off" />
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="global-actions">
+  <button id="settingsBtn" class="btn btn-outline btn-settings" title="Paramètres (Ctrl+,)" aria-haspopup="true" aria-expanded="false" aria-controls="settingsPanel"><span class="gear-icon" aria-hidden="true">⚙</span></button>
+  <div id="settingsPanel" class="settings-panel settings-panel-right" role="dialog" aria-modal="false" aria-label="Paramètres" hidden tabindex="-1">
+          <div class="settings-group">
+            <div class="settings-title" data-i18n="settings.theme">Thème</div>
+            <label><input type="radio" name="themePref" value="system" checked> <span data-i18n="settings.auto">Système</span></label>
+            <label><input type="radio" name="themePref" value="light"> <span data-i18n="settings.light">Clair</span></label>
+            <label><input type="radio" name="themePref" value="dark"> <span data-i18n="settings.dark">Sombre</span></label>
+          </div>
+          <div class="settings-group">
+            <div class="settings-title" data-i18n="settings.lang">Langue</div>
+            <label><input type="radio" name="langPref" value="auto" checked> <span data-i18n="settings.auto">Auto</span></label>
+            <label><input type="radio" name="langPref" value="fr"> <span data-i18n="settings.fr">Français</span></label>
+            <label><input type="radio" name="langPref" value="en"> <span data-i18n="settings.en">English</span></label>
+            <label><input type="radio" name="langPref" value="it"> <span data-i18n="settings.it">Italiano</span></label>
+          </div>
+          <div class="settings-group">
+            <div class="settings-title" data-i18n="settings.links">Liens</div>
+            <label style="font-size:13px;"><input type="checkbox" id="openExternalLinksCheckbox"> <span data-i18n="settings.openExternal">Ouvrir les liens dans le navigateur externe</span></label>
+          </div>
+          <div class="settings-group">
+            <div class="settings-title" data-i18n="settings.gpuTitle">Accélération GPU</div>
+            <label style="font-size:13px;"><input type="checkbox" id="disableGpuCheckbox"> <span data-i18n="settings.gpuLabel">Désactiver l'accélération GPU (pour corriger les bugs graphiques)</span></label>
+          </div>
+          <div class="settings-separator"></div>
+          <div class="settings-group">
+            <div class="settings-title" data-i18n="settings.coming">À venir</div>
+            <div style="font-size:12px; opacity:.7; line-height:1.4;" data-i18n="settings.future">De nouvelles options seront ajoutées ici prochainement.</div>
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:6px;">
+              <button id="purgeIconsBtn" class="mini-btn" type="button" style="align-self:flex-start; font-size:12px; padding:6px 10px; border:1px solid var(--border); background:var(--card); border-radius:8px; cursor:pointer;" data-i18n="settings.purge">Vider le cache des icônes</button>
+              <div id="purgeIconsResult" style="font-size:11px; opacity:.65;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="window-buttons" aria-label="Fenêtre">
+    <button class="win-btn" data-action="min" title="Réduire" data-i18n-title="window.min">–</button>
+    <button class="win-btn" data-action="max" title="Maximiser / Restaurer" data-i18n-title="window.max">⬜</button>
+    <button class="win-btn win-close" data-action="close" title="Fermer" data-i18n-title="window.close">×</button>
+      </div>
+    </div>
+  </header>
+  <div class="sub-bar" role="toolbar" aria-label="Navigation des onglets">
+    <div class="tabs-row">
+      <nav class="tabs" role="tablist" aria-label="Catégories">
+        <button class="tab active" role="tab" aria-selected="true" data-category="all" data-i18n="tabs.all">Applications</button>
+        <button class="tab" role="tab" aria-selected="false" data-category="installed"><span data-i18n="tabs.installed">Installées</span> <span id="installedCount" class="badge">0</span></button>
+        <button class="tab" role="tab" aria-selected="false" data-category="updates" data-i18n="tabs.updates">Mises à jour</button>
+        <button class="tab" role="tab" aria-selected="false" data-category="advanced" data-i18n="tabs.advanced">Mode avancé</button>
+      </nav>
+      <div class="view-mode-switch" role="group" aria-label="Mode d'affichage">
+        <button id="refreshBtn" class="btn btn-outline btn-refresh" title="Rafraîchir la liste" aria-label="Rafraîchir" data-i18n-title="refresh.title" data-i18n-aria-label="refresh.aria"><span class="icon" aria-hidden="true">↻</span></button>
+        <button id="modeMenuBtn" class="btn btn-outline" aria-haspopup="true" aria-expanded="false" aria-controls="modeMenu" title="Changer de mode d'affichage" data-i18n-title="modeMenu.title">▦</button>
+        <div id="modeMenu" class="mode-menu" role="menu" hidden>
+          <button class="mode-option" data-mode="grid" role="menuitem" aria-pressed="true" data-i18n="modeMenu.grid"><span class="mode-icon" aria-hidden="true">▦</span> Grille</button>
+          <button class="mode-option" data-mode="list" role="menuitem" aria-pressed="false" data-i18n="modeMenu.list"><span class="mode-icon" aria-hidden="true">≣</span> Liste</button>
+          <button class="mode-option" data-mode="icons" role="menuitem" aria-pressed="false" data-i18n="modeMenu.icons"><span class="mode-icon" aria-hidden="true">◻︎</span> Icônes</button>
+          <button class="mode-option" data-mode="cards" role="menuitem" aria-pressed="false" data-i18n="modeMenu.cards"><span class="mode-icon" aria-hidden="true">🂠</span> Cartes</button>
+        </div>
+      </div>
+    </div>
+    <div class="tabs-row-secondary">
+      <div class="dropdown-categories">
+  <button class="tab-secondary dropdown-toggle" id="categoriesDropdownBtn" aria-haspopup="true" aria-expanded="false"><span data-i18n="tabs.categories">Catégories</span> <span class="cat-arrow">▼</span></button>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-shell">
+    <main class="content" id="mainContent">
+      <!-- Updates panel moved to top to avoid big blank space when apps list hidden -->
+      <section id="updatesPanel" class="panel-lite updates-panel" hidden>
+    <h2 class="panel-heading-xl" data-i18n="updates.title">Mettre à jour AM et toutes les applications installées</h2>
+        <div class="updates-actions-row">
+          <button id="runUpdatesBtn" class="btn btn-primary updates-run" data-i18n="updates.run">Mettre à jour</button>
+          <button id="updatesToggleBtn" class="btn btn-outline updates-toggle-icon" type="button" aria-expanded="false" aria-controls="updatesTerminalWrap" title="Afficher/masquer le terminal" data-i18n-title="updates.toggleTerminal">
+            <span class="updates-log-caret" aria-hidden="true">▸</span>
+          </button>
+        </div>
+        <div id="updateSpinner" class="update-spinner" role="status" aria-live="polite" data-busy="false">
+          <div class="spinner-status-row">
+            
+            <div class="update-timer" style="display:none;"></div>
+            <div class="spinner-label" data-i18n="updates.ready">Aucune mise à jour en cours.</div>
+          </div>
+        </div>
+        <div id="updateResult" class="update-result" style="display:none;">
+          <div id="updateFinalMessage" class="update-final-message"></div>
+          <div id="updatedAppsIcons" class="icons-row updated-icons"></div>
+        </div>
+        <div id="updatesLogSection" class="updates-log-section" data-open="false">
+          <div id="updatesTerminalWrap" class="updates-terminal" hidden>
+            <div id="updatesTerminal" class="updates-terminal-body" role="log" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+      <section id="advancedPanel" class="panel-lite advanced-panel" hidden>
+  <h2 class="panel-heading-sm centered" data-i18n="advanced.title">Mode avancé</h2>
+    <p class="placeholder-strong"><span data-i18n="advanced.waiting">Fonctions avancées encore indisponibles dans l’UI — utilisez le terminal :</span></p>
+    <p class="note"><em><span data-i18n-html="advanced.note.appman">Les commandes <span class="note-cmd">am</span> ou <span class="note-cmd">appman</span> dépendent de votre installation ; si vous avez choisi l’installation rapide, utilisez <span class="note-cmd">appman</span>.</span></em></p>
+    <p class="placeholder-sub" data-i18n="advanced.basicIntro">Quelques commandes utiles :</p>
+
+    <ul class="commands condensed advanced-commands" aria-label="Commandes AM/AppMan">
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -h">am -h</button>
+        <button type="button" class="copy-cmd" data-copy="appman -h">appman -h</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.help">aide</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -l">am -l</button>
+        <button type="button" class="copy-cmd" data-copy="appman -l">appman -l</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.list">lister les apps disponibles</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -a &lt;PROGRAM&gt;">am -a &lt;PROGRAM&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -a &lt;PROGRAM&gt;">appman -a &lt;PROGRAM&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.about">informations sur l'app</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -i &lt;PROGRAM&gt;">am -i &lt;PROGRAM&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -i &lt;PROGRAM&gt;">appman -i &lt;PROGRAM&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.install">installer une app</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -q &lt;mot-clé&gt;">am -q &lt;mot-clé&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -q &lt;mot-clé&gt;">appman -q &lt;mot-clé&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.query">rechercher</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -u">am -u</button>
+        <button type="button" class="copy-cmd" data-copy="appman -u">appman -u</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.update">mettre à jour AM et toutes les apps</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -R &lt;PROGRAM&gt;">am -R &lt;PROGRAM&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -R &lt;PROGRAM&gt;">appman -R &lt;PROGRAM&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.remove">supprimer une app</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am -e &lt;git-url&gt; &lt;appname&gt;">am -e &lt;git-url&gt; &lt;appname&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -e &lt;git-url&gt; &lt;appname&gt;">appman -e &lt;git-url&gt; &lt;appname&gt;</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.extra">installer une app personnalisée depuis GitHub</span>
+      </li>
+      <li class="cmd-row">
+        <button type="button" class="copy-cmd" data-copy="am translate">am translate</button>
+        <span class="cmd-desc" data-i18n="advanced.cmd.translate">gérer traductions</span>
+      </li>
+    </ul>
+
+    <p class="docs-link"><a href="https://github.com/ivan-hc/AM" target="_blank" rel="noopener"><span data-i18n="advanced.docs">Documentation complète & guides →</span> AM (GitHub)</a></p>
+      </section>
+
+  
+  <div id="featuredBanner" class="featured-banner" aria-hidden="false"></div>
+  <div id="apps" class="app-list" aria-live="polite" aria-busy="true"></div>
+      <section id="appDetails" class="app-details" hidden>
+    <button id="backToListBtn" class="btn btn-outline back-btn" data-i18n="details.back">← Retour</button>
+        <div class="details-header">
+          <div class="details-icon-wrapper" style="position:relative;display:inline-block;">
+            <img id="detailsIcon" alt="Icône" />
+          </div>
+          <div class="details-head-text">
+            <h2 id="detailsName"></h2>
+          </div>
+        </div>
+        <div class="details-actions">
+          <button id="detailsInstallBtn" class="btn btn-primary" data-i18n="details.install">Installer</button>
+          <button id="detailsForceCancelBtn" class="btn btn-outline danger" title="Forcer l'annulation" aria-label="Forcer l'annulation" hidden style="padding:6px 10px;">✕</button>
+          <button id="detailsUninstallBtn" class="btn btn-outline" data-i18n="details.uninstall">Désinstaller</button>
+          <button id="sandboxOpenBtn" class="btn btn-soft-neutral sandbox-toggle-btn" type="button">
+            <span data-i18n="sandbox.title">Sandbox</span>
+            <span id="sandboxButtonStatus" class="sandbox-pill" data-status="unknown">—</span>
+          </button>
+        </div>
+        <div id="installStream" class="install-stream" hidden>
+          <div class="install-stream-head">
+            <div class="install-stream-meta">
+              <span id="installStreamElapsed">0s</span>
+            </div>
+            <div class="install-stream-progressbar-wrapper" style="width:100%;margin-top:8px;">
+              <span id="installStreamProgressPercent" style="margin-right:10px;font-weight:bold;font-size:13px;"></span>
+              <progress id="installStreamProgressBar" value="0" max="100" style="vertical-align:middle;width:160px;height:14px;"></progress>
+              <span id="installStreamEta" style="margin-left:12px;font-size:13px;color:var(--muted);"></span>
+            </div>
+          </div>
+        </div>
+        <div class="details-long-wrapper">
+          <h3 class="details-section-title" data-i18n="details.desc">Description</h3>
+          <p id="detailsLong" class="details-long"></p>
+        </div>
+        <!-- Galerie supprimée : toutes les images sont dans la description -->
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Modale confirmation de fermeture avec installation en cours -->
+  <div id="closeConfirmModal" class="modal" role="dialog" aria-modal="true" aria-label="Installation en cours" hidden>
+    <div class="modal-dialog confirm-dialog" role="document">
+      <div class="confirm-body">
+        <p class="confirm-message" data-i18n="closeConfirm.message">Une installation est en cours. Si vous quittez maintenant, l'installation sera annulée.</p>
+        <div class="confirm-actions">
+          <button id="closeConfirmStay" class="btn btn-soft-neutral" type="button" data-i18n="closeConfirm.stay">Annuler et rester</button>
+          <button id="closeConfirmQuit" class="btn btn-danger" type="button" data-i18n="closeConfirm.quit">Continuer et quitter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox supprimé : plus de galerie séparée -->
+  <!-- Modale confirmation compacte (sans titre ni croix) -->
+  <div id="actionConfirmModal" class="modal" role="dialog" aria-modal="true" aria-label="Confirmation" hidden>
+    <div class="modal-dialog confirm-dialog" role="document">
+      <div class="confirm-body">
+        <p id="actionConfirmMessage" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button id="actionConfirmCancel" class="btn btn-soft-neutral" type="button" data-i18n="confirm.cancel">Annuler</button>
+          <button id="actionConfirmOk" class="btn" type="button" data-i18n="confirm.ok">Valider</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sandboxModal" class="modal sandbox-modal" role="dialog" aria-modal="true" aria-labelledby="sandboxModalTitle" hidden>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="sandboxModalTitle" class="modal-title" data-i18n="sandbox.title">Sandbox</h3>
+        <button id="sandboxCloseBtn" class="modal-close" type="button" aria-label="Fermer">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="sandboxCard" class="details-card sandbox-card" hidden>
+          <div class="sandbox-card-head">
+            <div>
+              <div class="sandbox-card-title">
+                <h3 data-i18n="sandbox.title">Sandbox</h3>
+                <span id="sandboxStatusBadge" class="sandbox-status" data-status="unknown">—</span>
+              </div>
+              <p class="sandbox-subtitle" data-i18n="sandbox.subtitle">Isolez l'application avec SAS/Aisap et choisissez quels dossiers restent accessibles.</p>
+            </div>
+            <button id="sandboxRefreshBtn" class="btn btn-text" type="button" data-i18n="sandbox.actions.refresh">Actualiser</button>
+          </div>
+          <div id="sandboxDepsAlert" class="sandbox-alert" role="alert" hidden>
+            <div>
+              <strong data-i18n="sandbox.dependencies.missing">Dépendance manquante</strong>
+              <p data-i18n="sandbox.dependencies.description">Installez SAS (ou Aisap) pour activer la sandbox.</p>
+            </div>
+            <button id="sandboxInstallDepsBtn" class="mini-btn" type="button" data-i18n="sandbox.dependencies.install">Installer SAS</button>
+          </div>
+          <div id="sandboxUnavailable" class="sandbox-note" hidden>
+            <span class="sandbox-note-strong" data-i18n="sandbox.notInstalled">Installez l'application avant de configurer la sandbox.</span>
+            <button id="sandboxInstallAppBtn" class="btn btn-primary" type="button" data-i18n="details.install">Installer</button>
+          </div>
+          <form id="sandboxForm" class="sandbox-form" autocomplete="off">
+            <fieldset>
+              <legend data-i18n="sandbox.shareLegend">Dossiers autorisés</legend>
+              <div class="sandbox-grid">
+                <label><input type="checkbox" value="desktop"> <span data-i18n="sandbox.dir.desktop">Bureau</span></label>
+                <label><input type="checkbox" value="documents"> <span data-i18n="sandbox.dir.documents">Documents</span></label>
+                <label><input type="checkbox" value="downloads"> <span data-i18n="sandbox.dir.downloads">Téléchargements</span></label>
+                <label><input type="checkbox" value="games"> <span data-i18n="sandbox.dir.games">Jeux</span></label>
+                <label><input type="checkbox" value="music"> <span data-i18n="sandbox.dir.music">Musique</span></label>
+                <label><input type="checkbox" value="pictures"> <span data-i18n="sandbox.dir.pictures">Images</span></label>
+                <label><input type="checkbox" value="videos"> <span data-i18n="sandbox.dir.videos">Vidéos</span></label>
+              </div>
+              <p class="sandbox-hint" data-i18n="sandbox.shareHint">Seuls les dossiers cochés seront visibles par l'application.</p>
+            </fieldset>
+            <label class="sandbox-custom">
+              <span data-i18n="sandbox.customLabel">Dossier supplémentaire</span>
+              <input id="sandboxCustomPath" type="text" placeholder="~/Documents/Projets" data-i18n-placeholder="sandbox.customPlaceholder" />
+              <small data-i18n="sandbox.customHint">Utilisez un chemin absolu. Évitez / ou l'intégralité de votre $HOME.</small>
+            </label>
+          </form>
+          <div id="sandboxSummary" class="sandbox-summary" hidden>
+            <div class="sandbox-summary-head">
+              <h4 data-i18n="sandbox.summary.title">Autorisations enregistrées</h4>
+            </div>
+            <p class="sandbox-summary-hint" data-i18n="sandbox.summary.hint">Pour modifier les accès, supprimez la sandbox puis relancez la configuration.</p>
+            <ul id="sandboxSummaryList" class="sandbox-summary-list" hidden></ul>
+            <p id="sandboxSummaryEmpty" class="sandbox-summary-empty" data-i18n="sandbox.summary.none" hidden>Aucune autorisation enregistrée pour l'instant.</p>
+          </div>
+          <div class="sandbox-actions">
+            <button id="sandboxConfigureBtn" class="btn btn-primary" type="button" data-i18n="sandbox.actions.enable">Activer la sandbox</button>
+            <button id="sandboxDisableBtn" class="btn btn-outline" type="button" data-i18n="sandbox.actions.disable" disabled>Désactiver</button>
+          </div>
+          <div id="sandboxLogSection" class="sandbox-log-section" data-open="false">
+            <button id="sandboxLogToggle" class="sandbox-log-toggle" type="button" aria-expanded="false" aria-controls="sandboxLog">
+              <span data-i18n="sandbox.logTitle">Terminal (logs)</span>
+              <span class="sandbox-log-caret" aria-hidden="true">▸</span>
+            </button>
+            <pre id="sandboxLog" class="sandbox-log" aria-live="polite" hidden></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="nonAppimageModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="nonAppimageTitle" hidden>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="nonAppimageTitle" class="modal-title" data-i18n="sandbox.unsupported.title">Sandbox indisponible</h3>
+        <button id="nonAppimageClose" class="modal-close" type="button" aria-label="Fermer">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="nonAppimageMessage" data-i18n="sandbox.unsupported.desc">Cette application n'est pas un AppImage et ne peut pas être sandboxée.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="nonAppimageDismiss" class="btn btn-primary" type="button" data-i18n="sandbox.unsupported.ok">Compris</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="src/renderer/config/constants.js"></script>
+  <script src="src/renderer/utils.js"></script>
+  <script src="src/renderer/services/preferences.js"></script>
+  <script src="src/renderer/ui/layout.js"></script>
+  <script src="src/renderer/ui/passwordPrompt.js"></script>
+  <script src="src/renderer/ui/settingsPanel.js"></script>
+  <script src="src/renderer/ui/toast.js"></script>
+  <script src="src/renderer/ui/virtualList.js"></script>
+  <script src="src/renderer/app/init.js"></script>
+  <script src="src/renderer/i18n/translations.js"></script>
+  <script src="src/renderer/features/categories/cache.js"></script>
+  <script src="src/renderer/features/categories/dropdown.js"></script>
+  <script src="src/renderer/features/categories/index.js"></script>
+  <script src="src/renderer/features/search/index.js"></script>
+  <script src="src/renderer/features/details/index.js"></script>  <script src="src/renderer/features/featured/index.js"></script>  <script src="src/renderer/ui/syncButton.js"></script>
+  <script src="src/renderer/renderer.js"></script>
+  <!-- Modale choix installation multiple -->
+  <div id="multiChoiceModal" class="modal" role="dialog" aria-modal="true" aria-label="Choix d'installation" hidden>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Choisissez une variante à installer</h3>
+        <button id="multiChoiceClose" class="modal-close" aria-label="Fermer">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="multiChoiceList" class="multi-choice-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="multiChoiceCancel" class="btn btn-soft-neutral" type="button">Annuler</button>
+      </div>
+    </div>
+  </div>
+</body>
