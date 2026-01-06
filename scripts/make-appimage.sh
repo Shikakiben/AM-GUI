@@ -14,6 +14,11 @@ export ANYLINUX_LIB=1
 export DEPLOY_GTK=0
 export DEPLOY_GDK=0
 export DEPLOY_P11KIT=0
+# Explicitly disable extra deployments that bloat AppImage
+export DEPLOY_OPENGL=0
+export DEPLOY_VULKAN=0
+export DEPLOY_WEBKIT2GTK=0
+export DEPLOY_GSTREAMER=0
 
 # Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
 quick-sharun \
