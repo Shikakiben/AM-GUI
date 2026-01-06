@@ -67,7 +67,14 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.disableHardwareAcceleration();
 } else {
   console.log('[GPU DEBUG] NOT calling app.disableHardwareAcceleration(), shouldDisable:', shouldDisableGpu, 'function exists:', typeof app.disableHardwareAcceleration === 'function');
+  // Supprimer les erreurs VSync bénignes quand le GPU est activé
+  app.commandLine.appendSwitch('disable-gpu-vsync');
+  app.commandLine.appendSwitch('disable-frame-rate-limit');
 }
+
+// Réduire le bruit des logs Chromium (niveau 3 = erreurs fatales seulement)
+app.commandLine.appendSwitch('enable-logging', 'stderr');
+app.commandLine.appendSwitch('log-level', '3');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 
@@ -229,7 +236,7 @@ function buildSandboxAnswerScript(shouldConfigure, dirSelections, customPath) {
 
 function runSandboxTask(sender, { pm, action, args, stdinScript, appName }) {
   return new Promise((resolve) => {
-    const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+    const pty = require('node-pty');
     const id = `${action}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const env = Object.assign({}, process.env, {
       TERM: 'xterm',
@@ -349,7 +356,7 @@ function createWindow () {
     return 'generic';
   }
   const deTag = detectDesktopEnv();
-  const sysLocale = (app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : (process.env.LANG || 'en');
+  const sysLocale = process.env.LC_ALL || process.env.LC_MESSAGES || process.env.LANG || ((app.getLocale && typeof app.getLocale === 'function') ? app.getLocale() : 'en');
   // Icône PNG
   const iconPath = path.join(__dirname, 'AM-GUI.png');
   const win = new BrowserWindow({
@@ -489,7 +496,7 @@ ipcMain.handle('am-action', async (event, action, software) => {
 
   return new Promise((resolve) => {
     try {
-      const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+      const pty = require('node-pty');
       const env = Object.assign({}, process.env, {
         TERM: 'xterm',
         COLS: '80',
@@ -569,7 +576,7 @@ ipcMain.handle('install-start', async (event, name) => {
   const startedAt = Date.now();
   let stdoutRemainder = '';
   let stderrRemainder = '';
-  const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+  const pty = require('node-pty');
   const env = Object.assign({}, process.env, {
     TERM: 'xterm',
     COLS: '80',
@@ -721,7 +728,7 @@ ipcMain.handle('updates-start', async (event) => {
   const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
   let child;
   let output = '';
-  const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+  const pty = require('node-pty');
   const env = Object.assign({}, process.env, {
     TERM: 'xterm',
     COLS: '80',

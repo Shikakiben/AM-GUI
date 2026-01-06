@@ -1667,15 +1667,25 @@ const translations = window.translations || {};
 // --- Gestion multilingue ---
 function getSystemLang() {
   try {
-    // Prefer value fournie par le main / preload si disponible
+    const available = (window.translations && Object.keys(window.translations).map(k => String(k).toLowerCase())) || ['en'];
     const sys = (window.electronAPI && typeof window.electronAPI.systemLocale === 'function') ? window.electronAPI.systemLocale() : null;
-    const navLang = sys || navigator.language || navigator.userLanguage || 'fr';
-    const code = String(navLang).toLowerCase().split(/[-_.]/)[0];
-    if (code === 'fr' || code.startsWith('fr')) return 'fr';
-    if (code === 'it' || code.startsWith('it')) return 'it';
-    if (code === 'en' || code.startsWith('en')) return 'en';
-    // default fallback
-    return 'en';
+    const envLang = (window.electronAPI && typeof window.electronAPI.envLang === 'function') ? window.electronAPI.envLang() : null;
+    const navList = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || navigator.userLanguage || null];
+    const intl = (Intl && Intl.DateTimeFormat) ? Intl.DateTimeFormat().resolvedOptions().locale : null;
+
+    const candidates = [sys, envLang, ...(navList || []), intl].filter(Boolean).map(s => String(s).toLowerCase());
+
+    for (const cand of candidates) {
+      // exact match (fr-ca) or normalized
+      if (available.includes(cand)) return cand.split(/[-_.]/)[0];
+      // try base code (fr for fr-CA)
+      const base = cand.split(/[-_.]/)[0];
+      if (available.includes(base)) return base;
+    }
+
+    // last resort: pick first available 'preferred' (en if present)
+    if (available.includes('en')) return 'en';
+    return available[0] || 'en';
   } catch(_) { return 'en'; }
 }
 
