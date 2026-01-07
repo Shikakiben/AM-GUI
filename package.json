@@ -39,6 +39,9 @@
       "**/*.node",
       "node_modules/**/build/Release/**"
     ],
+    "extraResources": [
+      { "from": "src/assets/tray", "to": "assets/tray", "filter": ["**/*"] }
+    ],
     "directories": {
       "output": "dist"
     },

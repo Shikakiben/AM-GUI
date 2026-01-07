@@ -1,8 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=AM-GUI
+GenericName=Graphical frontend for AM
+Comment=AM-GUI lets you manage AppImages and other portable formats using AM as engine.
 Exec=am-gui %U
+TryExec=am-gui
 Icon=AM-GUI.png
-StartupWMClass=AM-GUI
 Terminal=false
-Categories=Utility;
+StartupWMClass=AM-GUI
+Categories=Utility;System;PackageManager;
+Keywords=am;appmanager;appimage;software;store;repository;package;manager;install;uninstall;update;apps;applications;games;electron;
