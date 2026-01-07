@@ -21,6 +21,8 @@ quick-sharun \
 # Additional changes can be done in between here
 
 # Supprimer les bibliothèques inutiles (audio, locales, etc.)
+# Supprimer uniquement le contenu des prebuilds dans le chemin exact (bin/resources)
+rm -rf ./AppDir/bin/resources/app.asar.unpacked/node_modules/node-pty/prebuilds/* 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/gbm 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/gconv 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/locale 2>/dev/null || true
@@ -41,8 +43,3 @@ GIO_MODULE_DIR=/nonexistent
 unset GBM_BACKENDS_PATH
 unset LIBGL_DRIVERS_PATH
 unset __EGL_VENDOR_LIBRARY_FILENAMES
-EOF
-
-
-# Turn AppDir into AppImage
-quick-sharun --make-appimage
