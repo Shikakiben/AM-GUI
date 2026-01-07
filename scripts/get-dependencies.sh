@@ -30,6 +30,4 @@ mkdir -p ./AppDir/bin
 cp -rv dist/linux-unpacked/*    ./AppDir/bin
 cp -v  AM-GUI.png               ./AppDir/.DirIcon
 cp -v  AM-GUI.desktop           ./AppDir
-# Copier les icônes de tray (non-fatal si absent)
-mkdir -p ./AppDir/bin/assets || true
-cp -rv src/assets/tray ./AppDir/bin/assets/ || true
+
