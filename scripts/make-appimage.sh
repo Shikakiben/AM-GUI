@@ -32,7 +32,6 @@ rm -f ./AppDir/shared/lib/libFLAC* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libmp3lame* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libmpg123* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libogg* 2>/dev/null || true
-#rm -f ./AppDir/bin/LICENSES.chromium.html 2>/dev/null || true
 find ./AppDir/bin/locales -type f ! -name 'en-US.pak' -delete 2>/dev/null || true
 
 # Ajouter unset des variables problématiques dans .env pour sharun
