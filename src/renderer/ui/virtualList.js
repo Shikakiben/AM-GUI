@@ -130,21 +130,19 @@
       let shortDesc = desc || (installed ? 'Déjà présente localement.' : 'Disponible pour installation.');
       if (shortDesc.length > 110) shortDesc = shortDesc.slice(0,107).trim() + '…';
       let actionsHTML = '';
-      if (state.viewMode === 'list') {
+      if (state.viewMode === 'list') {        
         if (!installed) {
-          let btnLabel = 'Installer';
-          let actionAttr = 'install';
-          let disabledAttr = '';
-          if (session.id && !session.done && session.name === name) {
-            btnLabel = 'Installation… ✕';
-            actionAttr = 'cancel-install';
+          const isInstalling = session.id && !session.done && session.name === name;
+          const pos = getQueuePosition(name);
+          if (isInstalling) {
+            actionsHTML = `<div class="actions"><button class="inline-action install" data-action="cancel-install" data-app="${name}">Installation… ✕</button></div>`;
+          } else if (pos !== -1) {
+            actionsHTML = `<div class="actions"><button class="inline-action queue-remove" data-action="remove-queue" data-app="${name}">En file (#${pos}) ✕</button></div>`;
           } else {
-            const pos = getQueuePosition(name);
-            if (pos !== -1) { btnLabel = 'En file (#'+pos+') ✕'; actionAttr='remove-queue'; }
+            actionsHTML = ''; // hide primary Installer button in list view
           }
-          actionsHTML = `<div class="actions"><button class="inline-action install" data-action="${actionAttr}" data-app="${name}"${disabledAttr}>${btnLabel}</button></div>`;
         } else {
-          actionsHTML = `<div class="actions"><button class="inline-action uninstall" data-action="uninstall" data-app="${name}">${t('details.uninstall')}</button></div>`;
+          actionsHTML = ''; // hide Uninstall in list view as well
         }
       }
 

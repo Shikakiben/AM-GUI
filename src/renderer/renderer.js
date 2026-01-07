@@ -1349,29 +1349,32 @@ function refreshDetailsInstallButtonForQueue(){
 
 // Synchroniser les boutons de la liste
 function refreshListInstallButtons(){
-  const buttons = document.querySelectorAll('.inline-action.install');
+  // Cible tous les boutons inline dans la liste pour gérer les états (cancel / queued)
+  const buttons = document.querySelectorAll('.app-tile .actions .inline-action');
   buttons.forEach(btn => {
     const name = btn.getAttribute('data-app');
     if (!name) return;
-    // Si appli déjà installée, ce bouton devrait avoir disparu après re-render.
+    // Si installation active pour cette app -> bouton d'annulation
     if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name){
       btn.textContent = t('install.status') + ' ✕';
       btn.disabled = false;
       btn.setAttribute('data-action','cancel-install');
       btn.setAttribute('aria-label', t('install.cancel') || 'Annuler installation en cours ('+name+')');
+      btn.style.display = '';
       return;
     }
+    // Si en file -> bouton retirer de la file
     const pos = getQueuePosition(name);
     if (pos !== -1){
       btn.textContent = t('install.queued') ? t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕');
       btn.disabled = false;
       btn.setAttribute('data-action','remove-queue');
       btn.setAttribute('aria-label', t('install.removeQueue') || ('Retirer de la file (' + name + ')'));
+      btn.style.display = '';
       return;
     }
-    btn.textContent = t('details.install');
-    btn.disabled = false;
-    btn.setAttribute('data-action','install');
+    // Pas d'état spécial -> masquer le bouton en mode liste pour éviter actions directes
+    btn.style.display = 'none';
   });
 }
 

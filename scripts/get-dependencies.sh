@@ -24,9 +24,12 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           node -v
           npm -v
           npm install       
+          # Prune prebuilds from node-pty to avoid including Windows prebuilds in the AppImage
+          ./scripts/prune-prebuilds.sh || true
           npm run dist
 
 mkdir -p ./AppDir/bin
 cp -rv dist/linux-unpacked/*    ./AppDir/bin
 cp -v  AM-GUI.png               ./AppDir/.DirIcon
 cp -v  AM-GUI.desktop           ./AppDir
+

@@ -18,19 +18,26 @@
   
 * [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  (AppImage — Beta)
 
+**This AppImage bundles everything and should work on any linux distro, even on musl based ones.**
+
+Thanks to [Samueru-sama](https://github.com/Samueru-sama) and [fiftydinar](https://github.com/fiftydinar) for making AppImage builds quicker and easier with this [TEMPLATE](https://github.com/pkgforge-dev/TEMPLATE-AppImage) using the [Anylinux-AppImages](https://github.com/pkgforge-dev/Anylinux-AppImages) tools.
+
+---
+
 If you already have [AM](https://github.com/ivan-hc/AM): use `am -i am-gui` or `appman -i am-gui` (depending on your configuration).
 
-If not, download the latest release and follow the installation steps.  
+If not, download the [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest) and follow the installation steps.  
 To integrate AM-GUI into your system, reinstall it via the app (search "am-gui") and you may remove the downloaded release afterward.
 <br>
 <br>
 
+---
 
 ⚠️ **This project is under development — some features may be incomplete or may not work.**  
 
 Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-GUI/issues) — your feedback is very helpful!
+AppImage made using [sharun](https://github.com/VHSgunzo/sharun), which makes it extremely easy to turn any binary into a portable package without using containers or similar tricks.
 
----
 
   **All credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handle the GUI, learning how to properly yell at GPT-4.1 to make sure that little f$@¤=# doesn't mess too much with the code.**
    
@@ -79,9 +86,9 @@ npm start
 
 ## Acknowledgements
 
-Thanks to [Ivan](https://github.com/ivan-hc) and the [pkgforge community](https://github.com/pkgforge-dev) for their outstanding work building, managing and distributing AppImages on Linux.
+Thanks to [Ivan](https://github.com/ivan-hc) and the [pkgforge community](https://github.com/pkgforge-dev) for their outstanding work building, managing and distributing AppImages and other portable formats on Linux.
 
----
+
 ---
 
 ## License

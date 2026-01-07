@@ -8,6 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const { exec, spawn } = require('child_process');
 const { registerCategoryHandlers } = require('./src/main/categories');
+const { initTray, destroyTray } = require('./src/main/tray');
 const { detectPackageManager, invalidatePackageManagerCache } = require('./src/main/packageManager');
 const { createIconCacheManager } = require('./src/main/iconCache');
 const { installAppManAuto } = require('./src/main/appManAuto');
@@ -441,8 +442,11 @@ function createWindow () {
 
 app.whenReady().then(() => {
   try { iconCacheManager.registerProtocol(protocol); } catch(e) { console.warn('Protocole appicon échec:', e); }
-  createWindow();
+  const win = createWindow();
+  try { initTray(win); } catch(e) { console.warn('initTray échec:', e); }
 });
+
+app.on('before-quit', () => { try { destroyTray(); } catch(_) {} });
 
 // IPC: purge complète du cache d'icônes
 ipcMain.handle('purge-icons-cache', async () => iconCacheManager.purgeCache());

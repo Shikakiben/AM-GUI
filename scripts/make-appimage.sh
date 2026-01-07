@@ -21,6 +21,7 @@ quick-sharun \
 # Additional changes can be done in between here
 
 # Supprimer les bibliothèques inutiles (audio, locales, etc.)
+rm -rf ./AppDir/bin/resources/app.asar.unpacked/node_modules/node-pty/prebuilds/* 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/gbm 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/gconv 2>/dev/null || true
 rm -rf ./AppDir/shared/lib/locale 2>/dev/null || true
@@ -31,8 +32,6 @@ rm -f ./AppDir/shared/lib/libFLAC* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libmp3lame* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libmpg123* 2>/dev/null || true
 rm -f ./AppDir/shared/lib/libogg* 2>/dev/null || true
-rm -f ./AppDir/bin/LICENSES.chromium.html 2>/dev/null || true
-rm -f ./AppDir/bin/LICENSE.electron.txt 2>/dev/null || true
 find ./AppDir/bin/locales -type f ! -name 'en-US.pak' -delete 2>/dev/null || true
 
 # Ajouter unset des variables problématiques dans .env pour sharun
