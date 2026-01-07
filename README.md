@@ -36,8 +36,6 @@ To integrate AM-GUI into your system, reinstall it via the app (search "am-gui")
 ⚠️ **This project is under development — some features may be incomplete or may not work.**  
 
 Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-GUI/issues) — your feedback is very helpful!
-AppImage made using [sharun](https://github.com/VHSgunzo/sharun), which makes it extremely easy to turn any binary into a portable package without using containers or similar tricks.
-
 
   **All credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handle the GUI, learning how to properly yell at GPT-4.1 to make sure that little f$@¤=# doesn't mess too much with the code.**
    
