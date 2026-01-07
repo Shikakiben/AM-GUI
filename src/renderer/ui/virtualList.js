@@ -130,9 +130,7 @@
       let shortDesc = desc || (installed ? 'Déjà présente localement.' : 'Disponible pour installation.');
       if (shortDesc.length > 110) shortDesc = shortDesc.slice(0,107).trim() + '…';
       let actionsHTML = '';
-      if (state.viewMode === 'list') {
-        // Remove direct install/uninstall actions in list mode to avoid accidental installs.
-        // But keep install-state controls (cancel-install / remove-queue) so users can cancel or remove queued items.
+      if (state.viewMode === 'list') {        
         if (!installed) {
           const isInstalling = session.id && !session.done && session.name === name;
           const pos = getQueuePosition(name);
