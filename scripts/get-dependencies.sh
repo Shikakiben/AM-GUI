@@ -27,7 +27,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           npm run dist
 
 mkdir -p ./AppDir/bin
-#cp -rv dist/linux-unpacked/*    ./AppDir/bin
+cp -rv dist/linux-unpacked/*    ./AppDir/bin
 cp -v  AM-GUI.png               ./AppDir/.DirIcon
 cp -v  AM-GUI.desktop           ./AppDir
 
