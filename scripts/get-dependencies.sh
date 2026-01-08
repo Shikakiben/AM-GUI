@@ -11,7 +11,7 @@ pacman -Syu --noconfirm python nss
 
 echo "Installing debloated packages..."
 echo "---------------------------------------------------------------"
-# get-debloated-pkgs --add-common --prefer-nano
+get-debloated-pkgs --add-common --prefer-nano
 
 # Comment this out if you need an AUR package
 #make-aur-package PACKAGENAME
@@ -27,7 +27,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           npm run dist
 
 mkdir -p ./AppDir/bin
-cp -rv dist/linux-unpacked/*    ./AppDir/bin
+#cp -rv dist/linux-unpacked/*    ./AppDir/bin
 cp -v  AM-GUI.png               ./AppDir/.DirIcon
 cp -v  AM-GUI.desktop           ./AppDir
 
