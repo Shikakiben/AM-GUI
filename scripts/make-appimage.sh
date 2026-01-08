@@ -8,7 +8,7 @@ export ARCH VERSION
 export OUTPATH=./dist
 export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
-#export DEPLOY_ELECTRON=0
+export DEPLOY_ELECTRON=0
 export DEPLOY_PULSE=0
 export ANYLINUX_LIB=1
 
@@ -16,7 +16,8 @@ export ANYLINUX_LIB=1
 # Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
 quick-sharun \
             ./AppDir/bin/am-gui\
-          #   /usr/lib/libpixman-1.so*
+             /usr/lib/libpixman-1.so*\
+             /usr/lib/libnss3.so*
 
 # Additional changes can be done in between here
 
@@ -42,19 +43,6 @@ unset LIBGL_DRIVERS_PATH
 unset __EGL_VENDOR_LIBRARY_FILENAMES
 EOF
 
-
-# Bundle NSS/NSPR (libnss3 / libnspr4) for compatibility with minimal distros (Alpine)
-# Copy the libraries from the build host into AppDir/shared/lib if available.
-mkdir -p ./AppDir/shared/lib
-found=0
-for f in $(find /usr/lib /usr/lib64 /lib /lib64 -maxdepth 2 -type f \( -name 'libnss3.so*' -o -name 'libnspr4.so*' \) 2>/dev/null); do
-  echo "Bundling $f"
-  cp -P "$f" ./AppDir/shared/lib/ || true
-  found=1
-done
-if [ "$found" -eq 0 ]; then
-  echo "Warning: libnss3/libnspr not found on build host. Alpine users may need to install 'nss' and 'nspr' inside the container, or add the libs to the AppImage manually."
-fi
 
 # Turn AppDir into AppImage
 quick-sharun --make-appimage
