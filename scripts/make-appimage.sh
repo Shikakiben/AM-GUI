@@ -11,18 +11,18 @@ export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}
 export DEPLOY_ELECTRON=0
 export DEPLOY_PULSE=0
 export ANYLINUX_LIB=1
-export DEPLOY_P11KIT=1
-export DEPLOY_GTK=1
+
 
 # Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
 quick-sharun \
              ./AppDir/bin/am-gui\
              /usr/lib/libpixman-1.so*\
-             /usr/lib/libnss3.so*\
              /usr/lib/libGL.so.1*\
              /usr/lib/libatk-bridge-2.0.so.0*\
-             /usr/lib/libatk-1.0.so.0*
-             
+             /usr/lib/libatk-1.0.so.0*\
+             /usr/lib/libgtk-3.so.0*\
+             /usr/lib/libcups.so.2*
+             #/usr/lib/libnss3.so*
 
 # Additional changes can be done in between here
 
