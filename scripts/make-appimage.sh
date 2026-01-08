@@ -17,7 +17,8 @@ export ANYLINUX_LIB=1
 quick-sharun \
             ./AppDir/bin/am-gui\
              /usr/lib/libpixman-1.so*\
-             /usr/lib/libnss3.so*
+             /usr/lib/libnss3.so*\
+             /usr/lib/libGL.so.1*
 
 # Additional changes can be done in between here
 
