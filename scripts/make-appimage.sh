@@ -11,7 +11,9 @@ export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}
 export DEPLOY_ELECTRON=0
 export DEPLOY_PULSE=0
 export ANYLINUX_LIB=1
-
+export DEPLOY_GTK=0
+export DEPLOY_GLYCIN=0
+export DEPLOY_P11KIT=0
 
 # Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
 quick-sharun \
