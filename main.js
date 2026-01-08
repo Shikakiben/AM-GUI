@@ -73,24 +73,15 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.commandLine.appendSwitch('disable-frame-rate-limit');
 }
 
-// Détection environnement conteneurisé (distrobox, toolbox, etc.)
-const isInContainer = fs.existsSync('/run/.containerenv') || 
-                      fs.existsSync('/run/.toolboxenv') ||
-                      process.env.container === 'podman' ||
-                      process.env.container === 'docker';
-
-if (isInContainer) {
-  console.log('[CONTAINER] Running in containerized environment, applying compatibility flags');
-  // Désactiver le sandbox pour éviter les erreurs NSS dans les conteneurs
-  app.commandLine.appendSwitch('no-sandbox');
-  app.commandLine.appendSwitch('disable-gpu-sandbox');
-  // Éviter les problèmes de shared memory
-  app.commandLine.appendSwitch('disable-dev-shm-usage');
-}
-
 // Réduire le bruit des logs Chromium (niveau 3 = erreurs fatales seulement)
 app.commandLine.appendSwitch('enable-logging', 'stderr');
 app.commandLine.appendSwitch('log-level', '3');
+
+// Fix NSS pour distrobox/conteneurs : utiliser une base de données NSS en mémoire
+// Évite les conflits avec la base NSS de l'hôte partagée via /home
+if (fs.existsSync('/run/.containerenv') || fs.existsSync('/run/.toolboxenv')) {
+  app.commandLine.appendSwitch('use-mock-keychain');
+}
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 
