@@ -8,17 +8,19 @@ export ARCH VERSION
 export OUTPATH=./dist
 export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
-#export DEPLOY_ELECTRON=0
+export DEPLOY_ELECTRON=0
 export DEPLOY_PULSE=0
 export ANYLINUX_LIB=1
-
+export DEPLOY_P11KIT=1
 
 # Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
 quick-sharun \
-             ./AppDir/bin/am-gui
-             #/usr/lib/libpixman-1.so*\
-             #/usr/lib/libnss3.so*\
-             #/usr/lib/libGL.so.1*
+             ./AppDir/bin/am-gui\
+             /usr/lib/libpixman-1.so*\
+             /usr/lib/libnss3.so*\
+             /usr/lib/libGL.so.1*\
+             /usr/lib/libatk-bridge-2.0.so.0*\
+             /usr/lib/libatk-1.0.so.0*
              
 
 # Additional changes can be done in between here
