@@ -14,7 +14,8 @@ export ANYLINUX_LIB=1
 
 
 # Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
-quick-sharun \ dist/linux-unpacked/am-gui 
+quick-sharun \
+            dist/linux-unpacked/am-gui
             #./AppDir/bin/am-gui\
              #/usr/lib/libpixman-1.so*\
              #/usr/lib/libnss3.so*\
