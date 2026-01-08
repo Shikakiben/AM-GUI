@@ -12,6 +12,7 @@ export DEPLOY_ELECTRON=0
 export DEPLOY_PULSE=0
 export ANYLINUX_LIB=1
 export DEPLOY_P11KIT=1
+export DEPLOY_GTK=1
 
 # Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
 quick-sharun \
