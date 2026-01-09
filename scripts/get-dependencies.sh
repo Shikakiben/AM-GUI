@@ -8,6 +8,7 @@ echo "Installing package dependencies..."
 echo "---------------------------------------------------------------"
 pacman -Syu --noconfirm  \
             python       \
+            rsync        \
             nss          \
             at-spi2-core \
             #gtk3         \
