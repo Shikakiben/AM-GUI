@@ -8,8 +8,8 @@ echo "Installing package dependencies..."
 echo "---------------------------------------------------------------"
 pacman -Syu --noconfirm  \
             python       \
-            #nss          \
-            #at-spi2-core \
+            nss          \
+            at-spi2-core \
             #gtk3         \
             #libcups
 
