@@ -8,17 +8,17 @@ export ARCH VERSION
 export OUTPATH=./dist
 export ADD_HOOKS="self-updater.bg.hook:fix-namespaces.hook"
 export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
-export DEPLOY_ELECTRON=0
+#export DEPLOY_ELECTRON=0
+#export ANYLINUX_LIB=1
+#export DEPLOY_GTK=0
+#export DEPLOY_P11KIT=0
+#export DEPLOY_GDK=0
 #export DEPLOY_PULSE=0
-export ANYLINUX_LIB=1
-export DEPLOY_GTK=0
 #export DEPLOY_GLYCIN=0
-export DEPLOY_P11KIT=0
-export DEPLOY_GDK=0
 
 # Deploy dependencies
 quick-sharun \
-             ./AppDir/bin/am-gui
+             ./AppDir/bin/*
              #/usr/lib/libpixman-1.so*\
              #/usr/lib/libGL.so.1*\
              #/usr/lib/libatk-bridge-2.0.so.0*\

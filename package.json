@@ -47,7 +47,7 @@
     },
     "linux": {
       "target": [
-        "dir"
+        "dir"        
       ],
       "category": "Utility"
     }
