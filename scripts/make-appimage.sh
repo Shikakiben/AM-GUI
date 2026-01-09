@@ -18,8 +18,7 @@ export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}
 
 # Deploy dependencies
 quick-sharun \
-             ./AppDir/bin/am-gui
-  NO_STRIP=1 ./AppDir/bin/resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node
+             ./AppDir/bin/*             
              #/usr/lib/libpixman-1.so*\
              #/usr/lib/libGL.so.1*\
              #/usr/lib/libatk-bridge-2.0.so.0*\
@@ -29,6 +28,7 @@ quick-sharun \
              #/usr/lib/libnss3.so*
 
 # Additional changes can be done in between here
+cp -v dist/linux-unpacked/resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node   ./AppDir/bin/resources/app.asar.unpacked/node_modules/node-pty/build/Release/
 
 # Supprimer les bibliothèques inutiles (audio, locales, etc.)
 #rm -rf ./AppDir/shared/lib/gbm 2>/dev/null || true
