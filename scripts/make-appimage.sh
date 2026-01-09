@@ -28,7 +28,7 @@ quick-sharun \
              #/usr/lib/libnss3.so*
 
 # Additional changes can be done in between here
-cp -rv dist/linux-unpacked/resources ./AppDir/bin/ressources
+cp -rv dist/linux-unpacked/resources ./AppDir/bin/resources
 
 # Supprimer les bibliothèques inutiles (audio, locales, etc.)
 #rm -rf ./AppDir/shared/lib/gbm 2>/dev/null || true
