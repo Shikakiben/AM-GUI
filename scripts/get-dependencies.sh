@@ -7,11 +7,11 @@ ARCH=$(uname -m)
 echo "Installing package dependencies..."
 echo "---------------------------------------------------------------"
 pacman -Syu --noconfirm  \
-            python       \
-            nss          \
-            at-spi2-core \
-            gtk3         \
-            libcups
+            #python       \
+            #nss          \
+            #at-spi2-core \
+            #gtk3         \
+            #libcups
 
 
 echo "Installing debloated packages..."
