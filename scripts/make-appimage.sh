@@ -28,7 +28,7 @@ quick-sharun \
              #/usr/lib/libnss3.so*
 
 # Additional changes can be done in between here
-cp -v dist/linux-unpacked/resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node  ./AppDir/shared/bin/
+cp -rv dist/linux-unpacked/resources ./AppDir/bin/ressources
 
 # Supprimer les bibliothèques inutiles (audio, locales, etc.)
 #rm -rf ./AppDir/shared/lib/gbm 2>/dev/null || true

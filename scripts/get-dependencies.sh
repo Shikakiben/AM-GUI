@@ -32,7 +32,7 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           npm run dist
 
 mkdir -p ./AppDir/bin
-cp -rv dist/linux-unpacked/*    ./AppDir/bin
+rsync -av --exclude 'resources' dist/linux-unpacked/ ./AppDir/bin/
 cp -v  AM-GUI.png               ./AppDir/.DirIcon
 cp -v  AM-GUI.desktop           ./AppDir
 find ./AppDir/bin/locales -type f ! -name 'en-US.pak' -delete 2>/dev/null || true
