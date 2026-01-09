@@ -16,7 +16,7 @@ export DEPLOY_GTK=0
 export DEPLOY_P11KIT=0
 export DEPLOY_GDK=0
 
-# Deploy dependencies + libpixman-1 pour éviter les conflits IFUNC musl/glibc sur Alpine
+# Deploy dependencies
 quick-sharun \
              ./AppDir/bin/am-gui
              #/usr/lib/libpixman-1.so*\
