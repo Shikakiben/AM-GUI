@@ -6,12 +6,17 @@ ARCH=$(uname -m)
 
 echo "Installing package dependencies..."
 echo "---------------------------------------------------------------"
-pacman -Syu --noconfirm python
+pacman -Syu --noconfirm  \
+            python       \
+            nss          \
+            at-spi2-core \
+            #gtk3         \
+            #libcups
 
 
 echo "Installing debloated packages..."
 echo "---------------------------------------------------------------"
-# get-debloated-pkgs --add-common --prefer-nano
+get-debloated-pkgs --add-common --prefer-nano
 
 # Comment this out if you need an AUR package
 #make-aur-package PACKAGENAME
@@ -24,8 +29,6 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           node -v
           npm -v
           npm install       
-          # Prune prebuilds from node-pty to avoid including Windows prebuilds in the AppImage
-          ./scripts/prune-prebuilds.sh || true
           npm run dist
 
 mkdir -p ./AppDir/bin

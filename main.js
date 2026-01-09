@@ -77,6 +77,12 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
 app.commandLine.appendSwitch('enable-logging', 'stderr');
 app.commandLine.appendSwitch('log-level', '3');
 
+// Fix NSS pour distrobox/conteneurs : utiliser une base de données NSS en mémoire
+// Évite les conflits avec la base NSS de l'hôte partagée via /home
+if (fs.existsSync('/run/.containerenv') || fs.existsSync('/run/.toolboxenv')) {
+  app.commandLine.appendSwitch('use-mock-keychain');
+}
+
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 
 function logGlobalError(err) {
