@@ -19,6 +19,7 @@ export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}
 # Deploy dependencies
 quick-sharun \
              ./AppDir/bin/am-gui
+  NO_STRIP=1 ./AppDir/bin/resources/app.asar.unpacked/node_modules/node-pty/build/Release/pty.node
              #/usr/lib/libpixman-1.so*\
              #/usr/lib/libGL.so.1*\
              #/usr/lib/libatk-bridge-2.0.so.0*\
