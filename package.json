@@ -6,7 +6,7 @@
     "start": "electron .",
     "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
     "lint": "eslint main.js preload.js src/**/*.js",
-    "dist": "npx electron-builder --linux dir",
+    "dist": "npx electron-builder --linux dir && find ./dist -name '*.node' -exec chmod 644 {} +",
     "postinstall": "if [ \"$CI\" != \"true\" ]; then electron-builder install-app-deps; fi"
   },
   "devDependencies": {
