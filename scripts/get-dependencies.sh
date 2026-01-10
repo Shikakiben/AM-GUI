@@ -8,10 +8,9 @@ echo "Installing package dependencies..."
 echo "---------------------------------------------------------------"
 pacman -Syu --noconfirm  \
             python       \
-            rsync        \
             nss          \
             at-spi2-core \
-            #libcups
+          
 
 
 echo "Installing debloated packages..."
@@ -32,7 +31,6 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
           npm run dist
 
 mkdir -p ./AppDir/bin
-#rsync -av --exclude 'resources/app.asar.unpacked/node_modules/node-pty/build' dist/linux-unpacked/ ./AppDir/bin/
 cp -rv dist/linux-unpacked/* ./AppDir/bin/
 cp -v  AM-GUI.png            ./AppDir/.DirIcon
 cp -v  AM-GUI.desktop        ./AppDir
