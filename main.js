@@ -73,16 +73,6 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.commandLine.appendSwitch('disable-frame-rate-limit');
 }
 
-// Réduire le bruit des logs Chromium (niveau 3 = erreurs fatales seulement)
-app.commandLine.appendSwitch('enable-logging', 'stderr');
-app.commandLine.appendSwitch('log-level', '3');
-
-// Fix NSS pour distrobox/conteneurs : utiliser une base de données NSS en mémoire
-// Évite les conflits avec la base NSS de l'hôte partagée via /home
-if (fs.existsSync('/run/.containerenv') || fs.existsSync('/run/.toolboxenv')) {
-  app.commandLine.appendSwitch('use-mock-keychain');
-}
-
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 
 function logGlobalError(err) {
@@ -1015,14 +1005,19 @@ ipcMain.handle('sandbox-info', async (_event, appName) => {
   const sandboxed = await isSandboxWrapper(execPath);
   // Si l'app est sandboxée, c'est forcément un AppImage (seules les AppImages peuvent être sandboxées)
   // Sinon, on détecte via les magic bytes
-  const isAppImage = sandboxed ? true : await detectAppImageFromPath(execPath);
+  let isAppImage = sandboxed ? true : await detectAppImageFromPath(execPath);
+  const selfExecPath = process.env.APPIMAGE || process.execPath;
+  const isSelfAppImage = execPath && selfExecPath && path.resolve(execPath) === path.resolve(selfExecPath);
+  if (isSelfAppImage) isAppImage = true;
   response.info = {
     appName: normalizedName,
     installed: !!execPath,
     sandboxed,
     execPath: execPath || null,
     dependenciesReady: deps.hasSas || deps.hasAisap,
-    isAppImage
+    isAppImage,
+    selfSandboxProhibited: isSelfAppImage,
+    sandboxForbiddenReason: isSelfAppImage ? 'self' : null
   };
   return response;
 });
