@@ -1,6 +1,11 @@
 // Fixe les variables d'environnement terminal si absentes (utile pour AppImage)
 if (!process.env.TERM) process.env.TERM = 'xterm-256color';
 if (!process.env.COLORTERM) process.env.COLORTERM = 'truecolor';
+// Ajoute XDG_BIN_HOME au PATH si absent
+const xdgBinHome = process.env.XDG_BIN_HOME || (process.env.HOME ? `${process.env.HOME}/.local/bin` : null);
+if (xdgBinHome && !process.env.PATH.split(':').includes(xdgBinHome)) {
+  process.env.PATH = `${process.env.PATH}:${xdgBinHome}`;
+}
 
 const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
 const path = require('path');
