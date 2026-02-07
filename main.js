@@ -1,6 +1,11 @@
 // Fixe les variables d'environnement terminal si absentes (utile pour AppImage)
 if (!process.env.TERM) process.env.TERM = 'xterm-256color';
 if (!process.env.COLORTERM) process.env.COLORTERM = 'truecolor';
+// Ajoute XDG_BIN_HOME au PATH si absent
+const xdgBinHome = process.env.XDG_BIN_HOME || (process.env.HOME ? `${process.env.HOME}/.local/bin` : null);
+if (xdgBinHome && !process.env.PATH.split(':').includes(xdgBinHome)) {
+  process.env.PATH = `${process.env.PATH}:${xdgBinHome}`;
+}
 
 const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
 const path = require('path');
@@ -71,16 +76,6 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   // Supprimer les erreurs VSync bénignes quand le GPU est activé
   app.commandLine.appendSwitch('disable-gpu-vsync');
   app.commandLine.appendSwitch('disable-frame-rate-limit');
-}
-
-// Réduire le bruit des logs Chromium (niveau 3 = erreurs fatales seulement)
-app.commandLine.appendSwitch('enable-logging', 'stderr');
-app.commandLine.appendSwitch('log-level', '3');
-
-// Fix NSS pour distrobox/conteneurs : utiliser une base de données NSS en mémoire
-// Évite les conflits avec la base NSS de l'hôte partagée via /home
-if (fs.existsSync('/run/.containerenv') || fs.existsSync('/run/.toolboxenv')) {
-  app.commandLine.appendSwitch('use-mock-keychain');
 }
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
@@ -1015,14 +1010,19 @@ ipcMain.handle('sandbox-info', async (_event, appName) => {
   const sandboxed = await isSandboxWrapper(execPath);
   // Si l'app est sandboxée, c'est forcément un AppImage (seules les AppImages peuvent être sandboxées)
   // Sinon, on détecte via les magic bytes
-  const isAppImage = sandboxed ? true : await detectAppImageFromPath(execPath);
+  let isAppImage = sandboxed ? true : await detectAppImageFromPath(execPath);
+  const selfExecPath = process.env.APPIMAGE || process.execPath;
+  const isSelfAppImage = execPath && selfExecPath && path.resolve(execPath) === path.resolve(selfExecPath);
+  if (isSelfAppImage) isAppImage = true;
   response.info = {
     appName: normalizedName,
     installed: !!execPath,
     sandboxed,
     execPath: execPath || null,
     dependenciesReady: deps.hasSas || deps.hasAisap,
-    isAppImage
+    isAppImage,
+    selfSandboxProhibited: isSelfAppImage,
+    sandboxForbiddenReason: isSelfAppImage ? 'self' : null
   };
   return response;
 });

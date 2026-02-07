@@ -1453,7 +1453,7 @@ body.pm-popup-open { overflow: hidden; }
   color:#a16207;
 }
 
-.sandbox-pill[data-status="unsupported"] {
+.sandbox-pill[data-status="forbidden"] {
   background:rgba(248,113,113,.2);
   color:#b91c1c;
 }
@@ -1532,7 +1532,7 @@ body.pm-popup-open { overflow: hidden; }
   color:#a16207;
 }
 
-.sandbox-status[data-status="unsupported"] {
+.sandbox-status[data-status="forbidden"] {
   background:rgba(248,113,113,.2);
   color:#b91c1c;
 }
