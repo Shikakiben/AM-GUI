@@ -546,6 +546,7 @@ const sandboxSummaryEmpty = document.getElementById('sandboxSummaryEmpty');
 const sandboxLogSection = document.getElementById('sandboxLogSection');
 const sandboxLogToggle = document.getElementById('sandboxLogToggle');
 const nonAppimageModal = document.getElementById('nonAppimageModal');
+const nonAppimageTitle = document.getElementById('nonAppimageTitle');
 const nonAppimageCloseBtn = document.getElementById('nonAppimageClose');
 const nonAppimageDismissBtn = document.getElementById('nonAppimageDismiss');
 const nonAppimageMessage = document.getElementById('nonAppimageMessage');
@@ -662,6 +663,7 @@ setSandboxLogExpanded(false);
 
 function inferAppImageFromInfo(appName, info) {
   if (!info) return null;
+  if (info.sandboxForbiddenReason) return false;
   // isAppImage est définitif quand c'est un boolean (détecté via magic bytes ou sandboxé)
   if (typeof info.isAppImage === 'boolean') return info.isAppImage;
   const target = typeof info.appName === 'string' ? info.appName.toLowerCase() : '';
@@ -674,6 +676,7 @@ function inferAppImageFromInfo(appName, info) {
 
 function isSandboxSupported(appName, info = sandboxState.info) {
   if (!appName) return false;
+  if (info?.sandboxForbiddenReason) return false;
   
   // Si on n'a pas encore d'info (chargement en cours), on ne sait pas encore
   if (!info || Object.keys(info).length === 0) return true;
@@ -713,10 +716,15 @@ function closeSandboxModal() {
   sandboxModal.hidden = true;
 }
 
-function showNonAppimageModal(appName) {
+function showNonAppimageModal(appName, reason = null) {
   if (!nonAppimageModal) return;
+  if (nonAppimageTitle) {
+    const titleKey = reason ? 'sandbox.forbidden.title' : 'sandbox.unsupported.title';
+    nonAppimageTitle.textContent = t(titleKey);
+  }
   if (nonAppimageMessage) {
-    nonAppimageMessage.textContent = t('sandbox.unsupported.desc', { name: appName || '—' });
+    const descKey = reason ? 'sandbox.forbidden.desc' : 'sandbox.unsupported.desc';
+    nonAppimageMessage.textContent = t(descKey, { name: appName || '—' });
   }
   nonAppimageModal.hidden = false;
   setTimeout(() => {
@@ -774,16 +782,17 @@ function renderSandboxCard() {
     : (installedFromInfo === false)
       ? false
       : (installedFromList || installedFromDetailsBtn === true);
-  const sandboxEligible = isSandboxSupported(sandboxState.currentApp, info);
+  const forbiddenReason = info?.sandboxForbiddenReason || (info?.selfSandboxProhibited ? 'self' : null);
+  const sandboxEligible = isSandboxSupported(sandboxState.currentApp, info) && !forbiddenReason;
   sandboxState.supported = sandboxEligible;
   if (sandboxOpenBtn) {
-    const titleKey = sandboxEligible ? 'sandbox.title' : 'sandbox.unsupported.title';
+    const titleKey = sandboxEligible ? 'sandbox.title' : (forbiddenReason ? 'sandbox.forbidden.title' : 'sandbox.unsupported.title');
     sandboxOpenBtn.title = t(titleKey);
   }
   const statusKey = sandboxState.busy
     ? 'busy'
     : (!sandboxEligible
-      ? 'unsupported'
+      ? 'forbidden' // même libellé bouton pour tout non-sandboxable; popup précisera la raison
       : (info.sandboxed ? 'active' : (installedFlag ? 'inactive' : 'unknown')));
   const statusLabel = t(`sandbox.status.${statusKey}`) || statusKey;
   if (sandboxStatusBadge) {
@@ -1202,8 +1211,9 @@ sandboxOpenBtn?.addEventListener('click', async () => {
     } catch (_) {}
     setSandboxBusy(false);
   }
-  if (!isSandboxSupported(sandboxState.currentApp)) {
-    showNonAppimageModal(sandboxState.currentApp);
+  const forbiddenReason = sandboxState.info?.sandboxForbiddenReason || (sandboxState.info?.selfSandboxProhibited ? 'self' : null);
+  if (!isSandboxSupported(sandboxState.currentApp) || forbiddenReason) {
+    showNonAppimageModal(sandboxState.currentApp, forbiddenReason);
     return;
   }
   openSandboxModal();
@@ -1986,6 +1996,15 @@ function applyTranslations() {
   updateUpdatesToggleUi();
   if (!sandboxState.logBuffer) resetSandboxLog();
   refreshAllSandboxBadges();
+  // Rafraîchir la carte sandbox pour refléter la langue et les libellés dynamiques
+  try { renderSandboxCard(); } catch(_) {}
+  // Si la popup non-AppImage est ouverte, re-injecter le texte traduit
+  try {
+    if (nonAppimageModal && !nonAppimageModal.hidden) {
+      const reason = sandboxState.info?.sandboxForbiddenReason || (sandboxState.info?.selfSandboxProhibited ? 'self' : null);
+      showNonAppimageModal(sandboxState.currentApp, reason);
+    }
+  } catch(_) {}
   if (popupWasOpen) {
     showMissingPmPopup();
   }
