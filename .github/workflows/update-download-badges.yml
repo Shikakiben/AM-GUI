@@ -14,8 +14,8 @@ jobs:
     env:
       REPO: ${{ github.repository }}
       # Regex par défaut — adapte si besoin
-      APPIMAGE_REGEX: '(?i)\\.AppImage$'
-      ZSHINC_REGEX: '(?i)^zshinc($|\\.)'
+      APPIMAGE_REGEX: '\\.AppImage$'
+      ZSHINC_REGEX: '\\.zshinc$'
       BADGES_DIR: 'badges'
     steps:
       - name: Checkout
@@ -45,9 +45,9 @@ jobs:
             if [ "$len" -eq 0 ]; then break; fi
 
             # Somme AppImage sur la page
-            page_app=$(echo "$resp" | jq --arg re "$APPIMAGE_REGEX" '[.[] | .assets[]? | select(.name | test($re)) | .download_count] | add // 0')
+            page_app=$(echo "$resp" | jq --arg re "$APPIMAGE_REGEX" '[.[] | .assets[]? | select(.name | test($re; "i")) | .download_count] | add // 0')
             # Somme zshinc sur la page
-            page_zsh=$(echo "$resp" | jq --arg re "$ZSHINC_REGEX" '[.[] | .assets[]? | select(.name | test($re)) | .download_count] | add // 0')
+            page_zsh=$(echo "$resp" | jq --arg re "$ZSHINC_REGEX" '[.[] | .assets[]? | select(.name | test($re; "i")) | .download_count] | add // 0')
 
             # convert null -> 0 et enlever d'éventuels guillemets
             page_app=${page_app:-0}
