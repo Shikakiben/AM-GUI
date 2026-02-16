@@ -4,7 +4,7 @@ on:
     types: [published, edited, released]
   schedule:
     - cron: '0 * * * *' # toutes les heures UTC
-  workflow_dispatch: # optionnel : permet de lancer manuellement depuis l'onglet Actions
+  workflow_dispatch: # permet de lancer manuellement depuis l'onglet Actions
 permissions:
   contents: write
 
