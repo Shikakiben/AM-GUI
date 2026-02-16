@@ -13,9 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REPO: ${{ github.repository }}
-      # Regex par défaut — adapte si besoin
-      APPIMAGE_REGEX: '(?i)\\.AppImage$'
-      ZSHINC_REGEX: '(?i)^zshinc($|\\.)'
+      APPIMAGE_REGEX: '\.AppImage$'
+      ZSYNC_REGEX: '\.zsync$'
       BADGES_DIR: 'badges'
     steps:
       - name: Checkout
@@ -29,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ env.REPO }}
           APPIMAGE_REGEX: ${{ env.APPIMAGE_REGEX }}
-          ZSHINC_REGEX: ${{ env.ZSHINC_REGEX }}
+          ZSYNC_REGEX: ${{ env.ZSYNC_REGEX }}
           BADGES_DIR: ${{ env.BADGES_DIR }}
         run: |
           set -euo pipefail
@@ -37,36 +36,67 @@ jobs:
           mkdir -p "$BADGES_DIR"
           page=1
           total_appimage=0
-          total_zshinc=0
+          total_zsync=0
+
+          echo "Fetching releases from $REPO..."
 
           while true; do
-            resp=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page")
+            echo "Fetching page $page..."
+            resp=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+                        -H "Accept: application/vnd.github+json" \
+                        -H "X-GitHub-Api-Version: 2022-11-28" \
+                        "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page")
+            
             len=$(echo "$resp" | jq 'length')
-            if [ "$len" -eq 0 ]; then break; fi
+            echo "Found $len releases on page $page"
+            
+            if [ "$len" -eq 0 ]; then 
+              echo "No more releases to fetch"
+              break
+            fi
 
-            # Somme AppImage sur la page
-            page_app=$(echo "$resp" | jq --arg re "$APPIMAGE_REGEX" '[.[] | .assets[]? | select(.name | test($re)) | .download_count] | add // 0')
-            # Somme zshinc sur la page
-            page_zsh=$(echo "$resp" | jq --arg re "$ZSHINC_REGEX" '[.[] | .assets[]? | select(.name | test($re)) | .download_count] | add // 0')
+            # Debug: afficher un exemple d'asset pour vérifier la structure
+            if [ "$page" -eq 1 ]; then
+              echo "Sample asset structure:"
+              echo "$resp" | jq '.[0].assets[0]? // empty' || true
+            fi
 
-            # convert null -> 0 et enlever d'éventuels guillemets
-            page_app=${page_app:-0}
-            page_zsh=${page_zsh:-0}
-            page_app=${page_app//\"/}
-            page_zsh=${page_zsh//\"/}
+            # Somme AppImage sur la page (fichiers se terminant par .AppImage SEULEMENT)
+            page_app=$(echo "$resp" | jq --arg re "$APPIMAGE_REGEX" '
+              [.[] | .assets[]? | 
+               select(.name | test($re) and (test("\\.zsync$") | not)) | 
+               .download_count // 0] | add // 0
+            ')
+            
+            # Somme zsync sur la page
+            page_zsync=$(echo "$resp" | jq --arg re "$ZSYNC_REGEX" '
+              [.[] | .assets[]? | 
+               select(.name | test($re)) | 
+               .download_count // 0] | add // 0
+            ')
+
+            echo "Page $page - AppImage: $page_app, zsync: $page_zsync"
 
             total_appimage=$((total_appimage + page_app))
-            total_zshinc=$((total_zshinc + page_zsh))
+            total_zsync=$((total_zsync + page_zsync))
 
             page=$((page + 1))
           done
 
-          # Écrire les JSON pour Shields endpoint (sans heredoc)
+          echo "Total AppImage downloads: $total_appimage"
+          echo "Total zsync downloads: $total_zsync"
+
+          # Écrire les JSON pour Shields endpoint
           printf '{"schemaVersion":1,"label":"AppImage downloads","message":"%s","color":"blue"}\n' "$total_appimage" > "$BADGES_DIR/appimage.json"
-          printf '{"schemaVersion":1,"label":"zshinc downloads","message":"%s","color":"blue"}\n' "$total_zshinc" > "$BADGES_DIR/zshinc.json"
+          printf '{"schemaVersion":1,"label":"zsync downloads","message":"%s","color":"blue"}\n' "$total_zsync" > "$BADGES_DIR/zsync.json"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$BADGES_DIR/appimage.json" "$BADGES_DIR/zshinc.json"
-          git commit -m "Update download badges: AppImage=$total_appimage zshinc=$total_zshinc" || echo "No changes to commit"
-          git push
+          git add "$BADGES_DIR/appimage.json" "$BADGES_DIR/zsync.json"
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update download badges: AppImage=$total_appimage zsync=$total_zsync"
+            git push
+          fi

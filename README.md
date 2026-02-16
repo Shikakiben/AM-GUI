@@ -5,7 +5,7 @@
   
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 [![AppImage downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Shikakiben/AM-GUI/main/badges/appimage.json)](https://github.com/Shikakiben/AM-GUI/releases)
-[![zshinc downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Shikakiben/AM-GUI/main/badges/zshinc.json)](https://github.com/Shikakiben/AM-GUI/releases)
+[![zsync downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Shikakiben/AM-GUI/main/badges/zsync.json)](https://github.com/Shikakiben/AM-GUI/releases)
 [![CI Build Status](https://github.com//Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 
 <br>
