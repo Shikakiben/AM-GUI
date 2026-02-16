@@ -4,7 +4,7 @@ on:
     types: [published, edited, released]
   schedule:
     - cron: '0 * * * *' # toutes les heures UTC
-
+  workflow_dispatch: # optionnel : permet de lancer manuellement depuis l'onglet Actions
 permissions:
   contents: write
 
@@ -33,38 +33,30 @@ jobs:
           BADGES_DIR: ${{ env.BADGES_DIR }}
         run: |
           mkdir -p "$BADGES_DIR"
-
           page=1
           total_appimage=0
           total_zshinc=0
-
           while true; do
             resp=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page")
             len=$(echo "$resp" | jq 'length')
             if [ "$len" -eq 0 ]; then break; fi
-
             # Somme AppImage sur la page
             page_app=$(echo "$resp" | jq --arg re "$APPIMAGE_REGEX" '[.[] | .assets[]? | select(.name | test($re)) | .download_count] | add // 0')
             # Somme zshinc sur la page
             page_zsh=$(echo "$resp" | jq --arg re "$ZSHINC_REGEX" '[.[] | .assets[]? | select(.name | test($re)) | .download_count] | add // 0')
-
             # convert null -> 0
             page_app=${page_app:-0}
             page_zsh=${page_zsh:-0}
             # ensure integers
             page_app=${page_app//\"/}
             page_zsh=${page_zsh//\"/}
-
             total_appimage=$((total_appimage + page_app))
             total_zshinc=$((total_zshinc + page_zsh))
-
             page=$((page + 1))
           done
-
           # Fallback si null
           total_appimage=${total_appimage:-0}
           total_zshinc=${total_zshinc:-0}
-
           # Écrire JSON pour Shields endpoint
           cat > "$BADGES_DIR/appimage.json" <<EOF
 {"schemaVersion":1,"label":"AppImage downloads","message":"$total_appimage","color":"blue"}
