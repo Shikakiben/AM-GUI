@@ -910,11 +910,12 @@ ipcMain.handle('list-apps-detailed', async () => {
           if (ignoreNamePatterns.some(re => re.test(name))) continue;
           if (!inCatalog) {
             installedFromCatalog.add(name);
+            if (desc) installedDesc.set(name, desc);
           } else {
             catalogSet.add(name);
+            if (desc) catalogDesc.set(name, desc);
           }
           diamondSet.add(name);
-          if (desc) installedDesc.set(name, desc);
           seenAppEntry = true;
         }
       } catch (e) {
