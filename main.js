@@ -864,11 +864,14 @@ ipcMain.handle('list-apps-detailed', async () => {
 
       const catalogSet = new Set();
       const catalogDesc = new Map();
+      const installedFromCatalog = new Set();
       const installedSet = new Set();
       const installedDesc = new Map();
   const diamondSet = new Set(); // apps that were listed with leading '◆' in catalog output
 
-      // Parse catalog from -l output (same rules as before)
+      // Parse catalog from -l output (same rules as before, but also collect
+      // names found inside the "YOU HAVE INSTALLED" section as a secondary
+      // source of truth for installations).
       try {
         const lines = (listRes.stdout || '').split('\n');
         let inInstalled = false;
@@ -899,7 +902,7 @@ ipcMain.handle('list-apps-detailed', async () => {
           if (ignoreNamePatterns.some(re => re.test(name))) continue;
           if (inInstalled && !inCatalog) {
             if (name) {
-              installedSet.add(name);
+              installedFromCatalog.add(name);
               diamondSet.add(name);
               if (desc) installedDesc.set(name, desc);
             }
@@ -964,6 +967,16 @@ ipcMain.handle('list-apps-detailed', async () => {
         }
       } catch (e) {
         // ignore parse errors from installed
+      }
+
+      // if -f output looks broken (empty or contains every catalog entry),
+      // fall back on the subset gathered from the catalog parsing.
+      if ((installedSet.size === 0 && installedFromCatalog.size > 0) ||
+          (catalogSet.size > 0 && installedSet.size >= catalogSet.size)) {
+        if (installedFromCatalog.size > 0 && installedFromCatalog.size < catalogSet.size) {
+          installedSet.clear();
+          for (const n of installedFromCatalog) installedSet.add(n);
+        }
       }
 
       const allSet = new Set([...catalogSet, ...installedSet]);
