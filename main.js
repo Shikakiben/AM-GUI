@@ -869,13 +869,16 @@ ipcMain.handle('list-apps-detailed', async () => {
       const installedDesc = new Map();
   const diamondSet = new Set(); // apps that were listed with leading '◆' in catalog output
 
-      // Parse catalog from -l output (same rules as before, but also collect
-      // names found inside the "YOU HAVE INSTALLED" section as a secondary
-      // source of truth for installations).
+      // Parse catalog from -l output. Instead of relying on any fixed
+      // language header, we simply treat the block of ◆ entries that appears
+      // before the first blank line as the "installed" list. Once we hit a
+      // blank line after having seen at least one ◆ entry, further ◆ lines
+      // belong to the catalog proper. This handles translations and avoids
+      // accidentally turning the summary text into an app name.
       try {
         const lines = (listRes.stdout || '').split('\n');
-        let inInstalled = false;
         let inCatalog = false;
+        let seenAppEntry = false;
         const ignoreNamePatterns = [
           /^YOU/i,
           /^-/,
@@ -884,11 +887,16 @@ ipcMain.handle('list-apps-detailed', async () => {
         ];
         for (const raw of lines) {
           const line = raw.trim();
-          if (!line) continue;
-          if (line.startsWith('YOU HAVE INSTALLED')) { inInstalled = true; continue; }
-          if (line.startsWith('To list all installable programs')) { inInstalled = false; continue; }
-          if (line.startsWith('LIST OF')) { inCatalog = true; continue; }
-          if (!line.startsWith('\u25c6')) continue;
+          if (line === '') {
+            // blank line: if we've already scanned at least one ◆ entry and
+            // we're not yet in the catalog, switch to catalog mode. Subsequent
+            // ◆ entries will then be catalog items.
+            if (seenAppEntry && !inCatalog) {
+              inCatalog = true;
+            }
+            continue;
+          }
+          if (!line.startsWith('\u25c6')) continue; // ignore non-◆ lines
           const rest = line.slice(1).trim();
           const colonIdx = rest.indexOf(':');
           let desc = null;
@@ -900,20 +908,14 @@ ipcMain.handle('list-apps-detailed', async () => {
           }
           const name = left.split(/\s+/)[0].trim();
           if (ignoreNamePatterns.some(re => re.test(name))) continue;
-          if (inInstalled && !inCatalog) {
-            if (name) {
-              installedFromCatalog.add(name);
-              diamondSet.add(name);
-              if (desc) installedDesc.set(name, desc);
-            }
-          } else if (inCatalog) {
-            if (name) {
-              catalogSet.add(name);
-              // The line had a leading '◆' (we trimmed it earlier), treat it as diamond-marked
-              diamondSet.add(name);
-              if (desc) catalogDesc.set(name, desc);
-            }
+          if (!inCatalog) {
+            installedFromCatalog.add(name);
+          } else {
+            catalogSet.add(name);
           }
+          diamondSet.add(name);
+          if (desc) installedDesc.set(name, desc);
+          seenAppEntry = true;
         }
       } catch (e) {
         // ignore parse errors from catalog
