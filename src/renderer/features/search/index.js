@@ -174,7 +174,7 @@
       base = Array.isArray(override.apps) ? override.apps : [];
     } else if (activeCategory === 'installed') {
       resetSearchModeIfNeeded();
-      base = filterInstalled(allApps);
+      base = filterInstalled(allApps); // uses full allApps to include implied apps
     } else if (activeCategory !== 'all') {
       resetSearchModeIfNeeded();
       base = filterByCategory(allApps, activeCategory);

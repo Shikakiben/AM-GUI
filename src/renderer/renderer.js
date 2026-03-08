@@ -374,7 +374,8 @@ const state = {
   currentDetailsApp: null,
   renderVersion: 0,
   lastScrollY: 0,
-  installed: new Set() // ensemble des noms installés (lowercase)
+  installed: new Set(), // ensemble des noms installés (lowercase)
+  bundleChildOf: {}    // { childName: parentName } – populated after loadApps
 };
 
 let virtualListApi = null;
@@ -2220,6 +2221,53 @@ async function loadApps() {
     }
     state.installed = installedNames;
   } catch(_) { state.installed = new Set(); }
+  // Dynamic app group filtering:
+  // 1. Bundle children: mark as installed when parent suite is installed
+  //    (e.g. user installs "adb" → "platform-tools" is installed → adb stays
+  //    visible and is shown as installed, so the user gets clear feedback)
+  // 2. Appimage mutex pairs: X-appimage and X share the same binary/config;
+  //    hide only the uninstalled partner so the installed one stays visible.
+  function applyAppGroupFiltering(bundleChildOf) {
+    const toRemove = new Set();
+    // 1. Bundle children: remove from all views (parent stays visible, installed).
+    //    After installing a child (adb…) the details panel redirects to the parent.
+    for (const app of state.allApps) {
+      const name = String(app.name).toLowerCase();
+      const parent = (bundleChildOf || {})[name];
+      if (parent && state.installed.has(parent.toLowerCase())) {
+        state.installed.add(name);
+        toRemove.add(name);
+      }
+    }
+    // 2. Appimage mutex pairs (e.g. firefox ↔ firefox-appimage)
+    // Also build mutexRedirect: { 'firefox-appimage': 'firefox' } so that
+    // post-install can redirect to the surviving app.
+    const allNames = new Set(state.allApps.map(a => String(a.name).toLowerCase()));
+    const mutexRedirect = {};
+    for (const app of state.allApps) {
+      const name = String(app.name).toLowerCase();
+      if (name.endsWith('-appimage')) {
+        const base = name.slice(0, -'-appimage'.length);
+        if (allNames.has(base)) {
+          if (state.installed.has(base)) {
+            toRemove.add(name);
+            mutexRedirect[name] = base; // installing firefox-appimage → show firefox
+          } else if (state.installed.has(name)) {
+            toRemove.add(base);
+            mutexRedirect[base] = name; // installing firefox → show firefox-appimage
+          }
+        }
+      }
+    }
+    state.mutexRedirect = mutexRedirect;
+    if (toRemove.size > 0) {
+      state.allApps = state.allApps.filter(a => !toRemove.has(String(a.name).toLowerCase()));
+      state.filtered = state.filtered.filter(a => !toRemove.has(String(a.name).toLowerCase()));
+    }
+  }
+  state.bundleChildOf = detailed.bundleChildOf || {};
+  state.mutexRedirect = {};
+  applyAppGroupFiltering(detailed.bundleChildOf);
   if (installedCountEl) installedCountEl.textContent = String(state.allApps.filter(a => a.installed && a.hasDiamond).length);
   cleanupSandboxCache();
   rerenderActiveCategory();
@@ -3453,7 +3501,13 @@ if (window.electronAPI.onInstallProgress){
         // Plus de gestion du log ou du bouton log ici
         loadApps().then(()=> {
           if (msg.success) {
-            if (msg.name) showDetails(msg.name); else if (detailsInstallBtn?.getAttribute('data-name')) showDetails(detailsInstallBtn.getAttribute('data-name'));
+            // Redirect to the surviving app after install:
+            // - bundle child (adb) → parent (platform-tools)
+            // - mutex partner (firefox-appimage) → canonical (firefox), or vice-versa
+            const installedName = msg.name || detailsInstallBtn?.getAttribute('data-name');
+            const key = installedName && installedName.toLowerCase();
+            const targetName = (key && (state.bundleChildOf[key] || state.mutexRedirect[key])) || installedName;
+            if (targetName) showDetails(targetName);
           }
           if (msg.name) {
             const tile = document.querySelector(`.app-tile[data-app="${CSS.escape(msg.name)}"]`);
