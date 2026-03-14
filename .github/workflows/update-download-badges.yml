@@ -83,8 +83,8 @@ jobs:
         run: |
           for badge in appimage zsync; do
             FILENAME="$badge.json"
-            RAW_CONTENT=$(cat "$BADGES_DIR/$FILENAME")
+            ESCAPED_CONTENT=$(jq -Rs . < "$BADGES_DIR/$FILENAME")
             curl -s -X PATCH "https://api.github.com/gists/$GIST_ID" \
               -H "Authorization: token $GIST_TOKEN" \
-              -d "{\"files\": { \"$FILENAME\": { \"content\": $RAW_CONTENT }}}"
+              -d "{\"files\": { \"$FILENAME\": { \"content\": $ESCAPED_CONTENT }}}"
           done
