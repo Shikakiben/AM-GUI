@@ -1313,7 +1313,7 @@
       'advanced.note.appman': '<span class="note-cmd">am</span> ili <span class="note-cmd">appman</span> komande zavise od tvog sistema (ako si odabrao brzu instalaciju, koristi <span class="note-cmd">appman</span>).',
       'advanced.copySuccess': 'Komanda kopirana.',
       'advanced.copyError': 'Ne mogu da kopiram komandu.',
-      'advanced.docs': 'Kompletna dokumentacija & uputstva →',
+      'advanced.docs': 'Kompletna dokumentacija i uputstva →',
       'sandbox.title': 'Sandbox',
       'sandbox.subtitle': 'Učini aplikaciju izolovanom sa SAS/Aisap i odluči koje foldere želiš da ostaviš vidljivim.',
       'sandbox.status.active': 'Aktivirano',
