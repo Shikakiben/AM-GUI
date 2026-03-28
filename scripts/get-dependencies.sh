@@ -9,7 +9,7 @@ echo "---------------------------------------------------------------"
 pacman -Syu --noconfirm  \
             python       \
             nss          \
-            at-spi2-core \
+            at-spi2-core
           
 
 
