@@ -3027,6 +3027,7 @@ function stripAnsiSequences(text = '') {
 }
 
 function parseUpdatedApps(res){
+  // Motifs purement structurels (indépendants de la langue)
   const cleanedOutput = stripAnsiSequences(res || '');
   const updated = new Set();
   if (typeof cleanedOutput !== 'string') return updated;
@@ -3034,18 +3035,13 @@ function parseUpdatedApps(res){
   for (const raw of lines){
     const line = raw.trim();
     if (!line) continue;
-    if (/Nothing to do here!?/i.test(line)) { updated.clear(); return updated; }
-    // Motifs possibles:
+    // Motifs structurels uniquement (symboles / flèches, pas de texte anglais):
     // ✔ appname
-    // appname updated
-    // Updating appname ...
     // * appname -> version
     // appname (old -> new)
     let name = null;
     let m;
     if ((m = line.match(/^✔\s+([A-Za-z0-9._-]+)/))) name = m[1];
-    else if ((m = line.match(/^([A-Za-z0-9._-]+)\s+updated/i))) name = m[1];
-    else if ((m = line.match(/^[Uu]pdating\s+([A-Za-z0-9._-]+)/))) name = m[1];
     else if ((m = line.match(/^\*\s*([A-Za-z0-9._-]+)\s+->/))) name = m[1];
     else if ((m = line.match(/^([A-Za-z0-9._-]+)\s*\([^)]*->[^)]*\)/))) name = m[1];
     if (name) {
@@ -3055,32 +3051,61 @@ function parseUpdatedApps(res){
   return updated;
 }
 
-function handleUpdateCompletion(fullText){
-  const sanitized = stripAnsiSequences(fullText || '');
-  // Map pour stocker les nouvelles versions extraites du log
+/**
+ * Parser structurel inspiré de l'approche awk (indépendant de la langue).
+ *
+ * appman affiche toujours 4 séparateurs dans cet ordre :
+ *   sep1 → >> START OF ALL PROCESSES <<
+ *   sep2 → CAN MANAGE... (en-tête)
+ *   sep3 → ◆ liste initiale de tout ce qui peut être mis à jour  ← À IGNORER
+ *   sep4 → résultat : ◆ apps mises à jour  OU  texte "rien à faire"  ← DÉBUT UTILE
+ *   (sep5+ possibles si d'autres sections sont ajoutées après)
+ *
+ * Stratégie : parcourir toutes les lignes APRÈS le 4ème séparateur
+ * et collecter les ◆ appname version trouvés.
+ *
+ * Retourne { updated: Set, newVersions: Map, hasStructure: bool }
+ *   hasStructure=true  → au moins 4 séparateurs trouvés (résultat fiable, pas de fallback)
+ *   hasStructure=false → structure inconnue (fallback autorisé)
+ */
+function parseUpdatedBlock(text) {
+  const updated = new Set();
   const newVersions = new Map();
-  // Chercher la section "The following apps have been updated:" dans le log
-  let filteredUpdated = null;
-  const match = sanitized && sanitized.match(/The following apps have been updated:[^\n]*\n([\s\S]*?)\n[-=]{5,}/i);
-  if (match) {
-    // Extraire les noms d'apps et leurs nouvelles versions de cette section
-    filteredUpdated = new Set();
-    const lines = match[1].split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-    for (const line of lines) {
-      // ligne du type: ◆ citron-nightly 8f38c83a2
-      const m = line.match(/^◆\s*([A-Za-z0-9._-]+)\s+(.+)?/);
-      if (m) {
-        const appName = m[1].toLowerCase();
-        filteredUpdated.add(appName);
-        if (m[2]) newVersions.set(appName, m[2].trim());
-      }
+  const lines = text.split(/\r?\n/);
+  const SEP_SKIP = 4; // sauter les 4 premiers séparateurs
+  let sepCount = 0;
+  let startIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^[-=]{5,}$/.test(lines[i].trim())) {
+      sepCount++;
+      if (sepCount === SEP_SKIP) { startIdx = i + 1; break; }
     }
   }
-  // Parser aussi les lignes du type: appname (oldversion -> newversion)
+  if (startIdx === -1) return { updated, newVersions, hasStructure: false };
+  // Tout ce qui suit le 4ème séparateur : chercher les ◆ appname [version]
+  // On collecte dans un tableau pour pouvoir ignorer le DERNIER (= synchronisation, pas une app)
+  const found = [];
+  for (let i = startIdx; i < lines.length; i++) {
+    const m = lines[i].match(/^\s*◆\s+([A-Za-z0-9._-]+)(?:\s+(.+))?/);
+    if (m) found.push({ name: m[1].toLowerCase(), ver: m[2] ? m[2].trim() : null });
+  }
+  // Exclure le dernier ◆ (entrée de synchronisation, pas une vraie app)
+  const appsToShow = found.slice(0, -1);
+  for (const { name, ver } of appsToShow) {
+    updated.add(name);
+    if (ver) newVersions.set(name, ver);
+  }
+  return { updated, newVersions, hasStructure: true };
+}
+
+function handleUpdateCompletion(fullText){
+  const sanitized = stripAnsiSequences(fullText || '');
+  // Parser structurel (indépendant de la langue) — inspiré de l'approche awk
+  const { updated: blockUpdated, newVersions, hasStructure } = parseUpdatedBlock(sanitized);
+  // Enrichir newVersions avec les lignes "appname (old -> new)" (structurel, pas de langue)
   const lines = sanitized.split(/\r?\n/);
   for (const raw of lines) {
     const line = raw.trim();
-    // Format: appname (1.0 -> 2.0) ou appname (old -> new)
     const arrowMatch = line.match(/^([A-Za-z0-9._-]+)\s*\([^)]*->\s*([^)]+)\)/);
     if (arrowMatch) {
       const appName = arrowMatch[1].toLowerCase();
@@ -3088,16 +3113,16 @@ function handleUpdateCompletion(fullText){
       if (newVer && !newVersions.has(appName)) newVersions.set(appName, newVer);
     }
   }
-  const updated = parseUpdatedApps(sanitized);
-  const nothingPhrase = /Nothing to do here!?/i.test(sanitized || '');
   let toShow = new Set();
-  // Si on a trouvé la section officielle, on ne montre QUE ces apps
-  if (filteredUpdated && filteredUpdated.size > 0) {
-    toShow = filteredUpdated;
-  } else if (!nothingPhrase && updated.size > 0) {
-    // Sinon fallback sur le parsing ligne par ligne, seulement si pas de message "rien à faire"
-    toShow = updated;
+  if (blockUpdated.size > 0) {
+    // Apps ◆ trouvées après le dernier séparateur → résultat fiable, toute langue
+    toShow = blockUpdated;
+  } else if (!hasStructure) {
+    // Pas de séparateur détecté (sortie inconnue) → fallback structurel (✔, *, ->)
+    const fallback = parseUpdatedApps(sanitized);
+    if (fallback.size > 0) toShow = fallback;
   }
+  // Si hasStructure && blockUpdated.size === 0 : dernier bloc sans ◆ = rien mis à jour
   if (toShow.size > 0) {
     if (updateFinalMessage) updateFinalMessage.textContent = t('updates.updatedApps');
     if (updatedAppsIcons) {
@@ -3125,11 +3150,13 @@ function handleUpdateCompletion(fullText){
       });
     }
   } else {
-    // Fallback: pas de noms détectés mais sortie non vide et pas de message "rien à faire" => supposer des mises à jour
-    if (!nothingPhrase && sanitized.trim()) {
-      if (updateFinalMessage) updateFinalMessage.textContent = t('updates.done');
-    } else {
+    // 0 apps à afficher
+    if (hasStructure) {
+      // Structure détectée mais aucun ◆ après le 4ème séparateur → vraiment rien mis à jour
       if (updateFinalMessage) updateFinalMessage.textContent = t('updates.none');
+    } else {
+      // Pas de structure connue → on ne sait pas, on affiche "terminé"
+      if (updateFinalMessage) updateFinalMessage.textContent = t('updates.done');
     }
     if (updatedAppsIcons) updatedAppsIcons.innerHTML = '';
   }
