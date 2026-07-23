@@ -9,8 +9,10 @@ try {
 
 let systemLocale = null;
 contextBridge.exposeInMainWorld('electronAPI', {
-  amAction: (action, software, scope) => ipcRenderer.invoke('am-action', action, software, scope),
   listAppsDetailed: () => ipcRenderer.invoke('list-apps-detailed'),
+  uninstallApp: (name) => ipcRenderer.invoke('uninstall-app', name),
+  depInstall: (name) => ipcRenderer.invoke('dep-install', name),
+  updatesBulk: () => ipcRenderer.invoke('updates-bulk'),
   windowControl: (action) => ipcRenderer.invoke('window-control', action),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   desktopEnv: () => desktopEnv,

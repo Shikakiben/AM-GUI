@@ -81,6 +81,32 @@ function registerUpdatesHandlers(ipcMain, deps) {
     return { id };
   });
 
+  ipcMain.handle('updates-bulk', async () => {
+    const { pm } = await detectPackageManager();
+    if (!pm) return { error: tErr('errNoPm', "No 'am' or 'appman' package manager found") };
+    if (await isExternalUpdateRunning(pm)) return { error: 'external-update-running' };
+
+    return new Promise((resolve) => {
+      const { spawn } = require('child_process');
+      const child = spawn(pm, ['-u']);
+      let stdoutBuf = '';
+      let stderrBuf = '';
+      const killTimer = setTimeout(() => { try { child.kill('SIGTERM'); } catch (_) {} }, 10 * 60 * 1000);
+      child.stdout.on('data', d => { stdoutBuf += d.toString(); });
+      child.stderr.on('data', d => { stderrBuf += d.toString(); });
+      child.on('close', (code) => {
+        clearTimeout(killTimer);
+        if (code === 0) return resolve({ ok: true, output: stdoutBuf || '' });
+        resolve({ ok: false, error: stderrBuf || stdoutBuf || tErr('errProcessFinishedCode', 'Process finished with code {code}', { code }) });
+      });
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        invalidatePackageManagerCache();
+        resolve({ ok: false, error: err.message || tErr('errUnknown', 'Unknown error') });
+      });
+    });
+  });
+
   ipcMain.handle('updates-cancel', async (_event, id) => {
     if (!id) return { ok: false, error: tErr('errMissingIdShort', 'missing-id') };
     const proc = activeUpdates.get(id);

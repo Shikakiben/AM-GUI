@@ -287,7 +287,7 @@
             showToast(t('toast.cancelRequested'));
             try {
               const scope = state.currentDetailsScope || getInstallScope();
-              await window.electronAPI.amAction('uninstall', name, scope);
+              await window.electronAPI.uninstallApp(name);
               await loadApps();
               showDetails(state.currentDetailsApp || name);
             } catch (_) {}
@@ -345,7 +345,7 @@
         detailsUninstallBtn.disabled = true;
         showToast(t('toast.uninstalling', { name }));
         try {
-          await window.electronAPI.amAction('uninstall', name, scope);
+          await window.electronAPI.uninstallApp(name);
         } catch (_) {}
         // Always refresh and update UI
         const appId = name + '|' + scope;

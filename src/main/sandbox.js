@@ -9,7 +9,7 @@ async function isExecutableFile(fsp, filePath) {
   try {
     const stats = await fsp.stat(filePath);
     if (!stats.isFile()) return false;
-    await fsp.access(filePath, require('fs').constants.X_OK);
+    await fsp.access(filePath, fsp.constants.X_OK);
     return true;
   } catch (_) { return false; }
 }

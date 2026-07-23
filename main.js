@@ -22,11 +22,11 @@ const { installAppManAuto } = require('./src/main/appManAuto');
 const { registerGpuHandlers } = require('./src/main/gpu');
 const { registerExternalHandlers } = require('./src/main/external');
 const { registerWindowHandlers } = require('./src/main/window');
-const { registerAmActionHandler } = require('./src/main/amAction');
 const { isExternalUpdateRunning, registerUpdatesHandlers } = require('./src/main/updates');
 const { registerSandboxHandlers } = require('./src/main/sandbox');
 const { registerInstallHandlers } = require('./src/main/install');
 const { registerAppListHandlers } = require('./src/main/appList');
+const { registerUninstallHandler } = require('./src/main/uninstall');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 function logGlobalError(err) {
@@ -153,11 +153,11 @@ const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwo
 registerGpuHandlers(ipcMain, app);
 registerExternalHandlers(ipcMain, deps);
 registerWindowHandlers(ipcMain);
-registerAmActionHandler(ipcMain, deps);
 registerUpdatesHandlers(ipcMain, deps);
 registerSandboxHandlers(ipcMain, deps);
 registerInstallHandlers(ipcMain, deps);
 registerAppListHandlers(ipcMain, deps);
+registerUninstallHandler(ipcMain, deps);
 
 const iconCacheManager = createIconCacheManager(app);
 registerCategoryHandlers(ipcMain, app.getPath('userData'));

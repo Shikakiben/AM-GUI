@@ -150,6 +150,32 @@ function registerInstallHandlers(ipcMain, deps) {
     }
   });
 
+  ipcMain.handle('dep-install', async (_event, name) => {
+    const { pm } = await detectPackageManager();
+    if (!pm) return { error: tErr('errNoPm', "No 'am' or 'appman' package manager found") };
+    if (!name || typeof name !== 'string') return { error: tErr('errInvalidName', 'Invalid name') };
+
+    return new Promise((resolve) => {
+      const { spawn } = require('child_process');
+      const child = spawn(pm, ['-i', name]);
+      let stdoutBuf = '';
+      let stderrBuf = '';
+      const killTimer = setTimeout(() => { try { child.kill('SIGTERM'); } catch (_) {} }, 5 * 60 * 1000);
+      child.stdout.on('data', d => { stdoutBuf += d.toString(); });
+      child.stderr.on('data', d => { stderrBuf += d.toString(); });
+      child.on('close', (code) => {
+        clearTimeout(killTimer);
+        if (code === 0) return resolve({ ok: true, output: stdoutBuf || '' });
+        resolve({ ok: false, error: stderrBuf || stdoutBuf || tErr('errProcessFinishedCode', 'Process finished with code {code}', { code }) });
+      });
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        invalidatePackageManagerCache();
+        resolve({ ok: false, error: err?.message || tErr('errUnknown', 'Unknown error') });
+      });
+    });
+  });
+
   ipcMain.handle('install-appman-auto', async () => {
     try {
       const result = await installAppManAuto();

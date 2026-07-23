@@ -1134,7 +1134,7 @@ sandboxInstallDepsBtn?.addEventListener('click', async () => {
   if (sandboxState.busy) return;
   setSandboxBusy(true);
   try {
-    await window.electronAPI.amAction('install', 'sas');
+    await window.electronAPI.depInstall('sas');
     showToast(t('sandbox.toast.depsInstalled'));
   } catch (error) {
     notifySandboxError(error?.code || null);
@@ -1517,14 +1517,10 @@ function processNextInstall(){
   });
   if (inlineBtn) inlineBtn.disabled = true;
   showToast(t('toast.installing', {name: next}));
-  startStreamingInstall(next, scope).catch(() => {
-    // Fallback: run via amAction then chain
-    window.electronAPI.amAction('install', next, scope).then(()=>{
-      loadApps().then(()=> applySearch());
-    }).finally(()=>{
-      activeInstallSession.done = true;
-      setTimeout(()=> processNextInstall(), 200);
-    });
+  startStreamingInstall(next, scope).catch((err) => {
+    showToast(err?.message || t('toast.installFailed', {name: next}));
+    activeInstallSession.done = true;
+    setTimeout(() => processNextInstall(), 200);
   });
   refreshAllInstallButtons();
 }
@@ -1560,7 +1556,7 @@ async function cancelActiveInstall(expectedName = null) {
     await window.electronAPI.installCancel(activeInstallSession.id);
     showToast(t('toast.cancelRequested'));
     try {
-      await window.electronAPI.amAction('uninstall', appName);
+      await window.electronAPI.uninstallApp(appName);
     } catch (_){ }
     try {
       await loadApps();
@@ -2741,7 +2737,7 @@ appsDiv?.addEventListener('click', (e) => {
         const tile = actionBtn.closest('.app-tile');
         if (tile){ tile.classList.add('busy'); }
         showToast(t('toast.uninstalling', {name: appName}));
-        window.electronAPI.amAction('uninstall', appName).then(() => {
+        window.electronAPI.uninstallApp(appName).then(() => {
           loadApps().then(()=> {
             applySearch();
             actionBtn.classList.remove('loading'); // Remove spinner after uninstall
@@ -3439,14 +3435,14 @@ async function fetchUpdatesOutput(){
       return await startUpdatesStream();
     } catch (err) {
       if (err?.error === 'external-update-running' || err?.message === 'external-update-running') throw err;
-      console.warn('Streaming updates failed, fallback to am-action', err);
+      console.warn('Streaming updates failed, fallback to updates-bulk', err);
       activeUpdateStreamId = null;
     }
   }
-  if (!window.electronAPI?.amAction) return { output: '' };
-  const res = await window.electronAPI.amAction('__update_all__');
-  if (res === 'external-update-running') throw new Error('external-update-running');
-  const output = typeof res === 'string' ? res : (res ? String(res) : '');
+  if (!window.electronAPI?.updatesBulk) return { output: '' };
+  const res = await window.electronAPI.updatesBulk();
+  if (res?.error === 'external-update-running') throw new Error('external-update-running');
+  const output = res?.output || (typeof res === 'string' ? res : '');
   if (output) {
     revealUpdatesTerminal();
     resetUpdatesTerminal();
