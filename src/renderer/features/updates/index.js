@@ -499,7 +499,8 @@
 
     return {
       setSpinnerBusy: setUpdateSpinnerBusy,
-      getSpinnerBusy: function () { return updateSpinnerBusy; }
+      getSpinnerBusy: function () { return updateSpinnerBusy; },
+      refreshToggleUi: updateUpdatesToggleUi
     };
   }
 

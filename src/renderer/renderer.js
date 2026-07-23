@@ -669,6 +669,9 @@ const _updatesApi = (function initUpdates() {
   });
 })();
 
+function setUpdateSpinnerBusy(val) { _updatesApi?.setSpinnerBusy?.(val); }
+function updateUpdatesToggleUi() { _updatesApi?.refreshToggleUi?.(); }
+
 function rerenderActiveCategory() {
   if (applySearch !== defaultApplySearch) {
     try {
@@ -1136,7 +1139,7 @@ function applyTranslations() {
   if (tabSecondary) {
     tabSecondary.textContent = t('tabs.categories') || 'Categories';
   }
-  setUpdateSpinnerBusy(updateSpinnerBusy);
+  setUpdateSpinnerBusy(_updatesApi?.getSpinnerBusy?.() ?? false);
   updateUpdatesToggleUi();
   if (!sandboxState.logBuffer) resetSandboxLog();
   refreshAllSandboxBadges();
@@ -1211,6 +1214,9 @@ const settingsPanelApi = window.ui?.settingsPanel?.init?.({
     updateScopeButtonUI();
   }
 }) || null;
+
+if (window.ui?.confirmModal?.init) window.ui.confirmModal.init({ t });
+if (window.ui?.lightbox?.init) window.ui.lightbox.init({ t });
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
