@@ -6,6 +6,9 @@
     "start": "electron .",
     "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
     "lint": "eslint main.js preload.js src/**/*.js",
+    "test": "node --test test/main/*.test.js test/renderer/*.test.js",
+    "test:main": "node --test test/main/*.test.js",
+    "test:renderer": "node --test test/renderer/*.test.js",
     "dist": "npx electron-builder --linux dir && find ./dist -name '*.node' -exec chmod 644 {} +",
     "postinstall": "if [ \"$CI\" != \"true\" ]; then electron-builder install-app-deps; fi"
   },
@@ -13,7 +16,8 @@
     "@electron/rebuild": "^4.0.1",
     "electron": "^35.7.5",
     "electron-builder": "^26.0.12",
-    "eslint": "^9.39.4"
+    "eslint": "^9.39.4",
+    "jsdom": "^29.1.1"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

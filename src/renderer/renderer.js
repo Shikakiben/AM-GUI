@@ -485,32 +485,6 @@ if (modeMenuBtn && modeMenu) {
   });
 }
 
-function startUpdateTimer() {
-  const timer = document.querySelector('.update-timer');
-  if (!timer) return;
-  // Don't reset if already in progress
-  if (updateTimerStart === null) updateTimerStart = Date.now();
-  if (updateTimerInterval) return;
-  const updateTimerText = () => {
-    const elapsed = Math.max(0, Math.floor((Date.now() - updateTimerStart) / 1000));
-    if (elapsed < 60) {
-      timer.textContent = `${elapsed}s`;
-    } else {
-      const min = Math.floor(elapsed / 60);
-      const sec = String(elapsed % 60).padStart(2, '0');
-      timer.textContent = `${min}:${sec}`;
-    }
-  };
-  updateTimerText();
-  updateTimerInterval = setInterval(updateTimerText, 1000);
-}
-
-function stopUpdateTimer() {
-  if (updateTimerInterval) clearInterval(updateTimerInterval);
-  updateTimerInterval = null;
-  updateTimerStart = null;
-}
-
 updateModeMenuUI();
 
 const appsDiv = document.getElementById('apps');
@@ -1820,20 +1794,8 @@ async function openPmDocs() {
 }
 
 async function copyTextToClipboard(text) {
-  if (!text) throw new Error('nothing to copy');
-  if (navigator?.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  document.execCommand('copy');
-  textarea.remove();
+  if (!text) return;
+  try { await navigator.clipboard.writeText(text); } catch (_) {}
 }
 
 async function runAutoInstallAppMan() {
@@ -2567,7 +2529,6 @@ function showDetails(appName) {
   if (detailsInstallBtn) {
     detailsInstallBtn.hidden = !!app.installed;
     detailsInstallBtn.setAttribute('data-name', app.name);
-    detailsInstallBtn.setAttribute('data-name', app.name);
     // Always remove spinner and re-enable the button
   detailsInstallBtn.classList.remove('loading');
   detailsInstallBtn.disabled = false;
@@ -3131,10 +3092,7 @@ function appendUpdatesTerminalChunk(chunk) {
   const term = ensureUpdatesTerminal();
   if (!term) {
     if (!updatesTerminalEl) return;
-    const cleaned = chunk
-      .replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '')
-      .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
-      .replace(/[\x07\x08]/g, '');
+    const cleaned = stripAnsiSequences(chunk);
     updatesTerminalEl.classList.add('updates-terminal-fallback');
     updatesTerminalEl.textContent += cleaned.replace(/\r?\n/g, '\n');
     updatesTerminalEl.scrollTop = updatesTerminalEl.scrollHeight;
@@ -3525,7 +3483,7 @@ async function loadRemoteDescription(appName) {
   let images = [];
   try {
     const parser2 = new DOMParser();
-    const doc2 = parser2.parseFromString(html, 'text/html');
+    const doc2 = parser2.parseFromString(longDesc, 'text/html');
     const imgEls = Array.from(doc2.querySelectorAll('img'));
     // Filter: avoid icons that are too small or decorative
     const filtered = imgEls.filter(img => {
@@ -3695,15 +3653,7 @@ if (window.electronAPI.onInstallProgress){
       // --- Extraction du pourcentage de progression depuis le flux ---
       if (msg.raw !== undefined) {
         // Robust cleanup of all ANSI/OSC escape sequences (colors, cursor, ESC 7/8, etc.)
-        const ansiCleaned = msg.raw
-          // ESC [ ... sequences (CSI)
-          .replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '')
-          // ESC ... sequences (OSC, ESC 7, ESC 8, etc.)
-          .replace(/\x1B[][A-Za-z0-9#()*+\-.\/]*|\x1B[7-8]/g, '')
-          // OSC sequences (Operating System Command)
-          .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
-          // Other control characters
-          .replace(/[\x07\x08\x0D\x0A\x1B]/g, '');
+        const ansiCleaned = stripAnsiSequences(msg.raw);
 
         // --- Warning block detection and accumulation ---
         if (!window._installWarningBuffer) window._installWarningBuffer = null;

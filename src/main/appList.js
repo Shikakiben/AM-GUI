@@ -227,4 +227,4 @@ function registerAppListHandlers(ipcMain, deps) {
   });
 }
 
-module.exports = { registerAppListHandlers };
+module.exports = { parseListOutput, parseInstalledOutput, detectBundles, registerAppListHandlers };

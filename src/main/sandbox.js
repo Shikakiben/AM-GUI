@@ -272,4 +272,4 @@ function registerSandboxHandlers(ipcMain, deps) {
   });
 }
 
-module.exports = { registerSandboxHandlers };
+module.exports = { registerSandboxHandlers, normalizeCustomSandboxPath, buildSandboxAnswerScript, getForbiddenSandboxPaths, SANDBOX_DIR_KEYS };
