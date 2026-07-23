@@ -9,6 +9,9 @@
     "test": "node --test test/main/*.test.js test/renderer/*.test.js",
     "test:main": "node --test test/main/*.test.js",
     "test:renderer": "node --test test/renderer/*.test.js",
+    "verify": "node scripts/verify-main-modules.js && node scripts/verify-renderer-queue.js && node scripts/verify-renderer-boot.js && node scripts/verify-ipc-surface.js",
+    "verify:boot": "node scripts/verify-renderer-boot.js",
+    "verify:ipc": "node scripts/verify-ipc-surface.js",
     "dist": "npx electron-builder --linux dir && find ./dist -name '*.node' -exec chmod 644 {} +",
     "postinstall": "if [ \"$CI\" != \"true\" ]; then electron-builder install-app-deps; fi"
   },
