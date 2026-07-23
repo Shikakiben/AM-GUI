@@ -515,7 +515,7 @@ const sandboxApi = (function initSandbox() {
     prettifyAppName,
     scheduleInstalledResort,
     loadApps,
-    openActionConfirm,
+    openActionConfirm: window.ui.confirmModal.openActionConfirm,
     getActiveInstallSession: () => installerApi?.getActiveInstallSession?.() || activeInstallSession,
     getStateInstalled: () => state.installed,
     getAllApps: () => state.allApps,
@@ -565,7 +565,7 @@ const installerApi = (function initInstaller() {
     updateQueueIndicators: () => { if (typeof updateQueueIndicators === 'function') updateQueueIndicators(); },
     isAppSandboxed,
     applySandboxBadgeToIcon,
-    openActionConfirm,
+    openActionConfirm: window.ui.confirmModal.openActionConfirm,
     setAppList,
     scrollShell,
     appsContainer: appsDiv
@@ -599,7 +599,7 @@ function ensureDetailsApi() {
     refreshAllInstallButtons,
     setAppList,
     loadApps,
-    openActionConfirm,
+    openActionConfirm: window.ui.confirmModal.openActionConfirm,
     rerenderActiveCategory,
     scrollShell,
     appsContainer: appsDiv,
@@ -762,58 +762,6 @@ try { document.addEventListener('category.override', () => { try { setTimeout(()
 
 // initial population of the banner
 if (featuredFeature && typeof featuredFeature.updateFromState === 'function') featuredFeature.updateFromState();
-// ...existing code...
-// Modale confirmation actions
-const actionConfirmModal = document.getElementById('actionConfirmModal');
-const actionConfirmMessage = document.getElementById('actionConfirmMessage');
-const actionConfirmCancel = document.getElementById('actionConfirmCancel');
-const actionConfirmOk = document.getElementById('actionConfirmOk');
-let confirmResolve = null;
-function openActionConfirm({ title, message, okLabel, intent }) {
-  if (!actionConfirmModal) return Promise.resolve(false);
-  actionConfirmMessage.innerHTML = message || '';
-  actionConfirmOk.textContent = okLabel || t('confirm.ok');
-  // Intent styling (danger / install)
-  actionConfirmOk.className = 'btn';
-  if (intent === 'danger') {
-    actionConfirmOk.classList.add('btn-soft-red');
-  } else {
-    actionConfirmOk.classList.add('btn-soft-blue');
-  }
-  if (actionConfirmCancel) actionConfirmCancel.className = 'btn-soft-neutral';
-  actionConfirmModal.hidden = false;
-  setTimeout(()=> actionConfirmOk.focus(), 30);
-  return new Promise(res => { confirmResolve = res; });
-}
-function closeActionConfirm(result){
-  if (!actionConfirmModal) return;
-  actionConfirmModal.hidden = true;
-  if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
-}
-actionConfirmCancel?.addEventListener('click', ()=> closeActionConfirm(false));
-actionConfirmOk?.addEventListener('click', ()=> closeActionConfirm(true));
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && actionConfirmModal && !actionConfirmModal.hidden) {
-    e.stopPropagation();
-    closeActionConfirm(false);
-  }
-  if (e.key === 'Enter' && actionConfirmModal && !actionConfirmModal.hidden) {
-    // Valide sur Enter uniquement si focus pas sur Cancel
-    const active = document.activeElement;
-    if (active !== actionConfirmCancel) {
-      e.preventDefault();
-      closeActionConfirm(true);
-    }
-  }
-}, { capture:true });
-// Lightbox
-const lightbox = document.getElementById('lightbox');
-const lightboxImage = document.getElementById('lightboxImage');
-const lightboxCaption = document.getElementById('lightboxCaption');
-const lightboxPrev = document.getElementById('lightboxPrev');
-const lightboxNext = document.getElementById('lightboxNext');
-const lightboxClose = document.getElementById('lightboxClose');
-let lightboxState = { images: [], index: 0, originApp: null };
 
 const descriptionCache = new Map();
 // --- Multilingual support ---
@@ -860,6 +808,8 @@ function t(key) {
   }
   return str;
 }
+window.ui.confirmModal?.init({ t: t });
+window.ui.lightbox?.init();
 
 function setPmPopupStatus(key, vars) {
   if (!pmPopupStatus) return;
@@ -934,7 +884,7 @@ async function handleManualInstallClick() {
     setPmPopupStatus('missingPm.manual.copied');
 
     // Show a confirmation dialog instructing user what to do next
-    const confirmed = await openActionConfirm({
+    const confirmed = await window.ui.confirmModal.openActionConfirm({
       message: t('missingPm.manual.confirmDesc'),
       okLabel: t('missingPm.manual.ok'),
       intent: 'install'
@@ -1665,7 +1615,7 @@ appsDiv?.addEventListener('click', (e) => {
     const appName = actionBtn.getAttribute('data-app');
     if (!action || !appName) return;
     if (action === 'install') {
-      openActionConfirm({
+      window.ui.confirmModal.openActionConfirm({
         title: t('confirm.installTitle'),
         message: t('confirm.installMsg', {name: `<strong>${appName}</strong>`}),
         okLabel: t('details.install')
@@ -1676,8 +1626,7 @@ appsDiv?.addEventListener('click', (e) => {
         if (tile){ tile.classList.add('busy'); }
         enqueueInstall(appName, (installerApi?.getInstallScope?.() ?? installScope));
       });
-    } else if (action === 'uninstall') {
-      openActionConfirm({
+      window.ui.confirmModal.openActionConfirm({
         title: t('confirm.uninstallTitle'),
         message: t('confirm.uninstallMsg', {name: `<strong>${appName}</strong>`}),
         okLabel: t('details.uninstall'),
@@ -1727,17 +1676,12 @@ window.addEventListener('keydown', (e) => {
     else settingsBtn?.click();
     return;
   }
-  // Escape: close details or lightbox / modes menu / settings
+  // Escape: close details / modes menu / settings
   if (e.key === 'Escape') {
-    if (lightbox && !lightbox.hidden) { closeLightbox(); return; }
     if (document.body.classList.contains('details-mode')) { exitDetailsView(); return; }
     if (!modeMenu?.hidden){ modeMenu.hidden = true; modeMenuBtn?.setAttribute('aria-expanded','false'); return; }
     if (settingsPanelApi?.isOpen?.()) { settingsPanelApi.close(); return; }
     if (!settingsPanel?.hidden){ settingsPanel.hidden = true; settingsBtn?.setAttribute('aria-expanded','false'); return; }
-  }
-  if (lightbox && !lightbox.hidden) {
-    if (e.key === 'ArrowLeft') { if (lightboxState.index > 0) { lightboxState.index--; applyLightboxImage(); } }
-    else if (e.key === 'ArrowRight') { if (lightboxState.index < lightboxState.images.length - 1) { lightboxState.index++; applyLightboxImage(); } }
   }
 }, { capture:true });
 
@@ -1999,7 +1943,7 @@ function applyDescription(appName, record) {
         const div = document.createElement('div'); div.className='shot';
         const img = document.createElement('img'); img.src = src; img.loading='lazy';
         img.onerror = () => { div.remove(); };
-        img.addEventListener('click', () => openLightbox(record.images, record.images.indexOf(src), detailsName?.textContent || ''));
+        img.addEventListener('click', () => window.ui.lightbox.openLightbox(record.images, record.images.indexOf(src), detailsName?.textContent || ''));
         div.appendChild(img); detailsGalleryInner.appendChild(div);
       });
       detailsGallery.hidden = false;
@@ -2009,49 +1953,6 @@ function applyDescription(appName, record) {
   }
 }
 
-function openLightbox(images, index, captionBase) {
-  if (!lightbox || !lightboxImage) return;
-  lightboxState.images = images || [];
-  lightboxState.index = index || 0;
-  lightboxState.originApp = captionBase;
-  applyLightboxImage();
-  lightbox.hidden = false;
-  // Focus on close for accessibility
-  if (lightboxClose) setTimeout(()=> lightboxClose.focus(), 30);
-}
-
-function applyLightboxImage() {
-  if (!lightboxImage) return;
-  const src = lightboxState.images[lightboxState.index];
-  lightboxImage.src = src;
-  if (lightboxCaption) {
-    lightboxCaption.textContent = `${lightboxState.originApp} – ${lightboxState.index+1}/${lightboxState.images.length}`;
-  }
-  updateLightboxNav();
-}
-
-function updateLightboxNav() {
-  if (lightboxPrev) lightboxPrev.disabled = lightboxState.index <= 0;
-  if (lightboxNext) lightboxNext.disabled = lightboxState.index >= lightboxState.images.length - 1;
-  if (lightboxPrev) lightboxPrev.style.visibility = lightboxState.images.length > 1 ? 'visible' : 'hidden';
-  if (lightboxNext) lightboxNext.style.visibility = lightboxState.images.length > 1 ? 'visible' : 'hidden';
-}
-
-function closeLightbox() {
-  if (lightbox) lightbox.hidden = true;
-}
-
-lightboxPrev?.addEventListener('click', () => {
-  if (lightboxState.index > 0) { lightboxState.index--; applyLightboxImage(); }
-});
-lightboxNext?.addEventListener('click', () => {
-  if (lightboxState.index < lightboxState.images.length - 1) { lightboxState.index++; applyLightboxImage(); }
-});
-lightboxClose?.addEventListener('click', () => closeLightbox());
-lightbox?.addEventListener('click', (e) => {
-  if (e.target === lightbox) closeLightbox();
-// Lightbox removed: no separate gallery
-});
 
 
 
