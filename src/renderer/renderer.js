@@ -474,6 +474,12 @@ const installStreamElapsed = document.getElementById('installStreamElapsed');
 const installProgressBar = document.getElementById('installStreamProgressBar');
 const installProgressPercentLabel = document.getElementById('installStreamProgressPercent');
 const installProgressEtaLabel = document.getElementById('installStreamEta');
+
+// stripAnsiSequences from updates feature module (fallback if module not loaded)
+const stripAnsiSequences = window.features?.updates?.stripAnsiSequences || function(text = '') {
+  return (text || '').replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '');
+};
+
 // Sandbox feature
 const sandboxApi = (function initSandbox() {
   const mod = window.features?.sandbox;
@@ -1861,11 +1867,6 @@ tabs.forEach(tab => {
     }
   });
 });
-
-// stripAnsiSequences from updates feature module (fallback if module not loaded)
-const stripAnsiSequences = window.features?.updates?.stripAnsiSequences || function(text = '') {
-  return (text || '').replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '');
-};
 
 // ...existing code...
 async function loadRemoteDescription(appName) {
