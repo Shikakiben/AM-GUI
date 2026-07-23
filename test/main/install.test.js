@@ -1,7 +1,8 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const path = require('path');
 
-const MODULE_PATH = '/home/moi/AM-GUI/src/main/install.js';
+const MODULE_PATH = path.resolve(__dirname, '../../src/main/install.js');
 const Module = require('module');
 const _originalRequire = Module.prototype.require;
 

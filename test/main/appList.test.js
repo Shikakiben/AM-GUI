@@ -1,17 +1,20 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const path = require('path');
+
+const MODULE_PATH = path.resolve(__dirname, '../../src/main/appList.js');
 
 beforeEach(() => {
-  delete require.cache[require.resolve('/home/moi/AM-GUI/src/main/appList.js')];
+  delete require.cache[require.resolve(MODULE_PATH)];
 });
 
 afterEach(() => {
-  delete require.cache[require.resolve('/home/moi/AM-GUI/src/main/appList.js')];
+  delete require.cache[require.resolve(MODULE_PATH)];
 });
 
 describe('parseListOutput', () => {
   it('parses catalog apps after empty line separator', () => {
-    const { parseListOutput } = require('/home/moi/AM-GUI/src/main/appList.js');
+    const { parseListOutput } = require(MODULE_PATH);
     const input = [
       '\u25c6 firefox: Firefox browser',
       '\u25c6 vlc: VLC player',
@@ -28,7 +31,7 @@ describe('parseListOutput', () => {
   });
 
   it('returns empty sets for empty input', () => {
-    const { parseListOutput } = require('/home/moi/AM-GUI/src/main/appList.js');
+    const { parseListOutput } = require(MODULE_PATH);
     const result = parseListOutput('');
     assert.strictEqual(result.catalogSet.size, 0);
     assert.strictEqual(result.catalogDesc.size, 0);
@@ -38,7 +41,7 @@ describe('parseListOutput', () => {
   });
 
   it('collects descriptions from catalog entries', () => {
-    const { parseListOutput } = require('/home/moi/AM-GUI/src/main/appList.js');
+    const { parseListOutput } = require(MODULE_PATH);
     const input = [
       '\u25c6 firefox: Firefox web browser',
       '\u25c6 vlc: VLC media player',
@@ -54,7 +57,7 @@ describe('parseListOutput', () => {
 
 describe('parseInstalledOutput', () => {
   it('parses table with name, version, scope', () => {
-    const { parseInstalledOutput } = require('/home/moi/AM-GUI/src/main/appList.js');
+    const { parseInstalledOutput } = require(MODULE_PATH);
     const input = [
       '  - NAME | VER | SOURCE | STATUS   ',
       '\u25c6 firefox | 120.0 | am | \u2714    ',
@@ -70,7 +73,7 @@ describe('parseInstalledOutput', () => {
   });
 
   it('handles empty input', () => {
-    const { parseInstalledOutput } = require('/home/moi/AM-GUI/src/main/appList.js');
+    const { parseInstalledOutput } = require(MODULE_PATH);
     const result = parseInstalledOutput('');
     assert.strictEqual(result.installedEntries.length, 0);
     assert.strictEqual(result.installedNameSet.size, 0);
@@ -79,7 +82,7 @@ describe('parseInstalledOutput', () => {
   });
 
   it('detects user vs system scope', () => {
-    const { parseInstalledOutput } = require('/home/moi/AM-GUI/src/main/appList.js');
+    const { parseInstalledOutput } = require(MODULE_PATH);
     const userInput = [
       '"APPMAN"',
       '  - NAME | VER | SOURCE | STATUS   ',
@@ -102,7 +105,7 @@ describe('parseInstalledOutput', () => {
 
 describe('detectBundles', () => {
   it('detects suite bundles', () => {
-    const { detectBundles } = require('/home/moi/AM-GUI/src/main/appList.js');
+    const { detectBundles } = require(MODULE_PATH);
     const catalogDesc = new Map([['libreoffice-writer', 'installs the full "libreoffice" suite']]);
     const result = detectBundles(catalogDesc);
     assert.deepStrictEqual(result, { 'libreoffice-writer': 'libreoffice' });

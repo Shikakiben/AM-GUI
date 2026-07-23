@@ -1,17 +1,20 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
+const path = require('path');
 const childProcess = require('child_process');
+
+const MODULE_PATH = path.resolve(__dirname, '../../src/main/packageManager.js');
 
 let originalExec;
 
 beforeEach(() => {
   originalExec = childProcess.exec;
-  delete require.cache[require.resolve('/home/moi/AM-GUI/src/main/packageManager.js')];
+  delete require.cache[require.resolve(MODULE_PATH)];
 });
 
 afterEach(() => {
   childProcess.exec = originalExec;
-  delete require.cache[require.resolve('/home/moi/AM-GUI/src/main/packageManager.js')];
+  delete require.cache[require.resolve(MODULE_PATH)];
 });
 
 describe('detectPackageManager', () => {
@@ -20,7 +23,7 @@ describe('detectPackageManager', () => {
       if (cmd === 'command -v am') return callback(null);
       return callback(new Error('not found'));
     };
-    const { detectPackageManager } = require('/home/moi/AM-GUI/src/main/packageManager.js');
+    const { detectPackageManager } = require(MODULE_PATH);
     const result = await detectPackageManager(true);
     assert.strictEqual(result.pm, 'am');
     assert.strictEqual(result.bothFound, false);
@@ -31,7 +34,7 @@ describe('detectPackageManager', () => {
       if (cmd === 'command -v appman') return callback(null);
       return callback(new Error('not found'));
     };
-    const { detectPackageManager } = require('/home/moi/AM-GUI/src/main/packageManager.js');
+    const { detectPackageManager } = require(MODULE_PATH);
     const result = await detectPackageManager(true);
     assert.strictEqual(result.pm, 'appman');
     assert.strictEqual(result.bothFound, false);
@@ -39,7 +42,7 @@ describe('detectPackageManager', () => {
 
   it('returns bothFound=true when both are found', async () => {
     childProcess.exec = (cmd, callback) => callback(null);
-    const { detectPackageManager } = require('/home/moi/AM-GUI/src/main/packageManager.js');
+    const { detectPackageManager } = require(MODULE_PATH);
     const result = await detectPackageManager(true);
     assert.strictEqual(result.pm, 'am');
     assert.strictEqual(result.bothFound, true);
@@ -47,7 +50,7 @@ describe('detectPackageManager', () => {
 
   it('returns pm=null when neither is found', async () => {
     childProcess.exec = (cmd, callback) => callback(new Error('not found'));
-    const { detectPackageManager } = require('/home/moi/AM-GUI/src/main/packageManager.js');
+    const { detectPackageManager } = require(MODULE_PATH);
     const result = await detectPackageManager(true);
     assert.strictEqual(result.pm, null);
     assert.strictEqual(result.bothFound, false);
@@ -59,7 +62,7 @@ describe('detectPackageManager', () => {
       execCount++;
       callback(null);
     };
-    const { detectPackageManager } = require('/home/moi/AM-GUI/src/main/packageManager.js');
+    const { detectPackageManager } = require(MODULE_PATH);
     await detectPackageManager();
     await detectPackageManager();
     assert.strictEqual(execCount, 2);
@@ -71,7 +74,7 @@ describe('detectPackageManager', () => {
       execCount++;
       callback(null);
     };
-    const { detectPackageManager, invalidatePackageManagerCache } = require('/home/moi/AM-GUI/src/main/packageManager.js');
+    const { detectPackageManager, invalidatePackageManagerCache } = require(MODULE_PATH);
     await detectPackageManager();
     invalidatePackageManagerCache();
     await detectPackageManager();
