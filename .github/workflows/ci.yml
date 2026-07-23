@@ -25,17 +25,5 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run tests
+      - name: Run tests (unit + integration)
         run: npm test
-
-      - name: Verify main-process modules
-        run: node scripts/verify-main-modules.js
-
-      - name: Verify renderer queue logic
-        run: node scripts/verify-renderer-queue.js
-
-      - name: Verify renderer boot (full page load)
-        run: node scripts/verify-renderer-boot.js
-
-      - name: Verify IPC surface
-        run: node scripts/verify-ipc-surface.js
