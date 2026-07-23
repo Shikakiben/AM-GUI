@@ -1397,144 +1397,31 @@ document.addEventListener('click', (ev) => {
     window.electronAPI.openExternal(href);
   }
 }, { capture: true });
-let _loadAppsSeq = 0;
-async function loadApps() {
-  const seq = ++_loadAppsSeq;
-  appsDiv?.setAttribute('aria-busy','true');
-  let detailed;
-  try {
-    detailed = await window.electronAPI.listAppsDetailed();
-  } catch (e) {
-    detailed = { all: [], installed: [], error: t('error.ipc', {msg: e?.message || e}) };
-  }
-  if (seq !== _loadAppsSeq) return; // stale – a newer loadApps is running
-  if (!detailed.pmFound) {
-    state.allApps = [];
-    state.filtered = [];
-    showMissingPmPopup();
-    if (appsDiv) {
-      appsDiv.innerHTML = `<div class="empty-state pm-empty-placeholder"><p>${t('missingPm.popup.desc')}</p></div>`;
-    }
-    if (installedCountEl) installedCountEl.textContent = '0';
-    sandboxedApps.clear();
-    refreshAllSandboxBadges();
-    appsDiv?.setAttribute('aria-busy','false');
-    return;
-  }
-  hideMissingPmPopup();
-  if (detailed.bothPms) {
-    state.allApps = [];
-    state.filtered = [];
-    showBothPmsPopup(true);
-    if (appsDiv) {
-      appsDiv.innerHTML = `<div class="empty-state pm-empty-placeholder"><p>${t('bothPms.popup.desc')}</p></div>`;
-    }
-    if (installedCountEl) installedCountEl.textContent = '0';
-    sandboxedApps.clear();
-    refreshAllSandboxBadges();
-    appsDiv?.setAttribute('aria-busy','false');
-    return;
-  }
-  showBothPmsPopup(false);
-  if (detailed.error) {
-    state.allApps = [];
-    state.filtered = [];
-    if (appsDiv) appsDiv.innerHTML = `<div class='empty-state'><h3>${t('error.dialogTitle')}</h3><p style='font-size:13px;'>${detailed.error}</p></div>`;
-    if (installedCountEl) installedCountEl.textContent = '0';
-    sandboxedApps.clear();
-    refreshAllSandboxBadges();
-    appsDiv?.setAttribute('aria-busy','false');
-    return;
-  }
-  state.allApps = detailed.all || [];
-  state.filtered = state.allApps;
-  state.pmName = detailed.pmName || null;
-  const isAmPm = String(state.pmName || '').trim().toLowerCase() === 'am';
-  // Default install scope: 'user' for am, null for appman; restore from localStorage
-  const savedScope = localStorage.getItem('installScope');
-  const newInstallScope = isAmPm ? (savedScope || 'user') : null;
-  if (installerApi) installerApi.setInstallScope?.(newInstallScope); else installScope = newInstallScope;
-  // Show/hide install scope setting in preferences
-  // Show only for am (supports both system and user scopes)
-  const scopeSettingsGroup = document.getElementById('installScopeSettingsGroup');
-  if (scopeSettingsGroup) {
-    scopeSettingsGroup.hidden = !isAmPm;
-    if (isAmPm) {
-      scopeSettingsGroup.querySelectorAll('input[name="installScopePref"]').forEach(r => {
-        r.checked = r.value === (installerApi?.getInstallScope?.() ?? installScope);
-      });
-    }
-  }
-  // Build the set of installed apps
-  try {
-    const installedNames = new Set();
-    if (Array.isArray(detailed.installed)) {
-      detailed.installed.forEach(entry => {
-        if (!entry) return;
-        if (typeof entry === 'string') installedNames.add(entry.toLowerCase());
-        else if (entry.name) installedNames.add(String(entry.name).toLowerCase());
-      });
-    } else {
-      // Fallback: derive from allApps
-      state.allApps.filter(a=>a && a.installed && a.name).forEach(a=> installedNames.add(a.name.toLowerCase()));
-    }
-    state.installed = installedNames;
-  } catch(_) { state.installed = new Set(); }
-  // Dynamic app group filtering:
-  // 1. Bundle children: mark as installed when parent suite is installed
-  //    (e.g. user installs "adb" → "platform-tools" is installed → adb stays
-  //    visible and is shown as installed, so the user gets clear feedback)
-  // 2. Appimage mutex pairs: X-appimage and X share the same binary/config;
-  //    hide only the uninstalled partner so the installed one stays visible.
-  function applyAppGroupFiltering(bundleChildOf) {
-    const toRemove = new Set();
-    // 1. Bundle children: remove from all views (parent stays visible, installed).
-    //    After installing a child (adb…) the details panel redirects to the parent.
-    for (const app of state.allApps) {
-      const name = String(app.name).toLowerCase();
-      const parent = (bundleChildOf || {})[name];
-      if (parent && state.installed.has(parent.toLowerCase())) {
-        state.installed.add(name);
-        toRemove.add(name);
-      }
-    }
-    // 2. Appimage mutex pairs (e.g. firefox ↔ firefox-appimage)
-    // Also build mutexRedirect: { 'firefox-appimage': 'firefox' } so that
-    // post-install can redirect to the surviving app.
-    const allNames = new Set(state.allApps.map(a => String(a.name).toLowerCase()));
-    const mutexRedirect = {};
-    for (const app of state.allApps) {
-      const name = String(app.name).toLowerCase();
-      if (name.endsWith('-appimage')) {
-        const base = name.slice(0, -'-appimage'.length);
-        if (allNames.has(base)) {
-          if (state.installed.has(base)) {
-            toRemove.add(name);
-            mutexRedirect[name] = base; // installing firefox-appimage → show firefox
-          } else if (state.installed.has(name)) {
-            toRemove.add(base);
-            mutexRedirect[base] = name; // installing firefox → show firefox-appimage
-          }
-        }
-      }
-    }
-    state.mutexRedirect = mutexRedirect;
-    if (toRemove.size > 0) {
-      state.allApps = state.allApps.filter(a => !toRemove.has(String(a.name).toLowerCase()));
-      state.filtered = state.filtered.filter(a => !toRemove.has(String(a.name).toLowerCase()));
-    }
-  }
-  state.bundleChildOf = detailed.bundleChildOf || {};
-  state.mutexRedirect = {};
-  applyAppGroupFiltering(detailed.bundleChildOf);
-  if (seq !== _loadAppsSeq) return; // stale
-  if (installedCountEl) installedCountEl.textContent = String(state.allApps.filter(a => a.installed).length);
-  cleanupSandboxCache();
-  rerenderActiveCategory();
-  refreshAllSandboxBadges();
-  scheduleSandboxStateSweep();
-  prefetchPreloadImages();
-}
+// App loader feature
+const appLoaderApi = (function initAppLoader() {
+  const mod = window.features?.appLoader;
+  if (typeof mod?.init !== 'function') return null;
+  return mod.init({
+    doms: () => ({ appsDiv, installedCountEl }),
+    state: () => state,
+    electronAPI: () => window.electronAPI,
+    t,
+    showMissingPmPopup,
+    hideMissingPmPopup,
+    showBothPmsPopup,
+    updateInstalledCount: (v) => { if (installedCountEl) installedCountEl.textContent = v; },
+    sandboxedApps: () => sandboxedApps,
+    refreshAllSandboxBadges,
+    cleanupSandboxCache,
+    scheduleSandboxStateSweep,
+    setInstallScope: (s) => { if (installerApi) installerApi.setInstallScope?.(s); else installScope = s; },
+    getInstallScope: () => installerApi?.getInstallScope?.() ?? installScope,
+    rerenderActiveCategory,
+    prefetchPreloadImages
+  });
+})();
+
+async function loadApps() { return appLoaderApi?.loadApps?.(); }
 
 let iconObserver = null;
 function initIconObserver(){
