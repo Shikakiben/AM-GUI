@@ -20,8 +20,6 @@ const { detectPackageManager, invalidatePackageManagerCache } = require('./src/m
 const { createIconCacheManager } = require('./src/main/iconCache');
 const { installAppManAuto } = require('./src/main/appManAuto');
 const { registerGpuHandlers } = require('./src/main/gpu');
-const { registerExternalHandlers } = require('./src/main/external');
-const { registerWindowHandlers } = require('./src/main/window');
 const { isExternalUpdateRunning, registerUpdatesHandlers } = require('./src/main/updates');
 const { registerSandboxHandlers } = require('./src/main/sandbox');
 const { registerInstallHandlers } = require('./src/main/install');
@@ -151,9 +149,31 @@ function createWindow() {
 // Register IPC handlers
 const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto, isExternalUpdateRunning, fsp };
 registerGpuHandlers(ipcMain, app);
-registerExternalHandlers(ipcMain, deps);
-registerWindowHandlers(ipcMain);
 registerUpdatesHandlers(ipcMain, deps);
+
+// Inline handlers (too small to justify separate modules)
+ipcMain.handle('open-external', async (_event, url) => {
+  try {
+    if (!url || typeof url !== 'string') return { ok: false, error: tErr('errInvalidUrl', 'invalid url') };
+    if (!/^https?:\/\//i.test(url)) return { ok: false, error: tErr('errSchemeNotAllowed', 'scheme not allowed') };
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e?.message || String(e) }; }
+});
+
+ipcMain.handle('window-control', (event, action) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  switch (action) {
+    case 'min': win.minimize(); break;
+    case 'max': win.isMaximized() ? win.unmaximize() : win.maximize(); break;
+    case 'close': win.close(); break;
+  }
+});
+ipcMain.handle('close-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.destroy();
+});
 registerSandboxHandlers(ipcMain, deps);
 registerInstallHandlers(ipcMain, deps);
 registerAppListHandlers(ipcMain, deps);
@@ -170,9 +190,6 @@ ipcMain.handle('set-tray-locale', (_event, locale) => {
   if (locale && locale !== 'auto') currentLocale = locale;
   setLocale(locale);
 });
-
-// Frameless window controls (delegated to window module)
-// Already registered via registerWindowHandlers above
 
 app.whenReady().then(() => {
   try { iconCacheManager.registerProtocol(protocol); } catch (e) { console.warn('appicon protocol failed:', e); }
