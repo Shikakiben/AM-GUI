@@ -222,7 +222,8 @@ function buildTile(item){
       let btnLabel = t('details.install');
       let actionAttr = 'install';
       let disabledAttr = '';
-      if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name){
+      const activeSess = installerApi?.getActiveInstallSession?.() || activeInstallSession;
+      if (activeSess.id && !activeSess.done && activeSess.name === name){
         btnLabel = t('install.listViewCancel');
         actionAttr = 'cancel-install';
       } else {
@@ -239,7 +240,8 @@ function buildTile(item){
 
   let stateBadge = '';
   if (state.viewMode !== 'list' && !installed) {
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name) {
+    const activeSess2 = installerApi?.getActiveInstallSession?.() || activeInstallSession;
+    if (activeSess2.id && !activeSess2.done && activeSess2.name === name) {
       stateBadge = ' <span class="install-state-badge installing" data-state="installing">'+t('install.status')+'<button class="queue-remove-badge inline-action" data-action="cancel-install" data-app="'+name+'" title="'+t('install.cancelShort')+'" aria-label="'+t('install.cancelShort')+'">✕</button></span>';
     } else {
       const pos = getQueuePosition(name);
@@ -317,43 +319,6 @@ setAnimationsActive(false);
 // ...existing code...
 
 
-function initXtermLog() {
-  if (!xtermLogDiv) xtermLogDiv = document.getElementById('xtermLog');
-  if (!xtermLogDiv) return;
-  if (!xterm) {
-    try {
-      xterm = new Terminal({
-        fontSize: 13,
-        fontFamily: 'monospace',
-        theme: { background: '#181c20' },
-        convertEol: true,
-        scrollback: 2000,
-        disableStdin: true,
-        cursorBlink: false
-      });
-      xtermFit = new FitAddonClass();
-      xterm.loadAddon(xtermFit);
-      xterm.open(xtermLogDiv);
-      window.addEventListener('resize', ()=>xtermFit.fit());
-      xtermFit.fit();
-    } catch (_err) {
-      xterm = null;
-      xtermFit = null;
-      if (xtermLogDiv) xtermLogDiv.style.display = 'none';
-      if (installStreamLog) installStreamLog.style.display = '';
-      return;
-    }
-  } else {
-    xterm.clear();
-    xtermFit && xtermFit.fit();
-  }
-  xtermLogDiv.style.display = '';
-  if (installStreamLog) installStreamLog.style.display = 'none';
-}
-// --- xterm.js for native terminal display ---
-let xterm = null;
-let xtermFit = null;
-let xtermLogDiv = null;
 // Window controls
 document.addEventListener('click', (e) => {
   const b = e.target.closest('.win-btn');
@@ -509,73 +474,111 @@ const installStreamElapsed = document.getElementById('installStreamElapsed');
 const installProgressBar = document.getElementById('installStreamProgressBar');
 const installProgressPercentLabel = document.getElementById('installStreamProgressPercent');
 const installProgressEtaLabel = document.getElementById('installStreamEta');
-const sandboxOpenBtn = document.getElementById('sandboxOpenBtn');
-const sandboxButtonStatus = document.getElementById('sandboxButtonStatus');
-const sandboxModal = document.getElementById('sandboxModal');
-const sandboxCloseBtn = document.getElementById('sandboxCloseBtn');
-const sandboxCard = document.getElementById('sandboxCard');
-const sandboxStatusBadge = document.getElementById('sandboxStatusBadge');
-const sandboxRefreshBtn = document.getElementById('sandboxRefreshBtn');
-const sandboxConfigureBtn = document.getElementById('sandboxConfigureBtn');
-const sandboxDisableBtn = document.getElementById('sandboxDisableBtn');
-const sandboxDepsAlert = document.getElementById('sandboxDepsAlert');
-const sandboxInstallDepsBtn = document.getElementById('sandboxInstallDepsBtn');
-const sandboxUnavailable = document.getElementById('sandboxUnavailable');
-const sandboxInstallAppBtn = document.getElementById('sandboxInstallAppBtn');
-const sandboxForm = document.getElementById('sandboxForm');
-const sandboxCustomPathInput = document.getElementById('sandboxCustomPath');
-const sandboxLog = document.getElementById('sandboxLog');
-const sandboxSummary = document.getElementById('sandboxSummary');
-const sandboxSummaryList = document.getElementById('sandboxSummaryList');
-const sandboxSummaryEmpty = document.getElementById('sandboxSummaryEmpty');
-const sandboxLogSection = document.getElementById('sandboxLogSection');
-const sandboxLogToggle = document.getElementById('sandboxLogToggle');
-const nonAppimageModal = document.getElementById('nonAppimageModal');
-const nonAppimageTitle = document.getElementById('nonAppimageTitle');
-const nonAppimageCloseBtn = document.getElementById('nonAppimageClose');
-const nonAppimageDismissBtn = document.getElementById('nonAppimageDismiss');
-const nonAppimageMessage = document.getElementById('nonAppimageMessage');
-const SANDBOX_DIR_VALUES = ['desktop','documents','downloads','games','music','pictures','videos'];
-const SANDBOX_DIR_LABEL_KEYS = {
-  desktop: 'sandbox.dir.desktop',
-  documents: 'sandbox.dir.documents',
-  downloads: 'sandbox.dir.downloads',
-  games: 'sandbox.dir.games',
-  music: 'sandbox.dir.music',
-  pictures: 'sandbox.dir.pictures',
-  videos: 'sandbox.dir.videos'
-};
-const SANDBOX_PREFS_KEY = 'sandboxSharePrefs';
-let sandboxSharePrefs = loadSandboxSharePrefs();
-const sandboxedApps = new Map();
-let sandboxSweepToken = 0;
-const sandboxState = {
-  currentApp: null,
-  info: null,
-  depsReady: false,
-  busy: false,
-  pendingAction: null,
-  logBuffer: '',
-  supported: true
-};
+// Sandbox feature
+const sandboxApi = (function initSandbox() {
+  const mod = window.features?.sandbox;
+  if (typeof mod?.init !== 'function') return null;
+  return mod.init({
+    dom: {
+      sandboxOpenBtn: document.getElementById('sandboxOpenBtn'),
+      sandboxButtonStatus: document.getElementById('sandboxButtonStatus'),
+      sandboxModal: document.getElementById('sandboxModal'),
+      sandboxCloseBtn: document.getElementById('sandboxCloseBtn'),
+      sandboxCard: document.getElementById('sandboxCard'),
+      sandboxStatusBadge: document.getElementById('sandboxStatusBadge'),
+      sandboxRefreshBtn: document.getElementById('sandboxRefreshBtn'),
+      sandboxConfigureBtn: document.getElementById('sandboxConfigureBtn'),
+      sandboxDisableBtn: document.getElementById('sandboxDisableBtn'),
+      sandboxDepsAlert: document.getElementById('sandboxDepsAlert'),
+      sandboxInstallDepsBtn: document.getElementById('sandboxInstallDepsBtn'),
+      sandboxUnavailable: document.getElementById('sandboxUnavailable'),
+      sandboxInstallAppBtn: document.getElementById('sandboxInstallAppBtn'),
+      sandboxForm: document.getElementById('sandboxForm'),
+      sandboxCustomPathInput: document.getElementById('sandboxCustomPath'),
+      sandboxLog: document.getElementById('sandboxLog'),
+      sandboxSummary: document.getElementById('sandboxSummary'),
+      sandboxSummaryList: document.getElementById('sandboxSummaryList'),
+      sandboxSummaryEmpty: document.getElementById('sandboxSummaryEmpty'),
+      sandboxLogSection: document.getElementById('sandboxLogSection'),
+      sandboxLogToggle: document.getElementById('sandboxLogToggle'),
+      nonAppimageModal: document.getElementById('nonAppimageModal'),
+      nonAppimageTitle: document.getElementById('nonAppimageTitle'),
+      nonAppimageCloseBtn: document.getElementById('nonAppimageClose'),
+      nonAppimageDismissBtn: document.getElementById('nonAppimageDismiss'),
+      nonAppimageMessage: document.getElementById('nonAppimageMessage')
+    },
+    state,
+    electronAPI: window.electronAPI,
+    t,
+    showToast,
+    stripAnsiSequences: window.features?.updates?.stripAnsiSequences,
+    prettifyAppName,
+    scheduleInstalledResort,
+    loadApps,
+    openActionConfirm,
+    getActiveInstallSession: () => installerApi?.getActiveInstallSession?.() || activeInstallSession,
+    getStateInstalled: () => state.installed,
+    getAllApps: () => state.allApps,
+    getDetailsApp: () => state.currentDetailsApp
+  });
+})();
 
-renderSandboxCard();
+const sandboxState = sandboxApi?.sandboxState || { currentApp: null, info: null, depsReady: false, busy: false, pendingAction: null, logBuffer: '', supported: true };
+const sandboxedApps = sandboxApi?.sandboxedApps || new Map();
+function handleSandboxShow(appName) { return sandboxApi?.handleSandboxShow?.(appName); }
+function handleSandboxExit() { return sandboxApi?.handleSandboxExit?.(); }
+function isAppSandboxed(appName) { return sandboxApi?.isAppSandboxed?.(appName) ?? false; }
+function _setAppSandboxState(appName, active) { return sandboxApi?.setAppSandboxState?.(appName, active); }
+function applySandboxBadgeToIcon(iconWrapper, isActive) { return sandboxApi?.applySandboxBadgeToIcon?.(iconWrapper, isActive); }
+function refreshAllSandboxBadges() { return sandboxApi?.refreshAllSandboxBadges?.(); }
+function applyDetailsSandboxBadge(appName) { return sandboxApi?.applyDetailsSandboxBadge?.(appName); }
+function cleanupSandboxCache() { return sandboxApi?.cleanupSandboxCache?.(); }
+function scheduleSandboxStateSweep() { return sandboxApi?.scheduleSandboxStateSweep?.(); }
+function renderSandboxCard() { return sandboxApi?.renderSandboxCard?.(); }
+function resetSandboxLog() { return sandboxApi?.resetSandboxLog?.(); }
+function showNonAppimageModal(appName, reason) { return sandboxApi?.showNonAppimageModal?.(appName, reason); }
 
-// Current install session memory
-let activeInstallSession = {
-  id: null,
-  name: null,
-  start: 0,
-  lines: [], // array of strings
-  done: false,
-  success: null,
-  code: null
-};
-// Sequential queue
-const installQueue = []; // noms d'apps en attente (FIFO)
-const installScopeMap = new Map(); // name → 'system' | 'user'
-let installScope = 'user'; // default scope for am installs
-let detailScopeOverride = null; // per-detail-view override, cleared on back
+// Current install session memory (managed by installer module)
+let installScope = 'user';
+
+const installerApi = (function initInstaller() {
+  const mod = window.features?.installer;
+  if (typeof mod?.init !== 'function') return null;
+  return mod.init({
+    dom: {
+      installStream, installStreamElapsed, installProgressBar,
+      installProgressPercentLabel, installProgressEtaLabel, installStreamStatus,
+      detailsInstallBtn, detailsUninstallBtn, detailsName, detailsIcon,
+      installScopeBtn: document.getElementById('installScopeBtn')
+    },
+    state,
+    t,
+    showToast,
+    prettifyAppName,
+    getIconUrl,
+    loadApps,
+    applySearch,
+    showDetails,
+    rerenderActiveCategory,
+    electronAPI: window.electronAPI,
+    stripAnsiSequences,
+    updateQueueIndicators: () => { if (typeof updateQueueIndicators === 'function') updateQueueIndicators(); },
+    isAppSandboxed,
+    applySandboxBadgeToIcon,
+    openActionConfirm,
+    setAppList,
+    scrollShell,
+    appsContainer: appsDiv
+  });
+})();
+
+// Wrapper functions to maintain backward compatibility
+function getQueuePosition(name) { return installerApi?.getQueuePosition?.(name) ?? -1; }
+function removeFromQueue(name) { return installerApi?.removeFromQueue?.(name); }
+function refreshAllInstallButtons() { return installerApi?.refreshAllInstallButtons?.(); }
+function cancelActiveInstall(name) { return installerApi?.cancelActiveInstall?.(name); }
+function updateScopeButtonUI() { return installerApi?.updateScopeButtonUI?.(); }
+function enqueueInstall(name, scope) { return installerApi?.enqueueInstall?.(name, scope); }
 
 let detailsApi = null;
 
@@ -585,13 +588,13 @@ function ensureDetailsApi() {
   if (typeof initFn !== 'function') return null;
   detailsApi = initFn({
     state,
-    activeInstallSession,
+    activeInstallSession: installerApi?.getActiveInstallSession?.() || { id: null, name: null, start: 0, lines: [], done: false, success: null, code: null },
     getIconUrl,
     showToast,
     translate: t,
     enqueueInstall,
-    getInstallScope: () => detailScopeOverride ?? installScope,
-    setInstallScope: (s) => { installScope = s; },
+    getInstallScope: () => installerApi?.getInstallScope?.() ?? installScope,
+    setInstallScope: (s) => { if (installerApi) installerApi.setInstallScope?.(s); else installScope = s; },
     removeFromQueue,
     refreshAllInstallButtons,
     setAppList,
@@ -600,10 +603,10 @@ function ensureDetailsApi() {
     rerenderActiveCategory,
     scrollShell,
     appsContainer: appsDiv,
-    getActiveInstallSession: () => activeInstallSession,
+    getActiveInstallSession: () => installerApi?.getActiveInstallSession?.() || activeInstallSession,
     applyDetailsSandboxBadge,
     updateScopeButtonUI,
-    onExitDetails: () => { detailScopeOverride = null; },
+    onExitDetails: () => { installerApi?.setDetailScopeOverride?.(null); },
     elements: {
       appDetailsSection,
       backToListBtn,
@@ -621,925 +624,6 @@ function ensureDetailsApi() {
   }) || null;
   return detailsApi;
 }
-
-function resetSandboxLog() {
-  if (!sandboxLog) return;
-  sandboxState.logBuffer = '';
-  sandboxLog.textContent = t('sandbox.logEmpty') || '…';
-}
-
-function appendSandboxLog(chunk) {
-  if (!sandboxLog || typeof chunk !== 'string') return;
-  sandboxState.logBuffer += chunk;
-  const sanitized = stripAnsiSequences(sandboxState.logBuffer || '');
-  const text = sanitized.trim() || t('sandbox.logEmpty') || '…';
-  sandboxLog.textContent = text;
-  sandboxLog.scrollTop = sandboxLog.scrollHeight;
-}
-
-function isSandboxLogExpanded() {
-  return !!(sandboxLog && !sandboxLog.hidden);
-}
-
-function setSandboxLogExpanded(expanded) {
-  if (!sandboxLog || !sandboxLogToggle) return;
-  const next = !!expanded;
-  sandboxLog.hidden = !next;
-  sandboxLogToggle.setAttribute('aria-expanded', String(next));
-  if (sandboxLogSection) {
-    sandboxLogSection.dataset.open = next ? 'true' : 'false';
-  }
-}
-
-setSandboxLogExpanded(false);
-
-function inferAppImageFromInfo(appName, info) {
-  if (!info) return null;
-  if (info.sandboxForbiddenReason) return false;
-  // isAppImage is definitive when it's a boolean (detected via magic bytes or sandboxed)
-  if (typeof info.isAppImage === 'boolean') return info.isAppImage;
-  const target = typeof info.appName === 'string' ? info.appName.toLowerCase() : '';
-  if (target && appName && target !== appName.toLowerCase()) return null;
-  const execPath = typeof info.execPath === 'string' ? info.execPath.toLowerCase() : '';
-  if (!execPath) return null;
-  // Fallback to extension if no magic byte detection
-  return execPath.endsWith('.appimage');
-}
-
-function isSandboxSupported(appName, info = sandboxState.info) {
-  if (!appName) return false;
-  if (info?.sandboxForbiddenReason) return false;
-  
-  // If we don't have info yet (loading in progress), we don't know yet
-  if (!info || Object.keys(info).length === 0) return true;
-  
-  const inferred = inferAppImageFromInfo(appName, info);
-  
-  // Check if the app is installed via appman (not just if an executable exists)
-  const installedViaAppman = isAppInstalledInList(appName);
-  
-  // If the app is NOT installed via appman, don't block
-  // (a system executable with the same name should not block future sandboxing)
-  if (!installedViaAppman) return true;
-  
-  // If we have a definitive detection and the app is installed via appman, use it
-  if (inferred !== null) return inferred;
-  
-  // App installed via appman but no detection possible → probably not an AppImage
-  return false;
-}
-
-function isAppInstalledInList(appName) {
-  if (!appName) return false;
-  const lower = appName.toLowerCase();
-  if (state?.installed instanceof Set && state.installed.has(lower)) return true;
-  if (!Array.isArray(state?.allApps)) return false;
-  const entry = state.allApps.find((app) => app && typeof app.name === 'string' && app.name.toLowerCase() === lower);
-  return !!entry?.installed;
-}
-
-function openSandboxModal() {
-  if (!sandboxModal || !sandboxState.currentApp) return;
-  sandboxModal.hidden = false;
-}
-
-function closeSandboxModal() {
-  if (!sandboxModal || sandboxModal.hidden) return;
-  sandboxModal.hidden = true;
-}
-
-function showNonAppimageModal(appName, reason = null) {
-  if (!nonAppimageModal) return;
-  if (nonAppimageTitle) {
-    const titleKey = reason ? 'sandbox.forbidden.title' : 'sandbox.unsupported.title';
-    nonAppimageTitle.textContent = t(titleKey);
-  }
-  if (nonAppimageMessage) {
-    const descKey = reason ? 'sandbox.forbidden.desc' : 'sandbox.unsupported.desc';
-    nonAppimageMessage.textContent = t(descKey, { name: appName || '—' });
-  }
-  nonAppimageModal.hidden = false;
-  setTimeout(() => {
-    try { nonAppimageDismissBtn?.focus(); }
-    catch (_) {}
-  }, 30);
-}
-
-function closeNonAppimageModal() {
-  if (!nonAppimageModal || nonAppimageModal.hidden) return;
-  nonAppimageModal.hidden = true;
-}
-
-function setSandboxBusy(flag) {
-  sandboxState.busy = !!flag;
-  renderSandboxCard();
-}
-
-function updateSandboxActionStyles(isSandboxed) {
-  if (!sandboxConfigureBtn || !sandboxDisableBtn) return;
-  if (isSandboxed) {
-    sandboxConfigureBtn.classList.remove('btn-primary');
-    sandboxConfigureBtn.classList.add('btn-outline');
-    sandboxDisableBtn.classList.add('btn-primary');
-    sandboxDisableBtn.classList.remove('btn-outline');
-  } else {
-    sandboxConfigureBtn.classList.add('btn-primary');
-    sandboxConfigureBtn.classList.remove('btn-outline');
-    sandboxDisableBtn.classList.remove('btn-primary');
-    sandboxDisableBtn.classList.add('btn-outline');
-  }
-}
-
-function renderSandboxCard() {
-  if (!sandboxCard) return;
-  if (!sandboxState.currentApp) {
-    sandboxCard.hidden = true;
-    if (sandboxOpenBtn) sandboxOpenBtn.disabled = true;
-    if (sandboxButtonStatus) {
-      sandboxButtonStatus.dataset.status = 'unknown';
-      sandboxButtonStatus.textContent = '—';
-    }
-    return;
-  }
-  sandboxCard.hidden = false;
-  if (sandboxOpenBtn) {
-    sandboxOpenBtn.disabled = false;
-  }
-  const info = sandboxState.info || {};
-  const installedFromInfo = typeof info.installed === 'boolean' ? info.installed : null;
-  const installedFromList = isAppInstalledInList(sandboxState.currentApp);
-  const installedFromDetailsBtn = detailsInstallBtn ? detailsInstallBtn.hidden : null;
-  const installedFlag = !!(installedFromInfo || installedFromList || installedFromDetailsBtn === true);
-  const forbiddenReason = info?.sandboxForbiddenReason || (info?.selfSandboxProhibited ? 'self' : null);
-  const sandboxEligible = isSandboxSupported(sandboxState.currentApp, info) && !forbiddenReason;
-  sandboxState.supported = sandboxEligible;
-  if (sandboxOpenBtn) {
-    const titleKey = sandboxEligible ? 'sandbox.title' : (forbiddenReason ? 'sandbox.forbidden.title' : 'sandbox.unsupported.title');
-    sandboxOpenBtn.title = t(titleKey);
-  }
-  const statusKey = sandboxState.busy
-    ? 'busy'
-    : (!sandboxEligible
-      ? 'forbidden' // same button label for all non-sandboxable; popup will specify the reason
-      : (info.sandboxed ? 'active' : (installedFlag ? 'inactive' : 'unknown')));
-  const statusLabel = t(`sandbox.status.${statusKey}`) || statusKey;
-  if (sandboxStatusBadge) {
-    sandboxStatusBadge.dataset.status = statusKey;
-    sandboxStatusBadge.textContent = statusLabel;
-  }
-  if (sandboxButtonStatus) {
-    sandboxButtonStatus.dataset.status = statusKey;
-    sandboxButtonStatus.textContent = statusLabel;
-  }
-  if (sandboxUnavailable) sandboxUnavailable.hidden = !!installedFlag;
-  if (sandboxInstallAppBtn) {
-    sandboxInstallAppBtn.disabled = sandboxState.busy || installedFlag;
-    sandboxInstallAppBtn.hidden = installedFlag;
-  }
-  if (sandboxDepsAlert) sandboxDepsAlert.hidden = sandboxState.depsReady || !sandboxEligible;
-  const isSandboxed = !!info.sandboxed;
-  if (sandboxInstallDepsBtn) sandboxInstallDepsBtn.disabled = sandboxState.busy || !sandboxEligible;
-  if (sandboxConfigureBtn) sandboxConfigureBtn.disabled = sandboxState.busy || !info.installed || !sandboxState.depsReady || isSandboxed || !sandboxEligible;
-  if (sandboxDisableBtn) sandboxDisableBtn.disabled = sandboxState.busy || !isSandboxed || !sandboxEligible;
-  if (sandboxRefreshBtn) sandboxRefreshBtn.disabled = sandboxState.busy;
-  updateSandboxActionStyles(isSandboxed);
-  renderSandboxSummary();
-}
-
-async function refreshSandboxInfo(appName = sandboxState.currentApp) {
-  if (!sandboxCard) return;
-  if (!appName) {
-    sandboxState.info = null;
-    sandboxCard.hidden = true;
-    return;
-  }
-  sandboxState.currentApp = appName;
-  sandboxCard.hidden = false;
-  setSandboxBusy(true);
-  try {
-    const response = await window.electronAPI.getSandboxInfo(appName);
-    const info = response?.info || { installed: false, sandboxed: false };
-    const depsFromInfo = typeof info?.dependenciesReady === 'boolean' ? info.dependenciesReady : null;
-    const depsFromResponse = !!(response?.dependencies && (response.dependencies.hasSas || response.dependencies.hasAisap));
-    const depsFlag = depsFromInfo !== null ? depsFromInfo : depsFromResponse;
-    const listInstalled = isAppInstalledInList(appName);
-    if (!info.installed && listInstalled) info.installed = true;
-    info.dependenciesReady = depsFlag;
-    sandboxState.info = info;
-    sandboxState.depsReady = !!depsFlag;
-    setAppSandboxState(appName, !!info.sandboxed);
-    renderSandboxCard();
-  } catch (error) {
-    appendSandboxLog(`\n${error?.message || 'IPC error'}\n`);
-  } finally {
-    setSandboxBusy(false);
-  }
-}
-
-function collectSandboxFormValues() {
-  const shareDirs = {};
-  let hasSelection = false;
-  if (sandboxForm) {
-    SANDBOX_DIR_VALUES.forEach((dir) => {
-      const input = sandboxForm.querySelector(`input[value="${dir}"]`);
-      const checked = !!(input && input.checked);
-      shareDirs[dir] = checked;
-      if (checked) hasSelection = true;
-    });
-  }
-  const customPath = (sandboxCustomPathInput?.value || '').trim();
-  const configureDirs = hasSelection || !!customPath;
-  return { shareDirs, customPath, configureDirs };
-}
-
-function loadSandboxSharePrefs() {
-  try {
-    const raw = localStorage.getItem(SANDBOX_PREFS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (_) {
-    return {};
-  }
-}
-
-function persistSandboxSharePrefs() {
-  try {
-    localStorage.setItem(SANDBOX_PREFS_KEY, JSON.stringify(sandboxSharePrefs));
-  } catch (_) {}
-}
-
-function getSandboxSharePrefs(appName) {
-  if (!appName) return null;
-  const key = appName.toLowerCase();
-  return sandboxSharePrefs[key] || null;
-}
-
-function rememberSandboxSharePrefs(appName, data) {
-  if (!appName || !data) return;
-  const key = appName.toLowerCase();
-  const nextPrefs = { shareDirs: {}, customPath: data.customPath || '' };
-  SANDBOX_DIR_VALUES.forEach((dir) => {
-    nextPrefs.shareDirs[dir] = !!data.shareDirs?.[dir];
-  });
-  sandboxSharePrefs[key] = nextPrefs;
-  persistSandboxSharePrefs();
-}
-
-function applySandboxPrefsToForm(appName) {
-  if (!sandboxForm) return;
-  const prefs = getSandboxSharePrefs(appName);
-  SANDBOX_DIR_VALUES.forEach((dir) => {
-    const input = sandboxForm.querySelector(`input[value="${dir}"]`);
-    if (input) input.checked = !!(prefs?.shareDirs?.[dir]);
-  });
-  if (sandboxCustomPathInput) sandboxCustomPathInput.value = prefs?.customPath || '';
-}
-
-function getSandboxSummaryEntries(prefs) {
-  if (!prefs || typeof prefs !== 'object') return [];
-  const entries = [];
-  SANDBOX_DIR_VALUES.forEach((dir) => {
-    if (prefs.shareDirs && prefs.shareDirs[dir]) entries.push({ type: 'dir', value: dir });
-  });
-  if (prefs.customPath) entries.push({ type: 'custom', value: prefs.customPath });
-  return entries;
-}
-
-function renderSandboxSummary() {
-  if (!sandboxSummary) return;
-  const hasApp = !!sandboxState.currentApp;
-  const isSandboxed = !!(sandboxState.info && sandboxState.info.sandboxed);
-  const prefs = getSandboxSharePrefs(sandboxState.currentApp);
-  const entries = getSandboxSummaryEntries(prefs);
-  const shouldShow = hasApp && isSandboxed;
-  sandboxSummary.hidden = !shouldShow;
-  if (!sandboxSummaryList) return;
-  if (!shouldShow) {
-    sandboxSummaryList.innerHTML = '';
-    sandboxSummaryList.hidden = true;
-    if (sandboxSummaryEmpty) sandboxSummaryEmpty.hidden = false;
-    return;
-  }
-  sandboxSummaryList.innerHTML = '';
-  if (!entries.length) {
-    sandboxSummaryList.hidden = true;
-    if (sandboxSummaryEmpty) sandboxSummaryEmpty.hidden = false;
-    return;
-  }
-  const fragment = document.createDocumentFragment();
-  entries.forEach((entry) => {
-    const li = document.createElement('li');
-    li.className = 'sandbox-summary-item';
-    if (entry.type === 'dir') {
-      li.textContent = t(SANDBOX_DIR_LABEL_KEYS[entry.value]) || entry.value;
-    } else if (entry.type === 'custom') {
-      const label = document.createElement('span');
-      label.className = 'sandbox-summary-label';
-      label.textContent = t('sandbox.summary.custom');
-      const path = document.createElement('code');
-      path.className = 'sandbox-summary-path';
-      path.textContent = entry.value;
-      li.append(label, path);
-    }
-    fragment.appendChild(li);
-  });
-  sandboxSummaryList.hidden = false;
-  sandboxSummaryList.appendChild(fragment);
-  if (sandboxSummaryEmpty) sandboxSummaryEmpty.hidden = true;
-}
-
-function isAppSandboxed(appName) {
-  if (!appName) return false;
-  return sandboxedApps.get(appName.toLowerCase()) === true;
-}
-
-function setAppSandboxState(appName, active) {
-  if (!appName) return;
-  const key = appName.toLowerCase();
-  const nextState = !!active;
-  const prevState = sandboxedApps.has(key);
-  if (nextState === prevState) {
-    return;
-  }
-  if (nextState) sandboxedApps.set(key, true);
-  else sandboxedApps.delete(key);
-  refreshSandboxBadgesForApp(appName);
-  scheduleInstalledResort();
-}
-
-function cleanupSandboxCache() {
-  if (!sandboxedApps.size || !(state.installed instanceof Set)) return;
-  sandboxedApps.forEach((_, key) => {
-    if (!state.installed.has(key)) sandboxedApps.delete(key);
-  });
-}
-
-function applySandboxBadgeToIcon(iconWrapper, isActive) {
-  if (!iconWrapper) return;
-  const badge = iconWrapper.querySelector('.installed-badge');
-  if (!badge) return;
-  const label = isActive ? t('sandbox.status.active') : t('installed.badge');
-  const symbol = isActive ? '🔒' : '✓';
-  badge.textContent = symbol;
-  badge.setAttribute('aria-label', label);
-  badge.title = label;
-}
-
-function refreshSandboxBadgesForApp(appName) {
-  if (!appName) return;
-  const lower = appName.toLowerCase();
-  const active = isAppSandboxed(appName);
-  document.querySelectorAll('.app-tile').forEach(tile => {
-    const appId = (tile.getAttribute('data-app') || '').toLowerCase();
-    const tileName = appId.includes('|') ? appId.slice(0, appId.lastIndexOf('|')) : appId;
-    if (tileName !== lower) return;
-    const iconWrapper = tile.querySelector('.tile-icon');
-    applySandboxBadgeToIcon(iconWrapper, active);
-  });
-  if (detailsName && detailsName.dataset.app === lower) {
-    applyDetailsSandboxBadge(appName);
-  }
-}
-
-function refreshAllSandboxBadges() {
-  document.querySelectorAll('.app-tile').forEach(tile => {
-    const appId = tile.getAttribute('data-app') || '';
-    const tileName = appId.includes('|') ? appId.slice(0, appId.lastIndexOf('|')) : appId;
-    if (!tileName) return;
-    const iconWrapper = tile.querySelector('.tile-icon');
-    applySandboxBadgeToIcon(iconWrapper, isAppSandboxed(tileName));
-  });
-  if (state.currentDetailsApp) {
-    applyDetailsSandboxBadge(state.currentDetailsApp);
-  }
-}
-
-function applyDetailsSandboxBadge(appName) {
-  if (!detailsIcon) return;
-  const wrapper = detailsIcon.parentElement;
-  if (!wrapper || !wrapper.classList.contains('details-icon-wrapper')) return;
-  if (getComputedStyle(wrapper).position === 'static') {
-    wrapper.style.position = 'relative';
-  }
-  const target = appName || state.currentDetailsApp;
-  const entry = state.allApps.find(a => a && a.name === target);
-  const isCurrentlyInstalling = !!(activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === target);
-  let isInstalled = false;
-  if (entry) {
-    isInstalled = !!(entry.installed && entry.hasDiamond !== false);
-  } else if (target) {
-    isInstalled = state.installed instanceof Set && state.installed.has(String(target).toLowerCase());
-  }
-  if (isCurrentlyInstalling) {
-    isInstalled = false;
-  }
-  const badge = wrapper.querySelector('.installed-badge');
-  if (!isInstalled) {
-    if (badge) badge.remove();
-    return;
-  }
-  if (!badge) {
-    const badgeEl = document.createElement('span');
-    badgeEl.className = 'installed-badge';
-    badgeEl.style.position = 'absolute';
-    badgeEl.style.top = '0';
-    badgeEl.style.right = '0';
-    badgeEl.style.zIndex = '2';
-    wrapper.appendChild(badgeEl);
-  }
-  applySandboxBadgeToIcon(wrapper, isAppSandboxed(target));
-}
-
-function scheduleSandboxStateSweep() {
-  if (!window.electronAPI?.getSandboxInfo) return;
-  const token = ++sandboxSweepToken;
-  runSandboxStateSweep(token).catch(() => {});
-}
-
-async function runSandboxStateSweep(token) {
-  const installedApps = (state.allApps || []).filter(app => app && app.installed && app.name).map(app => app.name);
-  for (const appName of installedApps) {
-    if (token !== sandboxSweepToken) return;
-    try {
-      const response = await window.electronAPI.getSandboxInfo(appName);
-      if (token !== sandboxSweepToken) return;
-      const info = response?.info;
-      setAppSandboxState(appName, !!info?.sandboxed);
-    } catch (_) {}
-    await new Promise(resolve => setTimeout(resolve, 65));
-  }
-}
-
-function handleSandboxShow(appName) {
-  if (!sandboxCard) return;
-  const isSameApp = sandboxState.currentApp === appName;
-  sandboxState.pendingAction = null;
-  closeNonAppimageModal();
-  sandboxState.currentApp = appName;
-  sandboxState.info = null;
-  if (!isSameApp) {
-    setSandboxLogExpanded(false);
-  }
-  applySandboxPrefsToForm(appName);
-  resetSandboxLog();
-  renderSandboxSummary();
-  refreshSandboxInfo(appName);
-}
-
-function handleSandboxExit() {
-  sandboxState.currentApp = null;
-  sandboxState.info = null;
-  sandboxState.pendingAction = null;
-  sandboxState.logBuffer = '';
-  sandboxState.supported = true;
-  setSandboxLogExpanded(false);
-  if (sandboxCard) sandboxCard.hidden = true;
-  closeSandboxModal();
-  renderSandboxCard();
-}
-
-sandboxRefreshBtn?.addEventListener('click', () => {
-  if (sandboxState.busy || !sandboxState.currentApp) return;
-  refreshSandboxInfo();
-});
-
-sandboxInstallDepsBtn?.addEventListener('click', async () => {
-  if (sandboxState.busy) return;
-  setSandboxBusy(true);
-  try {
-    await window.electronAPI.depInstall('sas');
-    showToast(t('sandbox.toast.depsInstalled'));
-  } catch (error) {
-    notifySandboxError(error?.code || null);
-  } finally {
-    setSandboxBusy(false);
-    refreshSandboxInfo();
-  }
-});
-
-sandboxConfigureBtn?.addEventListener('click', async () => {
-  if (sandboxState.busy) return;
-  if (!sandboxState.info?.installed) {
-    showToast(t('sandbox.toast.requireInstall'));
-    return;
-  }
-  if (!sandboxState.depsReady) {
-    showToast(t('sandbox.toast.missingDeps'));
-    return;
-  }
-  const payload = collectSandboxFormValues();
-  payload.appName = sandboxState.currentApp;
-  sandboxState.pendingAction = { type: 'configure', id: null };
-  resetSandboxLog();
-  setSandboxBusy(true);
-  try {
-    const result = await window.electronAPI.configureSandbox(payload);
-    const currentLog = stripAnsiSequences(sandboxState.logBuffer || '');
-    if (result?.output && !currentLog.trim()) appendSandboxLog(result.output);
-    if (result?.ok) {
-      rememberSandboxSharePrefs(sandboxState.currentApp, payload);
-      renderSandboxSummary();
-      setAppSandboxState(sandboxState.currentApp, true);
-      showToast(t('sandbox.toast.enabled', { name: sandboxState.currentApp }));
-      refreshSandboxInfo();
-    } else {
-      notifySandboxError(result?.error);
-    }
-  } catch (error) {
-    notifySandboxError(error?.code || null);
-  } finally {
-    sandboxState.pendingAction = null;
-    setSandboxBusy(false);
-  }
-});
-
-sandboxDisableBtn?.addEventListener('click', async () => {
-  if (sandboxState.busy || !sandboxState.info?.sandboxed) return;
-  sandboxState.pendingAction = { type: 'disable', id: null };
-  resetSandboxLog();
-  setSandboxBusy(true);
-  try {
-    const result = await window.electronAPI.disableSandbox({ appName: sandboxState.currentApp });
-    const currentLog = stripAnsiSequences(sandboxState.logBuffer || '');
-    if (result?.output && !currentLog.trim()) appendSandboxLog(result.output);
-    if (result?.ok) {
-      setAppSandboxState(sandboxState.currentApp, false);
-      showToast(t('sandbox.toast.disabled', { name: sandboxState.currentApp }));
-      refreshSandboxInfo();
-    } else {
-      notifySandboxError(result?.error);
-    }
-  } catch (error) {
-    notifySandboxError(error?.code || null);
-  } finally {
-    sandboxState.pendingAction = null;
-    setSandboxBusy(false);
-  }
-});
-
-sandboxInstallAppBtn?.addEventListener('click', () => {
-  if (sandboxState.busy || sandboxState.info?.installed) return;
-  closeSandboxModal();
-  detailsInstallBtn?.click();
-});
-
-sandboxLogToggle?.addEventListener('click', () => {
-  setSandboxLogExpanded(!isSandboxLogExpanded());
-});
-
-// Scope toggle for am installs (system vs user)
-const installScopeBtn = document.getElementById('installScopeBtn');
-
-function updateScopeButtonUI() {
-  const btn = document.getElementById('installScopeBtn');
-  if (!btn) return;
-  const isAm = String(state.pmName || '').trim().toLowerCase() === 'am';
-  btn.hidden = !isAm;
-  if (isAm) {
-    const effectiveScope = detailScopeOverride ?? installScope;
-    btn.textContent = t('settings.installScope') + ': ' + (effectiveScope === 'user' ? t('install.scope.user') : t('install.scope.system'));
-  }
-}
-
-installScopeBtn?.addEventListener('click', () => {
-  const effectiveScope = detailScopeOverride ?? installScope;
-  detailScopeOverride = effectiveScope === 'user' ? 'system' : 'user';
-  state.currentDetailsScope = detailScopeOverride;
-  updateScopeButtonUI();
-  // Re-render install/uninstall buttons for the new scope
-  if (state.currentDetailsApp) {
-    const currentAppId = state.currentDetailsApp;
-    const parsedName = currentAppId.includes('|') ? currentAppId.slice(0, currentAppId.lastIndexOf('|')) : currentAppId;
-    const newScope = detailScopeOverride ?? installScope;
-    // Update currentDetailsApp so post-uninstall refresh uses the correct scope
-    state.currentDetailsApp = parsedName + '|' + newScope;
-    const app = (state.allApps || []).find(e => e && e.name === parsedName && e.scope === newScope);
-    const isInstalled = !!app && !!app.installed;
-    const appVersion = app?.version || null;
-    if (detailsInstallBtn) {
-      detailsInstallBtn.hidden = isInstalled;
-      detailsInstallBtn.setAttribute('data-name', parsedName);
-      detailsInstallBtn.classList.remove('loading');
-      detailsInstallBtn.disabled = false;
-      detailsInstallBtn.textContent = t('details.install');
-      detailsInstallBtn.setAttribute('data-action', 'install');
-      detailsInstallBtn.setAttribute('aria-label', t('details.install'));
-    }
-    if (detailsUninstallBtn) {
-      detailsUninstallBtn.hidden = !isInstalled;
-      detailsUninstallBtn.disabled = false;
-      detailsUninstallBtn.setAttribute('data-name', parsedName);
-    }
-    if (detailsName) {
-      const label = prettifyAppName(parsedName);
-      const version = appVersion ? ' · ' + appVersion : '';
-      const scopeLabel = newScope ? ' <span class="updated-scope-tag">(' + (newScope === 'user' ? t('install.scope.user') : t('install.scope.system')) + ')</span>' : '';
-      detailsName.innerHTML = `${label}${version}${scopeLabel}`;
-      detailsName.dataset.app = parsedName.toLowerCase();
-    }
-  }
-});
-
-sandboxOpenBtn?.addEventListener('click', async () => {
-  if (!sandboxState.currentApp) return;
-  // If info is not loaded yet, wait for loading
-  if (!sandboxState.info && !sandboxState.busy) {
-    setSandboxBusy(true);
-    try {
-      const response = await window.electronAPI.getSandboxInfo(sandboxState.currentApp);
-      sandboxState.info = response?.info || { installed: false, sandboxed: false };
-      sandboxState.depsReady = !!(response?.dependencies && (response.dependencies.hasSas || response.dependencies.hasAisap));
-      renderSandboxCard();
-    } catch (_) {}
-    setSandboxBusy(false);
-  }
-  const forbiddenReason = sandboxState.info?.sandboxForbiddenReason || (sandboxState.info?.selfSandboxProhibited ? 'self' : null);
-  if (!isSandboxSupported(sandboxState.currentApp) || forbiddenReason) {
-    showNonAppimageModal(sandboxState.currentApp, forbiddenReason);
-    return;
-  }
-  openSandboxModal();
-});
-
-sandboxCloseBtn?.addEventListener('click', () => {
-  closeSandboxModal();
-});
-
-sandboxModal?.addEventListener('click', (event) => {
-  if (event.target === sandboxModal) {
-    closeSandboxModal();
-  }
-});
-
-nonAppimageCloseBtn?.addEventListener('click', () => {
-  closeNonAppimageModal();
-});
-
-nonAppimageDismissBtn?.addEventListener('click', () => {
-  closeNonAppimageModal();
-});
-
-nonAppimageModal?.addEventListener('click', (event) => {
-  if (event.target === nonAppimageModal) {
-    closeNonAppimageModal();
-  }
-});
-
-window.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape') return;
-  if (nonAppimageModal && !nonAppimageModal.hidden) {
-    event.stopPropagation();
-    closeNonAppimageModal();
-    return;
-  }
-  if (sandboxModal && !sandboxModal.hidden) {
-    closeSandboxModal();
-  }
-});
-
-if (window.electronAPI?.onSandboxProgress) {
-  window.electronAPI.onSandboxProgress((message) => {
-    if (!message || !sandboxState.currentApp) return;
-    if (message.appName !== sandboxState.currentApp) return;
-    if (!sandboxState.pendingAction) return;
-    if (sandboxState.pendingAction.type !== message.action) return;
-    if (!sandboxState.pendingAction.id && message.id) sandboxState.pendingAction.id = message.id;
-    if (sandboxState.pendingAction.id && message.id && sandboxState.pendingAction.id !== message.id) return;
-    if (message.kind === 'start') {
-      resetSandboxLog();
-      setSandboxBusy(true);
-    } else if (message.kind === 'data' && typeof message.chunk === 'string') {
-      appendSandboxLog(message.chunk);
-    } else if (message.kind === 'error' && message.message) {
-      appendSandboxLog(`\n${message.message}\n`);
-    } else if (message.kind === 'done') {
-      sandboxState.pendingAction = null;
-      setSandboxBusy(false);
-      refreshSandboxInfo();
-    }
-  });
-}
-
-function notifySandboxError(code) {
-  switch (code) {
-    case 'missing-dependency':
-      showToast(t('sandbox.toast.missingDeps'));
-      return;
-    case 'missing-path':
-      showToast(t('sandbox.toast.missingPath'));
-      return;
-    case 'forbidden-path':
-      showToast(t('sandbox.toast.forbiddenPath'));
-      return;
-    case 'invalid-app':
-      showToast(t('sandbox.toast.requireInstall'));
-      return;
-    case 'missing-pm':
-      showToast(t('missingPm.desc'));
-      return;
-    default:
-      showToast(t('sandbox.toast.error'));
-  }
-}
-
-function getQueuePosition(name){
-  const idx = installQueue.indexOf(name);
-  return idx === -1 ? -1 : (idx + 1); // position 1-based
-}
-
-function removeFromQueue(name){
-  const idx = installQueue.indexOf(name);
-  if (idx === -1) return false;
-  installQueue.splice(idx,1);
-  try {
-    if (typeof updateQueueIndicators === 'function') updateQueueIndicators();
-    // Debounce to avoid double refresh on multiple rapid removals
-    if (window.__queueRefreshTimeout) clearTimeout(window.__queueRefreshTimeout);
-    window.__queueRefreshTimeout = setTimeout(()=>{
-      try { refreshAllInstallButtons(); } catch(e) { console.error('Erreur refreshAllInstallButtons', e); }
-    }, 300);
-  showToast(t('toast.removedFromQueue', {name}));
-  } catch(e) {
-    console.error('Erreur removeFromQueue', e);
-  showToast(t('toast.removeQueueError'));
-  }
-  return true;
-}
-
-function refreshDetailsInstallButtonForQueue(){
-  if (!detailsInstallBtn || !detailsInstallBtn.getAttribute('data-name')) return;
-  detailsInstallBtn.classList.remove('loading');
-  const name = detailsInstallBtn.getAttribute('data-name');
-  if (!name) return;
-  // Active en cours
-  if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name){
-    // Button becomes cancel
-    detailsInstallBtn.disabled = false;
-    detailsInstallBtn.classList.remove('loading');
-    detailsInstallBtn.textContent = t('install.status') + ' ✕';
-    detailsInstallBtn.setAttribute('data-action','cancel-install');
-    detailsInstallBtn.setAttribute('aria-label', t('install.cancel') || 'Cancel installation in progress ('+name+')');
-    return;
-  }
-  const pos = getQueuePosition(name);
-  if (pos !== -1){
-    detailsInstallBtn.disabled = false;
-    detailsInstallBtn.classList.remove('loading');
-    detailsInstallBtn.textContent = t('install.queued') ? t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕');
-    detailsInstallBtn.setAttribute('data-action','remove-queue');
-    detailsInstallBtn.setAttribute('aria-label', t('install.removeQueue') || ('Retirer de la file (' + name + ')'));
-    return;
-  }
-  // Otherwise if already installed, it's hidden elsewhere, but reset label just in case
-  if (!detailsInstallBtn.hidden){
-    detailsInstallBtn.textContent = t('details.install');
-    detailsInstallBtn.classList.remove('loading');
-    detailsInstallBtn.disabled = false;
-    detailsInstallBtn.setAttribute('data-action','install');
-  }
-}
-
-// Sync list buttons
-function refreshListInstallButtons(){
-  // Target all inline buttons in the list to manage states (cancel / queued)
-  const buttons = document.querySelectorAll('.app-tile .actions .inline-action');
-  buttons.forEach(btn => {
-    const name = btn.getAttribute('data-app');
-    if (!name) return;
-    // If active install for this app -> cancel button
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name){
-      btn.textContent = t('install.status') + ' ✕';
-      btn.disabled = false;
-      btn.setAttribute('data-action','cancel-install');
-      btn.setAttribute('aria-label', t('install.cancel') || 'Cancel installation in progress ('+name+')');
-      btn.style.display = '';
-      return;
-    }
-    // If queued -> remove from queue button
-    const pos = getQueuePosition(name);
-    if (pos !== -1){
-      btn.textContent = t('install.queued') ? t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕');
-      btn.disabled = false;
-      btn.setAttribute('data-action','remove-queue');
-      btn.setAttribute('aria-label', t('install.removeQueue') || ('Retirer de la file (' + name + ')'));
-      btn.style.display = '';
-      return;
-    }
-    // No special state -> hide the button in list mode to avoid direct actions
-    btn.style.display = 'none';
-  });
-}
-
-function refreshAllInstallButtons(){
-  refreshDetailsInstallButtonForQueue();
-  refreshListInstallButtons();
-  refreshTileBadges();
-}
-
-// Update/inject state badges in non-list modes
-function refreshTileBadges() {
-  if (state.viewMode === 'list') return; // list handled by buttons
-  if (!state.installed || typeof state.installed.has !== 'function') return; // safety guard
-  const tiles = document.querySelectorAll('.app-tile');
-  tiles.forEach(tile => {
-    const appId = tile.getAttribute('data-app') || '';
-    const name = appId.includes('|') ? appId.slice(0, appId.lastIndexOf('|')) : appId;
-    const installed = state.installed.has(name);
-    const nameEl = tile.querySelector('.tile-name');
-    if (!nameEl) return;
-    // Supprimer badge existant
-    const existing = nameEl.querySelector('.install-state-badge');
-    if (existing) existing.remove();
-    if (installed) return; // no badge if already installed
-    let badgeHtml = '';
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name) {
-      // Add cancel button in the install badge
-      badgeHtml = `<span class="install-state-badge installing" data-state="installing">${t('install.installing')}<button class="queue-remove-badge inline-action" data-action="cancel-install" data-app="${name}" title="${t('install.cancel')}" aria-label="${t('install.cancel')}">✕</button></span>`;
-    } else {
-      const pos = getQueuePosition(name);
-      if (pos !== -1) badgeHtml = `<span class="install-state-badge queued" data-state="queued">${t('install.queuePosition', { pos: pos })}<button class="queue-remove-badge inline-action" data-action="remove-queue" data-app="${name}" title="${t('install.removeQueue')}" aria-label="${t('install.removeQueue')}">✕</button></span>`;
-    }
-    if (badgeHtml) nameEl.insertAdjacentHTML('beforeend', ' ' + badgeHtml);
-  });
-}
-
-function refreshQueueUI(){
-  // Only refreshes queue representations.
-  refreshAllInstallButtons();
-}
-
-function processNextInstall(){
-  // Don't start anything if an active install is not finished
-  if (activeInstallSession.id && !activeInstallSession.done) return;
-  if (!installQueue.length) return;
-  const next = installQueue.shift();
-  const scope = installScopeMap.get(next) || installScope;
-  installScopeMap.delete(next);
-  refreshQueueUI();
-  refreshTileBadges();
-  // Nettoyer busy sur toutes les autres tuiles, puis marquer uniquement celle en cours
-  document.querySelectorAll('.app-tile.busy').forEach(t => t.classList.remove('busy'));
-  const tile = Array.from(document.querySelectorAll('.app-tile')).find(t => {
-    const d = t.getAttribute('data-app') || '';
-    return d === next || d.startsWith(next + '|');
-  });
-  if (tile) tile.classList.add('busy');
-  const inlineBtn = Array.from(document.querySelectorAll('.inline-action.install')).find(b => {
-    const d = b.getAttribute('data-app') || '';
-    return d === next || d.startsWith(next + '|');
-  });
-  if (inlineBtn) inlineBtn.disabled = true;
-  showToast(t('toast.installing', {name: next}));
-  startStreamingInstall(next, scope).catch((err) => {
-    showToast(err?.message || t('toast.installFailed', {name: next}));
-    activeInstallSession.done = true;
-    setTimeout(() => processNextInstall(), 200);
-  });
-  refreshAllInstallButtons();
-}
-
-function enqueueInstall(name, scope){
-  if (!name) return;
-  // Check if already in progress or in queue
-  if ((activeInstallSession.name === name && !activeInstallSession.done) || installQueue.includes(name)) {
-    showToast(t('toast.alreadyInQueue', {name}));
-    return;
-  }
-  if (scope) installScopeMap.set(name, scope);
-  if (activeInstallSession.id && !activeInstallSession.done) {
-    installQueue.push(name);
-  refreshQueueUI();
-  showToast(t('toast.addedToQueue', {name, count: installQueue.length}));
-  } else {
-    installQueue.push(name);
-  refreshQueueUI();
-    processNextInstall();
-  }
-  refreshAllInstallButtons();
-}
-
-async function cancelActiveInstall(expectedName = null) {
-  // Always close existing choice dialogs
-  document.querySelectorAll('.choice-dialog').forEach(e => e.remove());
-  if (!activeInstallSession || activeInstallSession.done) return;
-  if (expectedName && activeInstallSession.name !== expectedName) return;
-  if (!activeInstallSession.id) return;
-  const appName = activeInstallSession.name;
-  try {
-    await window.electronAPI.installCancel(activeInstallSession.id);
-    showToast(t('toast.cancelRequested'));
-    try {
-      await window.electronAPI.uninstallApp(appName);
-    } catch (_){ }
-    try {
-      await loadApps();
-      applySearch();
-    } catch (_){ }
-  } catch (_) {
-    showToast(t('toast.cancelError'));
-  }
-}
 let syncBtn = null;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
@@ -1547,17 +631,8 @@ const openExternalCheckbox = document.getElementById('openExternalLinksCheckbox'
 const purgeIconsBtn = document.getElementById('purgeIconsBtn');
 const purgeIconsResult = document.getElementById('purgeIconsResult');
 const tabs = document.querySelectorAll('.tab');
-// Updates
+// Updates feature state (managed by module)
 let updateInProgress = false;
-let updatesXterm = null;
-let updatesXtermFit = null;
-let updatesTerminalEl = null;
-let updatesTerminalFallbackMode = false;
-let updatesTerminalExpanded = false;
-let updateSpinnerBusy = false;
-let activeUpdateStreamId = null;
-let updatesStreamBuffer = ''; // Buffer to accumulate streaming output
-const updateStreamWaiters = new Map();
 const updatesPanel = document.getElementById('updatesPanel');
 const advancedPanel = document.getElementById('advancedPanel');
 const runUpdatesBtn = document.getElementById('runUpdatesBtn');
@@ -1569,6 +644,30 @@ const updatesTerminalWrap = document.getElementById('updatesTerminalWrap');
 const updatesTerminalNode = document.getElementById('updatesTerminal');
 const updatesToggleBtn = document.getElementById('updatesToggleBtn');
 const installedCountEl = document.getElementById('installedCount');
+
+// Updates feature
+const _updatesApi = (function initUpdates() {
+  const mod = window.features?.updates;
+  if (typeof mod?.init !== 'function') return null;
+  return mod.init({
+    dom: {
+      runUpdatesBtn, updateSpinner, updateResult, updateFinalMessage,
+      updatedAppsIcons, updatesTerminalWrap, updatesTerminalNode, updatesToggleBtn
+    },
+    isUpdateInProgress: () => updateInProgress,
+    setUpdateInProgress: (val) => { updateInProgress = val; },
+    statePmName: () => state.pmName,
+    getAllApps: () => state.allApps,
+    t,
+    showToast,
+    prettifyAppName,
+    getIconUrl,
+    loadApps,
+    applySearch,
+    electronAPI: window.electronAPI,
+    categories: window.categories
+  });
+})();
 
 function rerenderActiveCategory() {
   if (applySearch !== defaultApplySearch) {
@@ -2091,11 +1190,10 @@ function applyTranslations() {
   updateUpdatesToggleUi();
   if (!sandboxState.logBuffer) resetSandboxLog();
   refreshAllSandboxBadges();
-  // Refresh sandbox card to reflect language and dynamic labels
   try { renderSandboxCard(); } catch(_) {}
-  // Si la popup non-AppImage est ouverte, re-injecter le texte traduit
   try {
-    if (nonAppimageModal && !nonAppimageModal.hidden) {
+    const _nonAppimageEl = document.getElementById('nonAppimageModal');
+    if (_nonAppimageEl && !_nonAppimageEl.hidden) {
       const reason = sandboxState.info?.sandboxForbiddenReason || (sandboxState.info?.selfSandboxProhibited ? 'self' : null);
       showNonAppimageModal(sandboxState.currentApp, reason);
     }
@@ -2159,7 +1257,7 @@ const settingsPanelApi = window.ui?.settingsPanel?.init?.({
   saveOpenExternalPref,
   onIconCachePurged: handleIconCachePurged,
   onInstallScopeChange: (scope) => {
-    installScope = scope;
+    if (installerApi) installerApi.setInstallScope?.(scope); else installScope = scope;
     updateScopeButtonUI();
   }
 }) || null;
@@ -2354,7 +1452,8 @@ async function loadApps() {
   const isAmPm = String(state.pmName || '').trim().toLowerCase() === 'am';
   // Default install scope: 'user' for am, null for appman; restore from localStorage
   const savedScope = localStorage.getItem('installScope');
-  installScope = isAmPm ? (savedScope || 'user') : null;
+  const newInstallScope = isAmPm ? (savedScope || 'user') : null;
+  if (installerApi) installerApi.setInstallScope?.(newInstallScope); else installScope = newInstallScope;
   // Show/hide install scope setting in preferences
   // Show only for am (supports both system and user scopes)
   const scopeSettingsGroup = document.getElementById('installScopeSettingsGroup');
@@ -2362,7 +1461,7 @@ async function loadApps() {
     scopeSettingsGroup.hidden = !isAmPm;
     if (isAmPm) {
       scopeSettingsGroup.querySelectorAll('input[name="installScopePref"]').forEach(r => {
-        r.checked = r.value === installScope;
+        r.checked = r.value === (installerApi?.getInstallScope?.() ?? installScope);
       });
     }
   }
@@ -2516,7 +1615,8 @@ function showDetails(appName) {
   }
   if (detailsName) {
     // Fix: if install cancelled, don't show as installed
-    const isActuallyInstalled = app.installed && !(activeInstallSession && activeInstallSession.name === app.name && activeInstallSession.id && !activeInstallSession.done);
+    const activeSess3 = installerApi?.getActiveInstallSession?.() || activeInstallSession;
+    const isActuallyInstalled = app.installed && !(activeSess3 && activeSess3.name === app.name && activeSess3.id && !activeSess3.done);
     detailsName.innerHTML = isActuallyInstalled
       ? `${label}${version ? ' · ' + version : ''}`
       : (version ? `${label} · ${version}` : label);
@@ -2532,7 +1632,8 @@ function showDetails(appName) {
     // Always remove spinner and re-enable the button
   detailsInstallBtn.classList.remove('loading');
   detailsInstallBtn.disabled = false;
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === app.name) {
+    const activeSess4 = installerApi?.getActiveInstallSession?.() || activeInstallSession;
+    if (activeSess4.id && !activeSess4.done && activeSess4.name === app.name) {
       detailsInstallBtn.textContent = t('install.status') + ' ✕';
       detailsInstallBtn.setAttribute('data-action','cancel-install');
       detailsInstallBtn.setAttribute('aria-label', t('install.cancel') || 'Cancel installation in progress ('+app.name+')');
@@ -2547,10 +1648,11 @@ function showDetails(appName) {
   updateScopeButtonUI();
   // Restore streaming panel if an ongoing install matches this app
   if (installStream) {
-    if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === app.name) {
+    const activeSess5 = installerApi?.getActiveInstallSession?.() || activeInstallSession;
+    if (activeSess5.id && !activeSess5.done && activeSess5.name === app.name) {
       installStream.hidden = false;
       if (installStreamElapsed) {
-        const secs = Math.round((performance.now()-activeInstallSession.start)/1000);
+        const secs = Math.round((performance.now()-activeSess5.start)/1000);
         installStreamElapsed.textContent = secs + 's';
       }
       if (detailsInstallBtn) { detailsInstallBtn.disabled = false; detailsInstallBtn.classList.remove('loading'); }
@@ -2619,7 +1721,9 @@ const legacyExitDetailsView = exitDetailsView;
       const pipeIdx = appName.lastIndexOf('|');
       if (pipeIdx !== -1) {
         const scope = appName.slice(pipeIdx + 1);
-        if (scope === 'system' || scope === 'user') detailScopeOverride = scope;
+        if (scope === 'system' || scope === 'user') {
+          if (installerApi) installerApi.setDetailScopeOverride?.(scope); else detailScopeOverride = scope;
+        }
       }
       const result = api.showDetails(appName);
       const plainName = appName.includes('|') ? appName.slice(0, appName.lastIndexOf('|')) : appName;
@@ -2647,7 +1751,7 @@ if (window.ui?.virtualList?.init) {
     getIconUrl,
     t,
     getQueuePosition,
-    getActiveInstallSession: () => activeInstallSession,
+    getActiveInstallSession: () => installerApi?.getActiveInstallSession?.() || activeInstallSession,
     showDetails,
     document,
     window,
@@ -2683,7 +1787,7 @@ appsDiv?.addEventListener('click', (e) => {
         actionBtn.disabled = true;
         const tile = actionBtn.closest('.app-tile');
         if (tile){ tile.classList.add('busy'); }
-        enqueueInstall(appName, detailScopeOverride ?? installScope);
+        enqueueInstall(appName, (installerApi?.getInstallScope?.() ?? installScope));
       });
     } else if (action === 'uninstall') {
       openActionConfirm({
@@ -2757,7 +1861,8 @@ window.addEventListener('keydown', (e) => {
   window.electronAPI?.onInstallProgress?.((data) => {
     // Initialize install session on receiving 'start'
     if (data.kind === 'start' && data.id) {
-      activeInstallSession.id = data.id;
+      const sess = installerApi?.getActiveInstallSession?.();
+      if (sess) sess.id = data.id;
     }
     if (data.kind === 'choice-prompt') {
       // Remove any existing choice dialog
@@ -2909,16 +2014,9 @@ tabs.forEach(tab => {
       try { virtualListApi.disconnectObservers(); } catch (_) {}
     }
     if (isUpdatesTab) {
-      if (updateInProgress) {
-        runUpdatesBtn.disabled = true;
-        setUpdateSpinnerBusy(true);
-      } else {
-        runUpdatesBtn.disabled = false;
-        setUpdateSpinnerBusy(false);
-      }
+      runUpdatesBtn.disabled = updateInProgress;
     } else {
-      // Keep spinner state if an update is still running
-      setUpdateSpinnerBusy(updateInProgress);
+      runUpdatesBtn.disabled = false;
     }
     // No terminal in advanced mode now
     if (document.body.classList.contains('details-mode')) {
@@ -2927,523 +2025,10 @@ tabs.forEach(tab => {
   });
 });
 
-// (Integrated terminal removed)
-
-// Sortie avec ESC
-// (Old Escape details handler merged above)
-
-// Update button: integrated terminal + streaming
-function hasUpdatesStreamingSupport() {
-  return !!(window.electronAPI?.startUpdates && window.electronAPI?.onUpdatesProgress);
-}
-let updateTimerInterval = null;
-let updateTimerStart = null;
-
-function setUpdateSpinnerBusy(isBusy) {
-  if (!updateSpinner) return;
-  updateSpinnerBusy = !!isBusy;
-  updateSpinner.setAttribute('data-busy', updateSpinnerBusy ? 'true' : 'false');
-  const hourglass = updateSpinner.querySelector('.update-hourglass');
-  const timer = updateSpinner.querySelector('.update-timer');
-  const label = updateSpinner.querySelector('.spinner-label');
-  if (runUpdatesBtn) runUpdatesBtn.classList.toggle('loading', updateSpinnerBusy);
-  if (updateSpinnerBusy) {
-    if (hourglass) hourglass.style.display = 'inline-block';
-    if (timer) timer.style.display = 'inline-block';
-    if (label) {
-      label.textContent = t('updates.loading');
-      label.style.display = '';
-    }
-    startUpdateTimer();
-  } else {
-    if (hourglass) hourglass.style.display = 'none';
-    if (timer) timer.style.display = 'none';
-    if (label) {
-      label.textContent = '';
-      label.style.display = 'none';
-    }
-    stopUpdateTimer();
-  }
-}
-
-function startUpdateTimer() {
-  const timer = document.querySelector('.update-timer');
-  if (!timer) return;
-  // Don't reset if already in progress
-  if (updateTimerStart === null) updateTimerStart = Date.now();
-  if (updateTimerInterval) return;
-  const updateTimerText = () => {
-    const elapsed = Math.max(0, Math.floor((Date.now() - updateTimerStart) / 1000));
-    if (elapsed < 60) {
-      timer.textContent = `${elapsed}s`;
-    } else {
-      const min = Math.floor(elapsed / 60);
-      const sec = String(elapsed % 60).padStart(2, '0');
-      timer.textContent = `${min}:${sec}`;
-    }
-  };
-  updateTimerText();
-  updateTimerInterval = setInterval(updateTimerText, 1000);
-}
-
-function stopUpdateTimer() {
-  if (updateTimerInterval) clearInterval(updateTimerInterval);
-  updateTimerInterval = null;
-  updateTimerStart = null;
-}
-
-function updateUpdatesToggleUi() {
-  if (!updatesToggleBtn) return;
-  updatesToggleBtn.setAttribute('aria-expanded', updatesTerminalExpanded ? 'true' : 'false');
-  const section = document.getElementById('updatesLogSection');
-  if (section) section.setAttribute('data-open', updatesTerminalExpanded ? 'true' : 'false');
-  // Update the arrow
-  const caret = updatesToggleBtn.querySelector('.updates-log-caret');
-  if (caret) caret.textContent = updatesTerminalExpanded ? '▾' : '▸';
-}
-
-function applyUpdatesTerminalVisibility() {
-  if (!updatesTerminalWrap) return;
-  updatesTerminalWrap.hidden = !updatesTerminalExpanded;
-  if (updatesTerminalExpanded) {
-    ensureUpdatesTerminal();
-    if (updatesXtermFit) setTimeout(() => updatesXtermFit?.fit(), 30);
-  }
-}
-
-function setUpdatesTerminalExpanded(expanded) {
-  const next = !!expanded;
-  if (next === updatesTerminalExpanded) {
-    updateUpdatesToggleUi();
-    return;
-  }
-  updatesTerminalExpanded = next;
-  applyUpdatesTerminalVisibility();
-  updateUpdatesToggleUi();
-}
-
-function ensureUpdatesTerminal() {
-  if (updatesTerminalFallbackMode) {
-    if (!updatesTerminalEl) updatesTerminalEl = updatesTerminalNode;
-    updatesTerminalEl?.classList.add('updates-terminal-fallback');
-    return null;
-  }
-  if (!updatesTerminalEl) updatesTerminalEl = updatesTerminalNode;
-  if (!updatesTerminalEl) return null;
-  if (updatesXterm) return updatesXterm;
-  try {
-    updatesXterm = new Terminal({
-      fontSize: 12,
-      fontFamily: 'JetBrains Mono, SFMono-Regular, Menlo, Consolas, monospace',
-      convertEol: true,
-      allowTransparency: true,
-      theme: { background: '#050e17', foreground: '#d4e7ff' },
-      scrollback: 2000,
-      disableStdin: true
-    });
-    updatesXtermFit = new FitAddonClass();
-    updatesXterm.loadAddon(updatesXtermFit);
-    updatesXterm.open(updatesTerminalEl);
-    setTimeout(() => updatesXtermFit?.fit(), 60);
-    window.addEventListener('resize', () => updatesXtermFit?.fit());
-    updatesTerminalEl.classList.remove('updates-terminal-fallback');
-  } catch (err) {
-    console.error('Init updates terminal failed', err);
-    updatesXterm = null;
-    updatesXtermFit = null;
-    updatesTerminalFallbackMode = true;
-    if (updatesTerminalEl) {
-      updatesTerminalEl.classList.add('updates-terminal-fallback');
-      updatesTerminalEl.textContent = '';
-    }
-    return null;
-  }
-  return updatesXterm;
-}
-
-function revealUpdatesTerminal(forceExpand = false) {
-  if (forceExpand) {
-    setUpdatesTerminalExpanded(true);
-    return;
-  }
-  ensureUpdatesTerminal();
-  if (updatesTerminalExpanded && updatesTerminalWrap) {
-    updatesTerminalWrap.hidden = false;
-  }
-}
-
-function resetUpdatesTerminal() {
-  const term = ensureUpdatesTerminal();
-  if (!term) {
-    if (updatesTerminalEl) {
-      updatesTerminalEl.classList.add('updates-terminal-fallback');
-      updatesTerminalEl.textContent = '';
-      updatesTerminalEl.scrollTop = 0;
-    }
-    return;
-  }
-  try { term.reset(); }
-  catch(_) { term.clear?.(); }
-  if (updatesXtermFit) setTimeout(() => updatesXtermFit?.fit(), 30);
-}
-
-function appendUpdatesTerminalChunk(chunk) {
-  if (!chunk) return;
-  const term = ensureUpdatesTerminal();
-  if (!term) {
-    if (!updatesTerminalEl) return;
-    const cleaned = stripAnsiSequences(chunk);
-    updatesTerminalEl.classList.add('updates-terminal-fallback');
-    updatesTerminalEl.textContent += cleaned.replace(/\r?\n/g, '\n');
-    updatesTerminalEl.scrollTop = updatesTerminalEl.scrollHeight;
-    return;
-  }
-  term.write(chunk.replace(/\r?\n/g, '\r\n'));
-}
-
-function waitForUpdateJob(id) {
-  return new Promise((resolve, reject) => {
-    updateStreamWaiters.set(id, { resolve, reject });
-  });
-}
-
-async function startUpdatesStream() {
-  revealUpdatesTerminal();
-  resetUpdatesTerminal();
-  const startRes = await window.electronAPI.startUpdates();
-  if (!startRes || startRes.error) {
-    throw new Error(startRes?.error || 'updates start failed');
-  }
-  activeUpdateStreamId = startRes.id;
-  return waitForUpdateJob(startRes.id);
-}
-
-function resolveUpdateWaiter(msg, isError) {
-  if (!msg || !msg.id) return;
-  const waiter = updateStreamWaiters.get(msg.id);
-  if (!waiter) return;
-  try {
-    if (isError) waiter.reject?.(msg);
-    else waiter.resolve?.(msg);
-  } finally {
-    updateStreamWaiters.delete(msg.id);
-  }
-}
-
-updatesToggleBtn?.addEventListener('click', () => {
-  setUpdatesTerminalExpanded(!updatesTerminalExpanded);
-});
-
-window.electronAPI?.onUpdatesProgress?.((msg) => {
-  if (!msg || !msg.id) return;
-  if (activeUpdateStreamId && msg.id !== activeUpdateStreamId) {
-    if (msg.kind === 'done') resolveUpdateWaiter(msg, false);
-    if (msg.kind === 'error') resolveUpdateWaiter(msg, true);
-    return;
-  }
-  switch (msg.kind) {
-    case 'start':
-      activeUpdateStreamId = msg.id;
-      updatesStreamBuffer = ''; // Reset buffer at start
-      revealUpdatesTerminal();
-      resetUpdatesTerminal();
-      appendUpdatesTerminalChunk(`\x1b[36m${t('updates.logHeader') || 'am -u'}\x1b[0m\r\n`);
-      break;
-    case 'data':
-      if (typeof msg.chunk === 'string') {
-        updatesStreamBuffer += msg.chunk; // Accumule la sortie
-        appendUpdatesTerminalChunk(msg.chunk);
-      }
-      break;
-    case 'done':
-      appendUpdatesTerminalChunk(`\r\n\x1b[32m${t('updates.logCompleted') || 'Completed'} (code ${typeof msg.code === 'number' ? msg.code : 0})\x1b[0m\r\n`);
-      // Pass the accumulated output into the resolved message
-      resolveUpdateWaiter({ ...msg, output: updatesStreamBuffer }, false);
-      activeUpdateStreamId = null;
-      break;
-    case 'error':
-      appendUpdatesTerminalChunk(`\r\n\x1b[31m${msg.message || (t('updates.error') || 'Erreur')}\x1b[0m\r\n`);
-      resolveUpdateWaiter({ ...msg, output: updatesStreamBuffer }, true);
-      activeUpdateStreamId = null;
-      break;
-  }
-});
-
-// Update button: log analysis
-function stripAnsiSequences(text = '') {
-  return text
-    .replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '')
-    .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '')
-    .replace(/\][0-9]+;[^\\\x07]*(\x07|\\)/g, '')
-    .replace(/[\x07\x08]/g, '');
-}
-
-function parseUpdatedApps(res){
-  // Purely structural patterns (language-independent)
-  const cleanedOutput = stripAnsiSequences(res || '');
-  const updated = new Set();
-  if (typeof cleanedOutput !== 'string') return updated;
-  const lines = cleanedOutput.split(/\r?\n/);
-  for (const raw of lines){
-    const line = raw.trim();
-    if (!line) continue;
-    // Structural patterns only (symbols / arrows, no English text):
-    // ✔ appname
-    // * appname -> version
-    // appname (old -> new)
-    let name = null;
-    let m;
-    if ((m = line.match(/^✔\s+([A-Za-z0-9._-]+)/))) name = m[1];
-    else if ((m = line.match(/^\*\s*([A-Za-z0-9._-]+)\s+->/))) name = m[1];
-    else if ((m = line.match(/^([A-Za-z0-9._-]+)\s*\([^)]*->[^)]*\)/))) name = m[1];
-    if (name && !name.toLowerCase().endsWith('.am')) {
-      updated.add(name.toLowerCase());
-    }
-  }
-  return updated;
-}
-
-/**
- * Parse the updated apps table from AM/appman output (new table format).
- *
- * appman always shows 4 separators in this order:
- *   sep1 → >> START OF ALL PROCESSES <<
- *   sep2 → CAN MANAGE... (header)
- *   sep3 ◆ initial list of everything that can be updated  ← IGNORE
- *   sep4 → result: table of updated apps  OR  "nothing to do" text
- *   (sep5+ possible if more sections are added after)
- *
- * The AM table looks like this (localized headers, ANSI colors removed):
- *        App      Previous    Current
- *
- *     1.  appname  oldver      newver
- *     2.  appname2 oldver2     newver2
- *
- * Strategy: after the 4th separator, look for numbered lines and extract
- * name + old + new version. Independent of the header language.
- *
- * Returns { updated: Set, newVersions: Map, hasStructure: bool }
- *   hasStructure=true  → at least 4 separators found
- *   hasStructure=false → unknown structure (fallback allowed)
- */
-function parseUpdatedBlock(text) {
-  const updated = new Set();
-  const newVersions = new Map();
-  const lines = text.split(/\r?\n/);
-  const SEP_SKIP = 4;
-  let sepCount = 0;
-  let startIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (/^[-=]{5,}$/.test(lines[i].trim())) {
-      sepCount++;
-      if (sepCount === SEP_SKIP) { startIdx = i + 1; break; }
-    }
-  }
-  if (startIdx === -1) return { updated, newVersions, hasStructure: false };
-
-  const blockLines = lines.slice(startIdx);
-
-  // Parse the table structurally: find numbered rows (locale-independent)
-  // The (AppMan) or (AM) qualifier can appear after old version, new version, or both
-  const QUAL = '(?:\\s+\\((?:AppMan|AM)\\))?';
-  const VER = '[^\\s()]+';
-  const ROW_RE = new RegExp(
-    '^\\s*\\d+\\.\\s+([A-Za-z0-9._-]+)\\s+' + VER + QUAL + '\\s+' + VER + QUAL + '$'
-  );
-  for (let i = 0; i < blockLines.length; i++) {
-    const line = blockLines[i].trim();
-    if (!ROW_RE.test(line)) continue;
-    const m = line.match(/^\s*\d+\.\s+([A-Za-z0-9._-]+)\s+(.*)/);
-    if (!m) continue;
-    const name = m[1].toLowerCase();
-    // Extract version tokens, filtering out (AppMan) and (AM) qualifiers
-    const allTokens = m[2].match(/\S+/g) || [];
-    const tokens = allTokens.filter(t => t !== '(AppMan)' && t !== '(AM)');
-    if (tokens.length < 2) continue;
-    const oldVer = tokens[tokens.length - 2];
-    const newVer = tokens[tokens.length - 1];
-    // Detect qualifier from the full line
-    const qualifier = /\((AppMan|AM)\)/.exec(line);
-    const scopeTag = qualifier ? qualifier[1] : null;
-    // AM: no qualifier = system, (AppMan) = user
-    // AppMan: no qualifier = user (only scope), no qualifier shown
-    let scope;
-    if (scopeTag === 'AppMan') scope = 'user';
-    else if (scopeTag === 'AM') scope = 'system';
-    else scope = state.pmName === 'appman' ? 'user' : 'system';
-    const key = name + '|' + scope;
-    if (!name.endsWith('.am')) {
-      updated.add(key);
-      newVersions.set(key, { old: oldVer, new: newVer, name, scope });
-    }
-  }
-  return { updated, newVersions, hasStructure: true };
-}
-
-function handleUpdateCompletion(fullText){
-  const sanitized = stripAnsiSequences(fullText || '');
-  // Structural parser (language-independent) — inspired by awk approach
-  const { updated: blockUpdated, newVersions, hasStructure } = parseUpdatedBlock(sanitized);
-  // Enrich newVersions with "appname (old -> new)" lines (structural, no language)
-  const lines = sanitized.split(/\r?\n/);
-  for (const raw of lines) {
-    const line = raw.trim();
-    const arrowMatch = line.match(/^([A-Za-z0-9._-]+)\s*\([^)]*->\s*([^)]+)\)/);
-    if (arrowMatch) {
-      const appName = arrowMatch[1].toLowerCase();
-      const newVer = arrowMatch[2].trim();
-      if (newVer && !newVersions.has(appName) && !appName.endsWith('.am')) newVersions.set(appName, newVer);
-    }
-  }
-  let toShow = new Set();
-  if (blockUpdated.size > 0) {
-    // Apps found in the table after the last separator -> reliable result
-    toShow = blockUpdated;
-  } else if (!hasStructure) {
-    // No separator found (unknown output) → structural fallback (✔, *, ->)
-    const fallback = parseUpdatedApps(sanitized);
-    if (fallback.size > 0) toShow = fallback;
-  }
-  // If hasStructure && blockUpdated.size === 0 : empty table = nothing updated
-  if (toShow.size > 0) {
-    if (updateFinalMessage) updateFinalMessage.textContent = t('updates.updatedApps');
-    if (updatedAppsIcons) {
-      updatedAppsIcons.innerHTML = '';
-      toShow.forEach(keyLower => {
-        const pipeIdx = keyLower.lastIndexOf('|');
-        const rawName = pipeIdx !== -1 ? keyLower.slice(0, pipeIdx) : keyLower;
-        const scopeKey = pipeIdx !== -1 ? keyLower.slice(pipeIdx + 1) : null;
-        const wrapper = document.createElement('div'); wrapper.className = 'updated-item';
-        const img = document.createElement('img');
-        const appObj = scopeKey
-          ? state.allApps.find(a => String(a.name).toLowerCase() === rawName && a.scope === scopeKey)
-          : state.allApps.find(a => String(a.name).toLowerCase() === rawName);
-        const displayName = prettifyAppName(rawName);
-        const versionInfo = newVersions.get(keyLower);
-        const fallbackVer = appObj && appObj.version ? appObj.version : null;
-        img.src = getIconUrl(rawName);
-        img.alt = displayName;
-        img.onerror = () => { img.src = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; };
-        const meta = document.createElement('div'); meta.className = 'updated-meta';
-        const title = document.createElement('div'); title.className = 'updated-name'; title.textContent = displayName;
-        const ver = document.createElement('div'); ver.className = 'updated-version';
-        const appScope = scopeKey || (appObj && appObj.scope ? appObj.scope : null);
-        if (versionInfo && typeof versionInfo === 'object' && versionInfo.old && versionInfo.new) {
-          ver.textContent = versionInfo.old + ' → ' + versionInfo.new;
-        } else {
-          const displayVersion = versionInfo || fallbackVer;
-          ver.textContent = displayVersion ? String(displayVersion) : '';
-          if (!displayVersion) ver.hidden = true;
-        }
-        if (appScope && state.pmName === 'am') {
-          const scopeTag = document.createElement('span');
-          scopeTag.className = 'updated-scope-tag';
-          scopeTag.textContent = appScope === 'system' ? `(${t('install.scope.system')})` : `(${t('install.scope.user')})`;
-          ver.appendChild(scopeTag);
-        }
-        meta.appendChild(title);
-        meta.appendChild(ver);
-        wrapper.appendChild(img);
-        wrapper.appendChild(meta);
-        updatedAppsIcons.appendChild(wrapper);
-      });
-    }
-  } else {
-    // 0 apps to display
-    if (hasStructure) {
-      // Structure detected but empty table -> really nothing updated
-      if (updateFinalMessage) updateFinalMessage.textContent = t('updates.none');
-    } else {
-      // No known structure -> we don't know, show "done"
-      if (updateFinalMessage) updateFinalMessage.textContent = t('updates.done');
-    }
-    if (updatedAppsIcons) updatedAppsIcons.innerHTML = '';
-  }
-  if (updateResult) updateResult.style.display = 'block';
-  // Refresh the full list to update installed versions
-  setTimeout(() => { loadApps().then(applySearch); }, 400);
-}
-
-async function refreshAfterUpdates(){
-  if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
-    await window.electronAPI.deleteCategoriesCache();
-  }
-  if (window.categories && typeof window.categories.resetCache === 'function') {
-    window.categories.resetCache();
-  }
-  if (window.categories && typeof window.categories.loadCategories === 'function') {
-    await window.categories.loadCategories({ showToast });
-  }
-  showToast(t('toast.refreshing'));
-  await loadApps();
-  applySearch();
-  try {
-    const needs = state.allApps.some(a => a.installed && (!a.version || String(a.version).toLowerCase().includes('unsupported')));
-    if (needs) {
-      await new Promise(r => setTimeout(r, 3000));
-      await loadApps();
-      applySearch();
-    }
-  } catch (_) {}
-}
-
-async function fetchUpdatesOutput(){
-  if (hasUpdatesStreamingSupport()) {
-    try {
-      return await startUpdatesStream();
-    } catch (err) {
-      if (err?.error === 'external-update-running' || err?.message === 'external-update-running') throw err;
-      console.warn('Streaming updates failed, fallback to updates-bulk', err);
-      activeUpdateStreamId = null;
-    }
-  }
-  if (!window.electronAPI?.updatesBulk) return { output: '' };
-  const res = await window.electronAPI.updatesBulk();
-  if (res?.error === 'external-update-running') throw new Error('external-update-running');
-  const output = res?.output || (typeof res === 'string' ? res : '');
-  if (output) {
-    revealUpdatesTerminal();
-    resetUpdatesTerminal();
-    appendUpdatesTerminalChunk(output);
-  }
-  return { output };
-}
-
-runUpdatesBtn?.addEventListener('click', async () => {
-  if (runUpdatesBtn.disabled) return;
-  updateInProgress = true;
-  showToast(t('toast.updating'));
-  setUpdateSpinnerBusy(true);
-  if (updateResult) updateResult.style.display = 'none';
-  if (updateFinalMessage) updateFinalMessage.textContent='';
-  if (updatedAppsIcons) updatedAppsIcons.innerHTML='';
-  runUpdatesBtn.disabled = true;
-  try {
-    const start = performance.now();
-    const result = await fetchUpdatesOutput();
-    const raw = typeof result?.output === 'string' ? result.output : '';
-    handleUpdateCompletion(raw);
-    const dur = Math.round((performance.now()-start)/1000);
-    if (updateFinalMessage && updateFinalMessage.textContent) updateFinalMessage.textContent += t('updates.duration', {dur});
-    // Stop the spinner as soon as the result is ready, before the heavy refresh
-    setUpdateSpinnerBusy(false);
-    await refreshAfterUpdates();
-  } catch (err) {
-    console.error('Updates failed', err);
-    if (err?.error === 'external-update-running' || err?.message === 'external-update-running') {
-      showToast(t('toast.updateAlreadyRunning'));
-      if (updateFinalMessage) updateFinalMessage.textContent = t('toast.updateAlreadyRunningDetail');
-    } else {
-      showToast(t('toast.updateFailed') || t('error.global', { msg: 'Update failed' }));
-      if (updateFinalMessage) updateFinalMessage.textContent = t('updates.error') || t('error.global', { msg: 'Error during update' });
-    }
-    if (updateResult) updateResult.style.display = 'block';
-  } finally {
-    updateInProgress = false;
-    setUpdateSpinnerBusy(false);
-    runUpdatesBtn.disabled = false;
-  }
-});
+// stripAnsiSequences from updates feature module (fallback if module not loaded)
+const stripAnsiSequences = window.features?.updates?.stripAnsiSequences || function(text = '') {
+  return (text || '').replace(/\x1B\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '');
+};
 
 // ...existing code...
 async function loadRemoteDescription(appName) {
@@ -3582,234 +2167,7 @@ lightbox?.addEventListener('click', (e) => {
 });
 
 
-// --- Streaming installation (Steps 1 & 2) ---
 
-
-let currentInstallId = null;
-let currentInstallStart = 0;
-let installElapsedInterval = null;
-
-function setInstallEtaDisplay(etaText, active) {
-  if (!installProgressEtaLabel) return;
-  installProgressEtaLabel.classList.toggle('eta-spinning', !!active);
-  installProgressEtaLabel.textContent = etaText || '';
-}
-
-
-function startStreamingInstall(name, scope){
-  initXtermLog();
-  if (!window.electronAPI.installStart) {
-    return Promise.reject(new Error('Streaming non supporté'));
-  }
-  // Marquer uniquement la tuile active busy (et enlever des autres)
-  document.querySelectorAll('.app-tile.busy').forEach(t => t.classList.remove('busy'));
-  const activeTile = Array.from(document.querySelectorAll('.app-tile')).find(t => {
-    const d = t.getAttribute('data-app') || '';
-    return d === name || d.startsWith(name + '|');
-  });
-  if (activeTile) activeTile.classList.add('busy');
-    if (installStream) {
-      installStream.hidden = false;
-      if (installStreamElapsed) installStreamElapsed.textContent='0s';
-      if (installProgressPercentLabel) installProgressPercentLabel.textContent = '';
-      setInstallEtaDisplay('', true);
-      if (installProgressBar) {
-        installProgressBar.value = 0;
-        installProgressBar.max = 100;
-        installProgressBar.removeAttribute('hidden');
-      }
-    }
-  currentInstallStart = Date.now();
-  currentInstallLines = 0;
-  activeInstallSession = { id: null, name, start: currentInstallStart, lines: [], done: false, success: null, code: null };
-  // Start the real-time timer
-  if (installElapsedInterval) clearInterval(installElapsedInterval);
-  installElapsedInterval = setInterval(() => {
-    if (installStreamElapsed) {
-      const secs = Math.floor((Date.now() - currentInstallStart) / 1000);
-      installStreamElapsed.textContent = secs + 's';
-    }
-  }, 1000);
-  return window.electronAPI.installStart(name, scope).then(res => {
-    if (res && res.error){
-      showToast(res.error);
-      if (installStream) installStream.hidden = true;
-      detailsInstallBtn?.classList.remove('loading');
-      detailsInstallBtn?.removeAttribute('disabled');
-      return;
-    }
-    currentInstallId = res?.id || null;
-    activeInstallSession.id = currentInstallId;
-    // Refresh buttons now that the ID is known
-    refreshAllInstallButtons();
-  });
-}
-
-if (window.electronAPI.onInstallProgress){
-  window.electronAPI.onInstallProgress(msg => {
-    if (!msg) return;
-    if (currentInstallId && msg.id !== currentInstallId) return; // ignore other installs (future multi support)
-    if (msg.kind === 'line') {
-      // --- Extraction du pourcentage de progression depuis le flux ---
-      if (msg.raw !== undefined) {
-        // Robust cleanup of all ANSI/OSC escape sequences (colors, cursor, ESC 7/8, etc.)
-        const ansiCleaned = stripAnsiSequences(msg.raw);
-
-        // --- Warning block detection and accumulation ---
-        if (!window._installWarningBuffer) window._installWarningBuffer = null;
-        if (!window._installWarningActive) window._installWarningActive = false;
-
-        // Warning block start
-        if (/^\s*WARNING:/i.test(ansiCleaned)) {
-          window._installWarningBuffer = ansiCleaned + '\n';
-          window._installWarningActive = true;
-          return;
-        }
-        // Accumulation du bloc warning
-        if (window._installWarningActive) {
-          if (/^=+/.test(ansiCleaned)) {
-            showPopupWarning(window._installWarningBuffer.trim());
-            window._installWarningBuffer = null;
-            window._installWarningActive = false;
-            return;
-          }
-          window._installWarningBuffer += ansiCleaned + '\n';
-          return;
-        }
-
-        // Accept multiple progress formats (wget/curl/custom bars) instead of only "%[".
-        const percentCandidates = [];
-        const percentRegex = /(\d{1,3}(?:[\.,]\d+)?)\s*%/g;
-        let percentHit;
-        while ((percentHit = percentRegex.exec(ansiCleaned)) !== null) {
-          const p = Math.round(parseFloat(String(percentHit[1]).replace(',', '.')));
-          if (!Number.isNaN(p) && p >= 0 && p <= 100) percentCandidates.push(p);
-        }
-        const ratioMatch = ansiCleaned.match(/(?:^|\s)(\d{1,6})\s*\/\s*(\d{1,6})(?=\s|$)/);
-        if (ratioMatch) {
-          const done = parseInt(ratioMatch[1], 10);
-          const total = parseInt(ratioMatch[2], 10);
-          if (!Number.isNaN(done) && !Number.isNaN(total) && total > 0 && done >= 0) {
-            percentCandidates.push(Math.round((done / total) * 100));
-          }
-        }
-        if (percentCandidates.length) {
-          const percent = Math.max(0, Math.min(100, Math.max(...percentCandidates)));
-          if (installProgressPercentLabel) installProgressPercentLabel.textContent = percent + '%';
-          if (installProgressBar) installProgressBar.value = percent;
-        }
-        // ETA extraction with broader patterns ("ETA 00:12", "00:12 ETA", "remaining 12s", etc.)
-        let eta = '';
-        let m = ansiCleaned.match(/(?:ETA|eta|Temps restant|remaining)[\s:=]+([0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?|\d+\s*(?:s|sec|min|m)\b|[^\r\n]+)/i);
-        if (m && m[1]) eta = m[1].trim();
-        if (!eta) {
-          const reverseEta = ansiCleaned.match(/([0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)\s*(?:ETA|eta)\b/i);
-          if (reverseEta && reverseEta[1]) eta = reverseEta[1].trim();
-        }
-        setInstallEtaDisplay(eta, true);
-      }
-      // (Elapsed time is now handled by the JS timer)
-      return;
-    }
-    switch(msg.kind){
-      case 'start':
-        if (installStreamStatus) installStreamStatus.textContent = t('install.status');
-        refreshAllInstallButtons();
-        if (installProgressBar) installProgressBar.value = 0;
-        setInstallEtaDisplay('', true);
-        break;
-      case 'error':
-        if (installStreamStatus) installStreamStatus.textContent = t('install.error') || 'Erreur';
-        detailsInstallBtn?.classList.remove('loading');
-        detailsInstallBtn?.removeAttribute('disabled');
-        setTimeout(()=> { if (installStream) installStream.hidden = true; }, 5000);
-        if (installProgressBar) installProgressBar.value = 0;
-        setInstallEtaDisplay('', false);
-        if (installElapsedInterval) { clearInterval(installElapsedInterval); installElapsedInterval = null; }
-        break;
-      case 'cancelled':
-        if (installStreamStatus) installStreamStatus.textContent = t('install.cancelled') || 'Cancelled';
-        if (detailsInstallBtn) {
-          detailsInstallBtn.classList.remove('loading');
-          detailsInstallBtn.disabled = false;
-        }
-        if (installProgressBar) installProgressBar.value = 0;
-        setInstallEtaDisplay('', false);
-        if (installElapsedInterval) { clearInterval(installElapsedInterval); installElapsedInterval = null; }
-        setTimeout(()=> { if (installStream) installStream.hidden = true; }, 2000);
-        // (Fix reverted: no longer refresh list or details here)
-        break;
-      case 'done':
-        if (installStreamStatus) installStreamStatus.textContent = t('install.done') || 'Done';
-        if (installProgressBar) installProgressBar.value = 100;
-        setInstallEtaDisplay('', false);
-        if (installElapsedInterval) { clearInterval(installElapsedInterval); installElapsedInterval = null; }
-        setTimeout(()=> { if (installStream) installStream.hidden = true; }, 2000);
-        // --- Logical continuation from old code (merge the two 'done' handlers) ---
-        detailsInstallBtn?.classList.remove('loading');
-        detailsInstallBtn?.removeAttribute('disabled');
-        if (activeInstallSession && activeInstallSession.id === currentInstallId) {
-          activeInstallSession.done = true;
-          activeInstallSession.success = msg.success;
-          activeInstallSession.code = msg.code;
-        }
-        // No more log or log button handling here
-        loadApps().then(()=> {
-          if (msg.success) {
-            // Redirect to the surviving app after install:
-            // - bundle child (adb) → parent (platform-tools)
-            // - mutex partner (firefox-appimage) → canonical (firefox), or vice-versa
-            const installedName = msg.name || detailsInstallBtn?.getAttribute('data-name');
-            const key = installedName && installedName.toLowerCase();
-            const targetName = (key && (state.bundleChildOf[key] || state.mutexRedirect[key])) || installedName;
-            if (targetName) showDetails(targetName);
-          }
-          if (msg.name) {
-            document.querySelectorAll(`.app-tile[data-app="${CSS.escape(msg.name)}"]`).forEach(t => t.classList.remove('busy'));
-          }
-          refreshQueueUI();
-          refreshAllInstallButtons();
-        });
-        setTimeout(()=> { if (installStream) installStream.hidden = true; }, 3500);
-        setTimeout(()=> processNextInstall(), 450);
-        break;
-    }
-  });
-}
-
-function showPopupWarning(msg) {
-  const dontShowKey = 'hideWget2Warning';
-  if (localStorage.getItem(dontShowKey) === '1') return;
-  let modal = document.getElementById('warningModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'warningModal';
-    modal.className = 'modal';
-    modal.style.position = 'fixed';
-    modal.style.top = '0';
-    modal.style.left = '0';
-    modal.style.width = '100vw';
-    modal.style.height = '100vh';
-    modal.style.background = 'rgba(0,0,0,0.45)';
-    modal.style.zIndex = '9999';
-    modal.innerHTML = `<div style='background:#fff;max-width:480px;margin:80px auto;padding:28px 22px;border-radius:12px;box-shadow:0 2px 16px #0002;text-align:left;'>
-      <h2 style='color:#c00;font-size:20px;margin-bottom:12px;'>${t('warning.title')}</h2>
-      <pre style='white-space:pre-wrap;font-size:15px;color:#c00;margin-bottom:18px;'>${msg}</pre>
-      <label style='display:flex;align-items:center;margin-bottom:18px;font-size:15px;color:#444;'><input type='checkbox' id='dontShowWget2Warning' style='margin-right:8px;'>${t('warning.checkboxText')}</label>
-      <button id='closeWarningModal' style='font-size:15px;padding:8px 18px;border-radius:8px;background:#c00;color:#fff;border:none;cursor:pointer;'>${t('warning.closeBtn')}</button>
-    </div>`;
-    document.body.appendChild(modal);
-    document.getElementById('closeWarningModal').onclick = () => {
-      const checkbox = document.getElementById('dontShowWget2Warning');
-      if (checkbox?.checked) localStorage.setItem(dontShowKey, '1');
-      modal.remove();
-    };
-  } else {
-    const pre = modal.querySelector('pre');
-    if (pre) pre.textContent = msg;
-    modal.style.display = 'block';
-  }
-}
 
 // Handle close confirmation with ongoing installation
 const closeConfirmModal = document.getElementById('closeConfirmModal');
@@ -3835,7 +2193,8 @@ closeConfirmStay?.addEventListener('click', () => {
 closeConfirmQuit?.addEventListener('click', async () => {
   hideCloseConfirm();
   // Cancel the ongoing installation
-  if (activeInstallSession && !activeInstallSession.done) {
+  const activeSess6 = installerApi?.getActiveInstallSession?.() || activeInstallSession;
+  if (activeSess6 && !activeSess6.done) {
     try {
       await cancelActiveInstall();
     } catch (err) {
@@ -3852,7 +2211,8 @@ closeConfirmQuit?.addEventListener('click', async () => {
 if (window.electronAPI?.onBeforeClose) {
   window.electronAPI.onBeforeClose(() => {
     // Check if an installation is in progress
-    if (activeInstallSession && activeInstallSession.id && !activeInstallSession.done) {
+    const activeSess7 = installerApi?.getActiveInstallSession?.() || activeInstallSession;
+    if (activeSess7 && activeSess7.id && !activeSess7.done) {
       showCloseConfirm();
     }
   });
