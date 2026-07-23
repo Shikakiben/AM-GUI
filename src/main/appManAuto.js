@@ -1,4 +1,4 @@
-const { tErr } = require('./trayI18n');
+const { tErr } = require('../i18n/translations');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
