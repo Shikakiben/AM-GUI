@@ -18,3 +18,4 @@ build/
 # Cache local des catégories (généré automatiquement)
 categories-cache.json
 categories-cache.meta.json
+.kanban/
