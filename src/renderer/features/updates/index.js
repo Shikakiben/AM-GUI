@@ -460,6 +460,9 @@
     }
 
     async function refreshAfterUpdates() {
+      if (_.electronAPI && typeof _.electronAPI.invalidateAppsCache === 'function') {
+        await _.electronAPI.invalidateAppsCache();
+      }
       if (_.electronAPI && typeof _.electronAPI.deleteCategoriesCache === 'function') {
         await _.electronAPI.deleteCategoriesCache();
       }

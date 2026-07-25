@@ -153,7 +153,7 @@ function createWindow() {
 }
 
 // Register IPC handlers
-const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto, isExternalUpdateRunning, fsp };
+const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto, isExternalUpdateRunning, fsp, userDataPath: app.getPath('userData') };
 registerGpuHandlers(ipcMain, app);
 registerUpdatesHandlers(ipcMain, deps);
 
@@ -184,6 +184,13 @@ registerSandboxHandlers(ipcMain, deps);
 registerInstallHandlers(ipcMain, deps);
 registerAppListHandlers(ipcMain, deps);
 registerUninstallHandler(ipcMain, deps);
+
+// Apps cache (speeds up cold start)
+ipcMain.handle('invalidate-apps-cache', async () => {
+  const p = path.join(app.getPath('userData'), 'apps-cache.json');
+  try { await fsp.unlink(p); } catch (_) {}
+  return { ok: true };
+});
 
 const iconCacheManager = createIconCacheManager(app);
 registerCategoryHandlers(ipcMain, app.getPath('userData'));

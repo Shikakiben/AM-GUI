@@ -118,9 +118,36 @@ function detectBundles(catalogDesc) {
 }
 
 function registerAppListHandlers(ipcMain, deps) {
-  const { tErr, detectPackageManager, invalidatePackageManagerCache } = deps;
+  const { tErr, detectPackageManager, invalidatePackageManagerCache, userDataPath } = deps;
+  const CACHE_FILE = path.join(userDataPath || path.join(os.homedir(), '.config', 'am-gui'), 'apps-cache.json');
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  function readAppsCache() {
+    try {
+      if (!fs.existsSync(CACHE_FILE)) return null;
+      const raw = fs.readFileSync(CACHE_FILE, 'utf8');
+      const cached = JSON.parse(raw);
+      if (!cached || !cached.timestamp || !cached.data) return null;
+      if (Date.now() - cached.timestamp > CACHE_TTL) return null;
+      return cached.data;
+    } catch (_) { return null; }
+  }
+
+  function writeAppsCache(data) {
+    try {
+      const dir = path.dirname(CACHE_FILE);
+      fs.mkdirSync(dir, { recursive: true });
+      const payload = JSON.stringify({ timestamp: Date.now(), data });
+      const tmpPath = CACHE_FILE + '.tmp';
+      fs.writeFileSync(tmpPath, payload, 'utf8');
+      fs.renameSync(tmpPath, CACHE_FILE);
+    } catch (_) { /* silent */ }
+  }
 
   ipcMain.handle('list-apps-detailed', async () => {
+    // Serve from cache if fresh
+    const cached = readAppsCache();
+    if (cached) return cached;
     const { pm, bothFound } = await detectPackageManager();
     if (!pm) {
       return { installed: [], all: [], pmFound: false, error: tErr('errNoPmPath', "No 'am' or 'appman' package manager detected in PATH.") };
@@ -216,7 +243,10 @@ function registerAppListHandlers(ipcMain, deps) {
         const installed = instData.installedEntries
           .filter(e => e.name.toLowerCase() !== 'am')
           .map(entry => ({ name: entry.name, installed: true, hasDiamond: listData.diamondSet.has(entry.name), version: entry.version || null, desc: listData.catalogDesc.get(entry.name) || null, scope: entry.scope || null }));
-        return resolve({ installed, all, pmFound: true, pmName: pm, bothPms: !!bothFound, bundleChildOf });
+
+        const result = { installed, all, pmFound: true, pmName: pm, bothPms: !!bothFound, bundleChildOf };
+        writeAppsCache(result);
+        return resolve(result);
       } catch (e) {
         return resolve({ installed: [], all: [], pmFound: true, error: tErr('errInternalParsing', 'Internal parsing error.') });
       } finally {
