@@ -249,6 +249,7 @@
           await _.electronAPI.uninstallApp(appName);
         } catch (_o) { }
         try {
+          await _.electronAPI.invalidateAppsCache?.();
           await _.loadApps();
           _.applySearch();
         } catch (_o) { }

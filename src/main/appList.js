@@ -128,8 +128,8 @@ function registerAppListHandlers(ipcMain, deps) {
       const raw = fs.readFileSync(CACHE_FILE, 'utf8');
       const cached = JSON.parse(raw);
       if (!cached || !cached.timestamp || !cached.data) return null;
-      if (Date.now() - cached.timestamp > CACHE_TTL) return null;
-      return cached.data;
+      const stale = (Date.now() - cached.timestamp) > CACHE_TTL;
+      return { data: cached.data, stale };
     } catch (_) { return null; }
   }
 
@@ -144,17 +144,11 @@ function registerAppListHandlers(ipcMain, deps) {
     } catch (_) { /* silent */ }
   }
 
-  ipcMain.handle('list-apps-detailed', async () => {
-    // Serve from cache if fresh
-    const cached = readAppsCache();
-    if (cached) return cached;
+  // Separate fetch function reusable by background refresh
+  async function fetchAppsFresh() {
     const { pm, bothFound } = await detectPackageManager();
-    if (!pm) {
-      return { installed: [], all: [], pmFound: false, error: tErr('errNoPmPath', "No 'am' or 'appman' package manager detected in PATH.") };
-    }
-    if (bothFound) {
-      return { installed: [], all: [], pmFound: true, pmName: pm, bothPms: true, bundleChildOf: {} };
-    }
+    if (!pm) return { installed: [], all: [], pmFound: false, error: tErr('errNoPmPath', "No 'am' or 'appman' package manager detected in PATH.") };
+    if (bothFound) return { installed: [], all: [], pmFound: true, pmName: pm, bothPms: true, bundleChildOf: {} };
 
     return new Promise(async (resolve) => {
       let tmpDir1, tmpDir2;
@@ -254,6 +248,29 @@ function registerAppListHandlers(ipcMain, deps) {
         try { if (tmpDir2) fs.rmSync(tmpDir2, { recursive: true, force: true }); } catch (_) {}
       }
     });
+  }
+
+  ipcMain.handle('list-apps-detailed', async (event) => {
+    const cached = readAppsCache();
+    if (cached) {
+      if (cached.stale) {
+        // Refresh in background, don't block the response
+        setImmediate(async () => {
+          try {
+            const fresh = await fetchAppsFresh();
+            if (fresh && fresh.pmFound) {
+              writeAppsCache(fresh);
+              try { event.sender?.send('apps-cache-updated'); } catch (_) {}
+            }
+          } catch (_) {}
+        });
+      }
+      return cached.data;
+    }
+    // No cache: fetch fresh
+    const result = await fetchAppsFresh();
+    if (result && result.pmFound && !result.error) writeAppsCache(result);
+    return result;
   });
 }
 

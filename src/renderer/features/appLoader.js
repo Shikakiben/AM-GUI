@@ -7,6 +7,13 @@
   function init(opts) {
     _ = opts;
 
+    // Background cache refresh: reload apps when the main process finishes refreshing
+    if (typeof _.electronAPI().onAppsCacheUpdated === 'function') {
+      _.electronAPI().onAppsCacheUpdated(async () => {
+        try { await loadApps(); _.applySearch(); } catch (_) {}
+      });
+    }
+
     async function loadApps() {
       const seq = ++_loadAppsSeq;
       _.doms().appsDiv?.setAttribute('aria-busy', 'true');

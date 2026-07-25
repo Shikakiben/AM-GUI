@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCategoriesCache: () => ipcRenderer.invoke('get-categories-cache'),
   deleteCategoriesCache: () => ipcRenderer.invoke('delete-categories-cache'),
   invalidateAppsCache: () => ipcRenderer.invoke('invalidate-apps-cache'),
+  onAppsCacheUpdated: (cb) => ipcRenderer.on('apps-cache-updated', () => cb && cb()),
   // Added for sudo password management
   onPasswordPrompt: (cb) => ipcRenderer.on('password-prompt', (e, data) => cb && cb(data)),
   sendPassword: (payload) => ipcRenderer.send('password-response', payload),
