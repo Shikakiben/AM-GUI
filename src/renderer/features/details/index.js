@@ -13,23 +13,22 @@
     }
 
     const baseInstallSession = options.activeInstallSession || {};
-    const getActiveInstallSession = typeof options.getActiveInstallSession === 'function'
-      ? options.getActiveInstallSession
-      : () => baseInstallSession;
-    const getIconUrl = typeof options.getIconUrl === 'function' ? options.getIconUrl : (name) => `appicon://${name}.png`;
-    const showToast = typeof options.showToast === 'function' ? options.showToast : () => {};
-    const t = typeof options.translate === 'function' ? options.translate : (key) => key;
-    const enqueueInstall = typeof options.enqueueInstall === 'function' ? options.enqueueInstall : () => {};
-    const getInstallScope = typeof options.getInstallScope === 'function' ? options.getInstallScope : () => null;
-    const removeFromQueue = typeof options.removeFromQueue === 'function' ? options.removeFromQueue : () => {};
-    const applyDetailsSandboxBadge = typeof options.applyDetailsSandboxBadge === 'function' ? options.applyDetailsSandboxBadge : null;
-    const refreshAllInstallButtons = typeof options.refreshAllInstallButtons === 'function' ? options.refreshAllInstallButtons : () => {};
-    const setAppList = typeof options.setAppList === 'function' ? options.setAppList : () => {};
-    const loadApps = typeof options.loadApps === 'function' ? options.loadApps : async () => {};
-    const openActionConfirm = typeof options.openActionConfirm === 'function' ? options.openActionConfirm : fallbackPromise;
-    const rerenderActiveCategory = typeof options.rerenderActiveCategory === 'function' ? options.rerenderActiveCategory : null;
-    const updateScopeButtonUI = typeof options.updateScopeButtonUI === 'function' ? options.updateScopeButtonUI : () => {};
-    const onExitDetails = typeof options.onExitDetails === 'function' ? options.onExitDetails : () => {};
+    const safe = (fn, fb) => typeof fn === 'function' ? fn : fb;
+    const getActiveInstallSession = safe(options.getActiveInstallSession, () => baseInstallSession);
+    const getIconUrl = safe(options.getIconUrl, name => `appicon://${name}.png`);
+    const showToast = safe(options.showToast, () => {});
+    const t = safe(options.translate, key => key);
+    const enqueueInstall = safe(options.enqueueInstall, () => {});
+    const getInstallScope = safe(options.getInstallScope, () => null);
+    const removeFromQueue = safe(options.removeFromQueue, () => {});
+    const applyDetailsSandboxBadge = safe(options.applyDetailsSandboxBadge, null);
+    const refreshAllInstallButtons = safe(options.refreshAllInstallButtons, () => {});
+    const setAppList = safe(options.setAppList, () => {});
+    const loadApps = safe(options.loadApps, async () => {});
+    const openActionConfirm = safe(options.openActionConfirm, fallbackPromise);
+    const rerenderActiveCategory = safe(options.rerenderActiveCategory, null);
+    const updateScopeButtonUI = safe(options.updateScopeButtonUI, () => {});
+    const onExitDetails = safe(options.onExitDetails, () => {});
 
     const scrollShell = options.scrollShell || null;
     const appsContainer = options.appsContainer || null;

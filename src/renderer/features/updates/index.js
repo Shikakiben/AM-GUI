@@ -11,8 +11,12 @@
   let activeUpdateStreamId = null;
   let updatesStreamBuffer = '';
   const updateStreamWaiters = new Map();
+  let activeReinstallStreamId = null;
+  const reinstallStreamWaiters = new Map();
+  let pendingChangedScripts = [];
   let updateTimerInterval = null;
   let updateTimerStart = null;
+  let resizeHandler = null;
 
   function stripAnsiSequences(text = '') {
     return text
@@ -118,7 +122,9 @@
         updatesXterm.loadAddon(updatesXtermFit);
         updatesXterm.open(updatesTerminalEl);
         setTimeout(() => updatesXtermFit?.fit(), 60);
-        window.addEventListener('resize', () => updatesXtermFit?.fit());
+        if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+        resizeHandler = () => updatesXtermFit?.fit();
+        window.addEventListener('resize', resizeHandler);
         updatesTerminalEl.classList.remove('updates-terminal-fallback');
       } catch (err) {
         console.error('Init updates terminal failed', err);
@@ -224,6 +230,37 @@
       }
     }
 
+    function waitForReinstallJob(id) {
+      return new Promise((resolve, reject) => {
+        reinstallStreamWaiters.set(id, { resolve, reject });
+      });
+    }
+
+    async function startReinstallStream(appNames) {
+      revealUpdatesTerminal(true);
+      resetUpdatesTerminal();
+      var namesList = (Array.isArray(appNames) && appNames.length > 0) ? ' ' + appNames.join(' ') : '';
+      appendUpdatesTerminalChunk('\x1b[36m' + (_.statePmName() || 'appman') + ' reinstall' + namesList + '\x1b[0m\r\n');
+      const startRes = await _.electronAPI.reinstallBulk(appNames);
+      if (!startRes || startRes.error) {
+        throw new Error(startRes?.error || 'reinstall start failed');
+      }
+      activeReinstallStreamId = startRes.id;
+      return waitForReinstallJob(startRes.id);
+    }
+
+    function resolveReinstallWaiter(msg, isError) {
+      if (!msg || !msg.id) return;
+      const waiter = reinstallStreamWaiters.get(msg.id);
+      if (!waiter) return;
+      try {
+        if (isError) waiter.reject?.(msg);
+        else waiter.resolve?.(msg);
+      } finally {
+        reinstallStreamWaiters.delete(msg.id);
+      }
+    }
+
     function parseUpdatedApps(res) {
       const cleanedOutput = stripAnsiSequences(res || '');
       const updated = new Set();
@@ -264,7 +301,7 @@
       const QUAL = '(?:\\s+\\((?:AppMan|AM)\\))?';
       const VER = '[^\\s()]+';
       const ROW_RE = new RegExp(
-        '^\\s*\\d+\\.\\s+([A-Za-z0-9._-]+)\\s+' + VER + QUAL + '\\s+' + VER + QUAL + '$'
+        '^\\s*\\d+\\.\\s+([A-Za-z0-9._-]+)\\s+' + VER + QUAL + '\\s+' + VER + QUAL + '(?:\\s+\\(checksum changed\\))?\\s*$'
       );
       for (let i = 0; i < blockLines.length; i++) {
         const line = blockLines[i].trim();
@@ -273,7 +310,7 @@
         if (!m) continue;
         const name = m[1].toLowerCase();
         const allTokens = m[2].match(/\S+/g) || [];
-        const tokens = allTokens.filter(function (t) { return t !== '(AppMan)' && t !== '(AM)'; });
+        const tokens = allTokens.filter(function (t) { return t !== '(AppMan)' && t !== '(AM)' && t !== '(checksum' && t !== 'changed)'; });
         if (tokens.length < 2) continue;
         const oldVer = tokens[tokens.length - 2];
         const newVer = tokens[tokens.length - 1];
@@ -290,6 +327,22 @@
         }
       }
       return { updated: updated, newVersions: newVersions, hasStructure: true };
+    }
+
+    function parseChangedScripts(text) {
+      const changed = [];
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const m = line.match(/^◆\s+([A-Za-z0-9._-]+)\s+has changed,\s+you may need to reinstall it/i);
+        if (m) {
+          const name = m[1].toLowerCase();
+          const urlLine = lines[i + 1]?.trim() || '';
+          const urlMatch = urlLine.match(/(https:\/\/github\.com\/[^\s]+)/);
+          changed.push({ name: name, url: urlMatch ? urlMatch[1] : null });
+        }
+      }
+      return changed;
     }
 
     function handleUpdateCompletion(fullText) {
@@ -316,6 +369,24 @@
         var fallback = parseUpdatedApps(sanitized);
         if (fallback.size > 0) toShow = fallback;
       }
+
+      function buildUpdatedItem(rawName, extraClass, container) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'updated-item' + (extraClass ? ' ' + extraClass : '');
+        var img = document.createElement('img');
+        var displayName = _.prettifyAppName(rawName);
+        img.src = _.getIconUrl(rawName);
+        img.alt = displayName;
+        img.onerror = function () { img.src = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; };
+        var meta = document.createElement('div'); meta.className = 'updated-meta';
+        var title = document.createElement('div'); title.className = 'updated-name'; title.textContent = displayName;
+        meta.appendChild(title);
+        wrapper.appendChild(img);
+        wrapper.appendChild(meta);
+        container.appendChild(wrapper);
+        return meta;
+      }
+
       if (toShow.size > 0) {
         if (dom.updateFinalMessage) dom.updateFinalMessage.textContent = _.t('updates.updatedApps');
         if (dom.updatedAppsIcons) {
@@ -324,21 +395,15 @@
             var pipeIdx = keyLower.lastIndexOf('|');
             var rawName = pipeIdx !== -1 ? keyLower.slice(0, pipeIdx) : keyLower;
             var scopeKey = pipeIdx !== -1 ? keyLower.slice(pipeIdx + 1) : null;
-            var wrapper = document.createElement('div'); wrapper.className = 'updated-item';
-            var img = document.createElement('img');
             var appObj = scopeKey
               ? _.getAllApps().find(function (a) { return String(a.name).toLowerCase() === rawName && a.scope === scopeKey; })
               : _.getAllApps().find(function (a) { return String(a.name).toLowerCase() === rawName; });
-            var displayName = _.prettifyAppName(rawName);
             var versionInfo = newVersions.get(keyLower);
             var fallbackVer = appObj && appObj.version ? appObj.version : null;
-            img.src = _.getIconUrl(rawName);
-            img.alt = displayName;
-            img.onerror = function () { img.src = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; };
-            var meta = document.createElement('div'); meta.className = 'updated-meta';
-            var title = document.createElement('div'); title.className = 'updated-name'; title.textContent = displayName;
-            var ver = document.createElement('div'); ver.className = 'updated-version';
             var appScope = scopeKey || (appObj && appObj.scope ? appObj.scope : null);
+
+            var meta = buildUpdatedItem(rawName, null, dom.updatedAppsIcons);
+            var ver = document.createElement('div'); ver.className = 'updated-version';
             if (versionInfo && typeof versionInfo === 'object' && versionInfo.old && versionInfo.new) {
               ver.textContent = versionInfo.old + ' \u2192 ' + versionInfo.new;
             } else {
@@ -352,11 +417,7 @@
               scopeTag.textContent = appScope === 'system' ? '(' + _.t('install.scope.system') + ')' : '(' + _.t('install.scope.user') + ')';
               ver.appendChild(scopeTag);
             }
-            meta.appendChild(title);
             meta.appendChild(ver);
-            wrapper.appendChild(img);
-            wrapper.appendChild(meta);
-            dom.updatedAppsIcons.appendChild(wrapper);
           });
         }
       } else {
@@ -367,8 +428,35 @@
         }
         if (dom.updatedAppsIcons) dom.updatedAppsIcons.innerHTML = '';
       }
+      // --- Changed scripts (scripts d'installation modifiés) ---
+      var changedScripts = parseChangedScripts(sanitized);
+      pendingChangedScripts = changedScripts.map(function (cs) { return cs.name; });
+      if (changedScripts.length > 0) {
+        if (dom.changedScriptsFinalMessage) dom.changedScriptsFinalMessage.textContent = _.t('updates.changedScripts');
+        if (dom.changedScriptsIcons) {
+          dom.changedScriptsIcons.innerHTML = '';
+          changedScripts.forEach(function (cs) {
+            var meta = buildUpdatedItem(cs.name, 'changed-item', dom.changedScriptsIcons);
+            var ver = document.createElement('div'); ver.className = 'updated-version script-changed-msg';
+            ver.textContent = _.t('updates.scriptChanged') || 'Script modifié — réinstallation recommandée';
+            if (cs.url) {
+              var link = document.createElement('a');
+              link.href = cs.url;
+              link.className = 'script-link';
+              link.textContent = ' \u2197';
+              link.title = cs.url;
+              link.addEventListener('click', function (e) { e.stopPropagation(); });
+              ver.appendChild(link);
+            }
+            meta.appendChild(ver);
+          });
+        }
+        if (dom.changedScriptsResult) dom.changedScriptsResult.style.display = 'block';
+      } else {
+        if (dom.changedScriptsResult) dom.changedScriptsResult.style.display = 'none';
+      }
       if (dom.updateResult) dom.updateResult.style.display = 'block';
-      setTimeout(function () { _.loadApps().then(_.applySearch); }, 400);
+      setTimeout(function () { _.loadApps().then(_.applySearch).catch(function () {}); }, 400);
     }
 
     async function refreshAfterUpdates() {
@@ -458,6 +546,35 @@
       }
     });
 
+    _.electronAPI?.onReinstallProgress?.(function (msg) {
+      if (!msg || !msg.id) return;
+      if (activeReinstallStreamId && msg.id !== activeReinstallStreamId) {
+        if (msg.kind === 'done') resolveReinstallWaiter(msg, false);
+        if (msg.kind === 'error') resolveReinstallWaiter(msg, true);
+        return;
+      }
+      switch (msg.kind) {
+        case 'start':
+          activeReinstallStreamId = msg.id;
+          break;
+        case 'data':
+          if (typeof msg.chunk === 'string') {
+            appendUpdatesTerminalChunk(msg.chunk);
+          }
+          break;
+        case 'done':
+          appendUpdatesTerminalChunk('\r\n\x1b[32m' + (_.t('updates.reinstallDone') || 'Réinstallation terminée.') + ' (code ' + (typeof msg.code === 'number' ? msg.code : 0) + ')\x1b[0m\r\n');
+          resolveReinstallWaiter(Object.assign({}, msg, { output: '' }), false);
+          activeReinstallStreamId = null;
+          break;
+        case 'error':
+          appendUpdatesTerminalChunk('\r\n\x1b[31m' + (msg.message || (_.t('updates.error') || 'Erreur')) + '\x1b[0m\r\n');
+          resolveReinstallWaiter(Object.assign({}, msg, { output: '' }), true);
+          activeReinstallStreamId = null;
+          break;
+      }
+    });
+
     dom.runUpdatesBtn?.addEventListener('click', async function () {
       if (dom.runUpdatesBtn.disabled) return;
       _.setUpdateInProgress(true);
@@ -466,6 +583,9 @@
       if (dom.updateResult) dom.updateResult.style.display = 'none';
       if (dom.updateFinalMessage) dom.updateFinalMessage.textContent = '';
       if (dom.updatedAppsIcons) dom.updatedAppsIcons.innerHTML = '';
+      if (dom.changedScriptsResult) dom.changedScriptsResult.style.display = 'none';
+      if (dom.changedScriptsIcons) dom.changedScriptsIcons.innerHTML = '';
+      pendingChangedScripts = [];
       dom.runUpdatesBtn.disabled = true;
       try {
         var startTime = performance.now();
@@ -490,6 +610,44 @@
         _.setUpdateInProgress(false);
         setUpdateSpinnerBusy(false);
         dom.runUpdatesBtn.disabled = false;
+      }
+    });
+
+    dom.reinstallChangedBtn?.addEventListener('click', async function () {
+      if (dom.reinstallChangedBtn.disabled) return;
+      if (!_.electronAPI?.reinstallBulk) {
+        _.showToast(_.t('toast.updateFailed') || 'Réinstallation non supportée');
+        return;
+      }
+      if (!_.electronAPI?.onReinstallProgress) {
+        _.showToast(_.t('toast.updateFailed') || 'Streaming réinstallation non supporté');
+        return;
+      }
+      var appNames = pendingChangedScripts.slice();
+      dom.reinstallChangedBtn.disabled = true;
+      _.showToast(_.t('updates.reinstalling') || 'Réinstallation en cours…');
+      setUpdateSpinnerBusy(true);
+      try {
+        var resStream = await startReinstallStream(appNames);
+        if (resStream && resStream.success) {
+          _.showToast(_.t('updates.reinstallDone') || 'Réinstallation terminée.');
+          if (dom.changedScriptsResult) dom.changedScriptsResult.style.display = 'none';
+          pendingChangedScripts = [];
+        } else {
+          var errMsg = resStream?.message || resStream?.error || 'Échec';
+          _.showToast(_.t('updates.reinstallFailed') || 'Échec de la réinstallation.');
+          appendUpdatesTerminalChunk('\r\n\x1b[31m' + errMsg + '\x1b[0m\r\n');
+        }
+      } catch (err) {
+        console.error('Reinstall failed', err);
+        _.showToast(_.t('updates.reinstallFailed') || 'Échec de la réinstallation.');
+        if (err?.error !== 'external-update-running' && err?.message !== 'external-update-running') {
+          appendUpdatesTerminalChunk('\r\n\x1b[31m' + (err?.message || 'Erreur') + '\x1b[0m\r\n');
+        }
+      } finally {
+        setUpdateSpinnerBusy(false);
+        dom.reinstallChangedBtn.disabled = false;
+        setTimeout(function () { _.loadApps().then(_.applySearch).catch(function () {}); }, 400);
       }
     });
 

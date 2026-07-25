@@ -93,27 +93,40 @@
       return true;
     }
 
+    function getInstallButtonState(name) {
+      if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name) {
+        return {
+          text: _.t('install.status') + ' ✕',
+          action: 'cancel-install',
+          ariaLabel: _.t('install.cancel') || 'Cancel installation in progress (' + name + ')',
+          isActive: true
+        };
+      }
+      const pos = getQueuePosition(name);
+      if (pos !== -1) {
+        return {
+          text: _.t('install.queued') ? _.t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕'),
+          action: 'remove-queue',
+          ariaLabel: _.t('install.removeQueue') || ('Retirer de la file (' + name + ')'),
+          isActive: true
+        };
+      }
+      return { text: '', action: '', ariaLabel: '', isActive: false };
+    }
+
     function refreshDetailsInstallButtonForQueue() {
       const btn = dom.detailsInstallBtn;
       if (!btn || !btn.getAttribute('data-name')) return;
       btn.classList.remove('loading');
       const name = btn.getAttribute('data-name');
       if (!name) return;
-      if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name) {
+      var st = getInstallButtonState(name);
+      if (st.isActive) {
         btn.disabled = false;
         btn.classList.remove('loading');
-        btn.textContent = _.t('install.status') + ' ✕';
-        btn.setAttribute('data-action', 'cancel-install');
-        btn.setAttribute('aria-label', _.t('install.cancel') || 'Cancel installation in progress (' + name + ')');
-        return;
-      }
-      const pos = getQueuePosition(name);
-      if (pos !== -1) {
-        btn.disabled = false;
-        btn.classList.remove('loading');
-        btn.textContent = _.t('install.queued') ? _.t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕');
-        btn.setAttribute('data-action', 'remove-queue');
-        btn.setAttribute('aria-label', _.t('install.removeQueue') || ('Retirer de la file (' + name + ')'));
+        btn.textContent = st.text;
+        btn.setAttribute('data-action', st.action);
+        btn.setAttribute('aria-label', st.ariaLabel);
         return;
       }
       if (!btn.hidden) {
@@ -129,20 +142,12 @@
       buttons.forEach(btn => {
         const name = btn.getAttribute('data-app');
         if (!name) return;
-        if (activeInstallSession.id && !activeInstallSession.done && activeInstallSession.name === name) {
-          btn.textContent = _.t('install.status') + ' ✕';
+        var st = getInstallButtonState(name);
+        if (st.isActive) {
+          btn.textContent = st.text;
           btn.disabled = false;
-          btn.setAttribute('data-action', 'cancel-install');
-          btn.setAttribute('aria-label', _.t('install.cancel') || 'Cancel installation in progress (' + name + ')');
-          btn.style.display = '';
-          return;
-        }
-        const pos = getQueuePosition(name);
-        if (pos !== -1) {
-          btn.textContent = _.t('install.queued') ? _.t('install.queued').replace('{pos}', pos) : ('En file (#' + pos + ') ✕');
-          btn.disabled = false;
-          btn.setAttribute('data-action', 'remove-queue');
-          btn.setAttribute('aria-label', _.t('install.removeQueue') || ('Retirer de la file (' + name + ')'));
+          btn.setAttribute('data-action', st.action);
+          btn.setAttribute('aria-label', st.ariaLabel);
           btn.style.display = '';
           return;
         }
@@ -278,7 +283,9 @@
           window._xtermFit = new FitAddonClass();
           window._xterm.loadAddon(window._xtermFit);
           window._xterm.open(window._xtermLogDiv);
-          window.addEventListener('resize', () => window._xtermFit.fit());
+          if (window._xtermResizeHandler) window.removeEventListener('resize', window._xtermResizeHandler);
+          window._xtermResizeHandler = () => window._xtermFit.fit();
+          window.addEventListener('resize', window._xtermResizeHandler);
           window._xtermFit.fit();
         } catch (_err) {
           window._xterm = null;

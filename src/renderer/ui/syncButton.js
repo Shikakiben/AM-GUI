@@ -36,10 +36,6 @@ function createSyncButton({ onSync }) {
         btn.disabled = true;
         btn.classList.add('loading');
         try {
-            // Reset cache apps local avant reload
-            if (window.electronAPI && typeof window.electronAPI.resetAppsCache === 'function') {
-                await window.electronAPI.resetAppsCache();
-            }
             // Delete local category cache to force reload from AM
             if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
                 await window.electronAPI.deleteCategoriesCache();

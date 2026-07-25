@@ -26,48 +26,34 @@ const appUtils = window.utils || {};
 const appPreferences = window.preferences || {};
 const AM_INSTALLER_COMMAND = 'wget -q https://raw.githubusercontent.com/ivan-hc/AM/main/AM-INSTALLER && chmod a+x ./AM-INSTALLER && ./AM-INSTALLER && rm ./AM-INSTALLER';
 const PM_DOCS_URL = 'https://github.com/ivan-hc/AM#installation';
-const getThemePref = typeof appPreferences.getThemePref === 'function'
-  ? appPreferences.getThemePref
-  : () => {
-      try { return localStorage.getItem('themePref') || 'system'; }
-      catch (_) { return 'system'; }
-    };
-const applyThemePreference = typeof appPreferences.applyThemePreference === 'function'
-  ? appPreferences.applyThemePreference
-  : () => {
-      const pref = getThemePref();
-      const root = document.documentElement;
-      root.classList.remove('theme-light','theme-dark');
-      if (pref === 'light') root.classList.add('theme-light');
-      else if (pref === 'dark') root.classList.add('theme-dark');
-    };
-const loadOpenExternalPref = typeof appPreferences.loadOpenExternalPref === 'function'
-  ? appPreferences.loadOpenExternalPref
-  : () => {
-      try { return localStorage.getItem('openExternalLinks') === '1'; }
-      catch (_) { return false; }
-    };
-const saveOpenExternalPref = typeof appPreferences.saveOpenExternalPref === 'function'
-  ? appPreferences.saveOpenExternalPref
-  : (val) => {
-      try { localStorage.setItem('openExternalLinks', val ? '1' : '0'); }
-      catch (_) {}
-    };
-const getIconUrl = typeof appUtils.getIconUrl === 'function'
-  ? appUtils.getIconUrl
-  : (name) => `appicon://${name}.png`;
-const debounce = typeof appUtils.debounce === 'function'
-  ? appUtils.debounce
-  : (fn, delay) => {
-      let timer;
-      return (...args) => {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn(...args), delay);
-      };
-    };
-const prettifyAppName = typeof appUtils.prettifyAppName === 'function'
-  ? appUtils.prettifyAppName
-  : (name) => name || '';
+
+const safe = (fn, fallback) => typeof fn === 'function' ? fn : fallback;
+
+const getThemePref = safe(appPreferences.getThemePref, () => {
+  try { return localStorage.getItem('themePref') || 'system'; }
+  catch (_) { return 'system'; }
+});
+const applyThemePreference = safe(appPreferences.applyThemePreference, () => {
+  const pref = getThemePref();
+  const root = document.documentElement;
+  root.classList.remove('theme-light','theme-dark');
+  if (pref === 'light') root.classList.add('theme-light');
+  else if (pref === 'dark') root.classList.add('theme-dark');
+});
+const loadOpenExternalPref = safe(appPreferences.loadOpenExternalPref, () => {
+  try { return localStorage.getItem('openExternalLinks') === '1'; }
+  catch (_) { return false; }
+});
+const saveOpenExternalPref = safe(appPreferences.saveOpenExternalPref, (val) => {
+  try { localStorage.setItem('openExternalLinks', val ? '1' : '0'); }
+  catch (_) {}
+});
+const getIconUrl = safe(appUtils.getIconUrl, name => `appicon://${name}.png`);
+const debounce = safe(appUtils.debounce, (fn, delay) => {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+});
+const prettifyAppName = safe(appUtils.prettifyAppName, name => name || '');
 
 function getThemeVar(name, fallback) {
   try {
@@ -205,6 +191,8 @@ function createInstalledSection(sectionKey) {
   return section;
 }
 
+let tileRenderCount = 0;
+
 function buildTile(item){
   if (item && item.__section) {
     return createInstalledSection(item.__section);
@@ -284,11 +272,10 @@ function buildTile(item){
       }, { once:true });
       img.addEventListener('error', () => { img.classList.remove('img-loading'); }, { once:true });
       if (iconObserver) iconObserver.observe(img); else { img.src = iconUrl; img.removeAttribute('data-src'); }
-      if (buildTile._count === undefined) buildTile._count = 0;
-      if (buildTile._count < 48) {
+      if (tileRenderCount < 48) {
         try { img.setAttribute('fetchpriority','high'); } catch(_){ }
       }
-      buildTile._count++;
+      tileRenderCount++;
     }
   }
   tile.tabIndex = 0; // keyboard navigation
@@ -338,7 +325,7 @@ document.addEventListener('click', (e) => {
 
 const modeMenuBtn = document.getElementById('modeMenuBtn');
 const modeMenu = document.getElementById('modeMenu');
-const modeOptions = () => Array.from(document.querySelectorAll('.mode-option'));
+const modeOptions = Array.from(document.querySelectorAll('.mode-option'));
 const disableGpuCheckbox = document.getElementById('disableGpuCheckbox');
 const state = {
   allApps: [], // [{name, installed}]
@@ -405,7 +392,7 @@ function scheduleInstalledResort() {
 // --- (Re)add view mode change handling ---
 function updateModeMenuUI() {
   // Update pressed states
-  modeOptions().forEach(opt => {
+  modeOptions.forEach(opt => {
     const m = opt.getAttribute('data-mode');
     const active = m === state.viewMode;
     opt.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -437,7 +424,7 @@ if (modeMenuBtn && modeMenu) {
     modeMenuBtn.setAttribute('aria-expanded','false');
   });
   // Added: handle click on view mode options
-  modeOptions().forEach(opt => {
+  modeOptions.forEach(opt => {
     opt.addEventListener('click', (e) => {
       const mode = opt.getAttribute('data-mode');
       if (!mode) return;
@@ -529,20 +516,16 @@ const sandboxApi = (function initSandbox() {
   });
 })();
 
+// Sandbox wrapper functions (auto-generated from API)
+['handleSandboxShow','_setAppSandboxState','applySandboxBadgeToIcon','applyDetailsSandboxBadge','showNonAppimageModal'].forEach(fn => {
+  window[fn] = (...args) => sandboxApi?.[fn]?.(...args);
+});
+['handleSandboxExit','refreshAllSandboxBadges','cleanupSandboxCache','scheduleSandboxStateSweep','renderSandboxCard','resetSandboxLog'].forEach(fn => {
+  window[fn] = () => sandboxApi?.[fn]?.();
+});
+function isAppSandboxed(appName) { return sandboxApi?.isAppSandboxed?.(appName) ?? false; }
 const sandboxState = sandboxApi?.sandboxState || { currentApp: null, info: null, depsReady: false, busy: false, pendingAction: null, logBuffer: '', supported: true };
 const sandboxedApps = sandboxApi?.sandboxedApps || new Map();
-function handleSandboxShow(appName) { return sandboxApi?.handleSandboxShow?.(appName); }
-function handleSandboxExit() { return sandboxApi?.handleSandboxExit?.(); }
-function isAppSandboxed(appName) { return sandboxApi?.isAppSandboxed?.(appName) ?? false; }
-function _setAppSandboxState(appName, active) { return sandboxApi?.setAppSandboxState?.(appName, active); }
-function applySandboxBadgeToIcon(iconWrapper, isActive) { return sandboxApi?.applySandboxBadgeToIcon?.(iconWrapper, isActive); }
-function refreshAllSandboxBadges() { return sandboxApi?.refreshAllSandboxBadges?.(); }
-function applyDetailsSandboxBadge(appName) { return sandboxApi?.applyDetailsSandboxBadge?.(appName); }
-function cleanupSandboxCache() { return sandboxApi?.cleanupSandboxCache?.(); }
-function scheduleSandboxStateSweep() { return sandboxApi?.scheduleSandboxStateSweep?.(); }
-function renderSandboxCard() { return sandboxApi?.renderSandboxCard?.(); }
-function resetSandboxLog() { return sandboxApi?.resetSandboxLog?.(); }
-function showNonAppimageModal(appName, reason) { return sandboxApi?.showNonAppimageModal?.(appName, reason); }
 
 // Current install session memory (managed by installer module)
 let installScope = 'user';
@@ -646,6 +629,10 @@ const updateSpinner = document.getElementById('updateSpinner');
 const updateResult = document.getElementById('updateResult');
 const updateFinalMessage = document.getElementById('updateFinalMessage');
 const updatedAppsIcons = document.getElementById('updatedAppsIcons');
+const changedScriptsResult = document.getElementById('changedScriptsResult');
+const changedScriptsFinalMessage = document.getElementById('changedScriptsFinalMessage');
+const changedScriptsIcons = document.getElementById('changedScriptsIcons');
+const reinstallChangedBtn = document.getElementById('reinstallChangedBtn');
 const updatesTerminalWrap = document.getElementById('updatesTerminalWrap');
 const updatesTerminalNode = document.getElementById('updatesTerminal');
 const updatesToggleBtn = document.getElementById('updatesToggleBtn');
@@ -658,7 +645,9 @@ const _updatesApi = (function initUpdates() {
   return mod.init({
     dom: {
       runUpdatesBtn, updateSpinner, updateResult, updateFinalMessage,
-      updatedAppsIcons, updatesTerminalWrap, updatesTerminalNode, updatesToggleBtn
+      updatedAppsIcons, changedScriptsResult, changedScriptsFinalMessage,
+      changedScriptsIcons, reinstallChangedBtn,
+      updatesTerminalWrap, updatesTerminalNode, updatesToggleBtn
     },
     isUpdateInProgress: () => updateInProgress,
     setUpdateInProgress: (val) => { updateInProgress = val; },
@@ -680,29 +669,18 @@ function updateUpdatesToggleUi() { _updatesApi?.refreshToggleUi?.(); }
 
 function rerenderActiveCategory() {
   if (applySearch !== defaultApplySearch) {
-    try {
-      applySearch();
-      return;
-    } catch (err) {
-      console.error('applySearch failed, falling back to direct render', err);
-    }
+    try { applySearch(); return; }
+    catch (err) { console.error('applySearch failed, falling back to direct render', err); }
   }
-  if (state.activeCategory === 'updates') {
-    if (appsDiv) {
-      appsDiv.innerHTML = '';
-      appsDiv.hidden = true;
-    }
-    if (updatesPanel) updatesPanel.hidden = false;
-    if (advancedPanel) advancedPanel.hidden = true;
-    return;
-  }
-  if (state.activeCategory === 'advanced') {
-    if (appsDiv) {
-      appsDiv.innerHTML = '';
-      appsDiv.hidden = true;
-    }
-    if (advancedPanel) advancedPanel.hidden = false;
-    if (updatesPanel) updatesPanel.hidden = true;
+  const panelConf = {
+    updates: { apps: false, panel: updatesPanel, other: advancedPanel },
+    advanced: { apps: false, panel: advancedPanel, other: updatesPanel }
+  };
+  const cfg = panelConf[state.activeCategory];
+  if (cfg) {
+    if (appsDiv) { appsDiv.innerHTML = ''; appsDiv.hidden = true; }
+    if (cfg.panel) cfg.panel.hidden = false;
+    if (cfg.other) cfg.other.hidden = true;
     return;
   }
   setAppList(state.filtered);
