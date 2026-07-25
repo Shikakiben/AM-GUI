@@ -81,6 +81,8 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
 // Electron 36+ defaults to GTK4 which crashes on mixed-GTK systems.
 // Official Electron fix: https://www.electronjs.org/docs/latest/breaking-changes#changed-gtk-4-is-default-when-running-gnome
 app.commandLine.appendSwitch('gtk-version', '3');
+// Suppress VAAPI error on systems without libva (AM-GUI doesn't play video)
+app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecode');
 
 function detectDesktopEnv() {
   const env = process.env;
