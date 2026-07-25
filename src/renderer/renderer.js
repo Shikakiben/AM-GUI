@@ -150,6 +150,7 @@ function renderVirtualList() {
     spacer = document.createElement('div');
     spacer.className = 'app-list-spacer';
     spacer.style.width = '100%';
+    spacer.style.gridColumn = '1 / -1';
     spacer.style.pointerEvents = 'none';
     appsDiv.appendChild(spacer);
   }

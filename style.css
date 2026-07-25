@@ -660,7 +660,7 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 .tab { padding: 10px 14px; border-radius: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; font-weight:600; font-size:17px; line-height:1; }
 .tab.active { color: var(--fg); border-color: var(--border) !important; background: var(--card) !important; }
 
-.content { padding: 8px 16px 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
+.content { padding: 8px 16px 16px; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; overflow-x: hidden; }
 
 /* Quand la vue détaillée masque le header, on annule le décalage des tabs */
 
@@ -679,6 +679,7 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
   grid-auto-rows: auto;
   align-items: start;
   align-content: start;
+  overflow-x: hidden;
 }
 .app-tile { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; gap:12px; cursor:pointer; align-items:flex-start; box-shadow:var(--shadow); transition:background .15s,border-color .15s; height:auto; min-height:0; max-height:none; }
 .app-tile.busy { opacity:.55; }
