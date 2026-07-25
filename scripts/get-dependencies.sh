@@ -19,9 +19,9 @@ get-debloated-pkgs --add-common --prefer-nano
 
 # If the application needs to be manually built that has to be done down here
 
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash
           . "$HOME/.nvm/nvm.sh"
-          nvm install 22
+          nvm install 24
           node -v
           npm -v
           npm install       
