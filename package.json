@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "electron . --gtk-version=3",
     "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
     "lint": "eslint main.js preload.js src/**/*.js",
     "test": "node --test --test-timeout=20000 test/main/*.test.js test/renderer/*.test.js test/integration/*.test.js",
@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
-    "electron": "^35.7.5",
+    "electron": "^36.9.5",
     "electron-builder": "^26.0.12",
     "eslint": "^9.39.5",
     "jsdom": "^29.1.1"

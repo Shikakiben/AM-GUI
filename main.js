@@ -78,6 +78,10 @@ if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.commandLine.appendSwitch('disable-frame-rate-limit');
 }
 
+// Electron 36+ defaults to GTK4 which crashes on mixed-GTK systems.
+// Official Electron fix: https://www.electronjs.org/docs/latest/breaking-changes#changed-gtk-4-is-default-when-running-gnome
+app.commandLine.appendSwitch('gtk-version', '3');
+
 function detectDesktopEnv() {
   const env = process.env;
   const xdg = (env.XDG_CURRENT_DESKTOP || '').toLowerCase();
