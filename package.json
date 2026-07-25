@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "GDK_BACKEND=x11 electron .",
     "download-icons": "node scripts/download-icons.js --limit=500 --concurrency=8",
     "lint": "eslint main.js preload.js src/**/*.js",
     "test": "node --test --test-timeout=20000 test/main/*.test.js test/renderer/*.test.js test/integration/*.test.js",
