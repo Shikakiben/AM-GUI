@@ -1,5 +1,3 @@
-const { exec } = require('child_process');
-
 const PM_CACHE_TTL_MS = 60 * 1000;
 let cachedResult = null;
 let cachedPmTimestamp = 0;
@@ -10,12 +8,13 @@ async function detectPackageManager(forceRefresh = false) {
     return cachedResult;
   }
 
+  const e = require('child_process').exec;
   const [hasAm, hasAppman] = await Promise.all([
     new Promise((resolve) => {
-      exec('command -v am', (err) => resolve(!err));
+      e('command -v am', (err) => resolve(!err));
     }),
     new Promise((resolve) => {
-      exec('command -v appman', (err) => resolve(!err));
+      e('command -v appman', (err) => resolve(!err));
     })
   ]);
 
