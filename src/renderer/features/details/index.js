@@ -25,6 +25,7 @@
     const refreshAllInstallButtons = safe(options.refreshAllInstallButtons, () => {});
     const setAppList = safe(options.setAppList, () => {});
     const loadApps = safe(options.loadApps, async () => {});
+    const applySearch = safe(options.applySearch, () => {});
     const openActionConfirm = safe(options.openActionConfirm, fallbackPromise);
     const rerenderActiveCategory = safe(options.rerenderActiveCategory, null);
     const updateScopeButtonUI = safe(options.updateScopeButtonUI, () => {});
@@ -285,10 +286,17 @@
             }
             showToast(t('toast.cancelRequested'));
             try {
-              const scope = state.currentDetailsScope || getInstallScope();
               await window.electronAPI.uninstallApp(name);
+              await window.electronAPI.invalidateAppsCache?.();
               await loadApps();
-              showDetails(state.currentDetailsApp || name);
+              applySearch();
+              // Directly update buttons
+              detailsInstallBtn?.classList.remove('loading');
+              detailsInstallBtn.disabled = false;
+              detailsInstallBtn.hidden = false;
+              detailsInstallBtn.textContent = t('details.install');
+              detailsInstallBtn.setAttribute('data-action', 'install');
+              detailsUninstallBtn.hidden = true;
             } catch (_) {}
             return;
           }
@@ -346,11 +354,22 @@
         try {
           await window.electronAPI.uninstallApp(name);
         } catch (_) {}
-        // Always refresh and update UI
-        const appId = name + '|' + scope;
+        // Invalidate cache + reload + refresh grid
+        await window.electronAPI.invalidateAppsCache?.();
         await loadApps();
-        await new Promise(r => setTimeout(r, 100));
-        showDetails(appId);
+        applySearch();
+        // Directly update buttons (don't rely on showDetails finding the right scope)
+        detailsUninstallBtn.classList.remove('loading');
+        detailsUninstallBtn.disabled = false;
+        detailsUninstallBtn.hidden = true;
+        if (detailsInstallBtn) {
+          detailsInstallBtn.hidden = false;
+          detailsInstallBtn.classList.remove('loading');
+          detailsInstallBtn.disabled = false;
+          detailsInstallBtn.textContent = t('details.install');
+          detailsInstallBtn.setAttribute('data-action', 'install');
+          detailsInstallBtn.setAttribute('aria-label', t('details.install'));
+        }
       });
     }
 

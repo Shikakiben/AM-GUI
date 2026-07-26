@@ -447,7 +447,11 @@
               activeInstallSession.success = msg.success;
               activeInstallSession.code = msg.code;
             }
-            _.loadApps().then(() => {
+            // Invalidate cache then reload so newly‑installed apps appear immediately
+            (async () => {
+              await _.electronAPI.invalidateAppsCache?.();
+              await _.loadApps();
+              _.applySearch();
               if (msg.success) {
                 const installedName = msg.name || dom.detailsInstallBtn?.getAttribute('data-name');
                 const key = installedName && installedName.toLowerCase();
@@ -459,7 +463,7 @@
               }
               refreshQueueUI();
               refreshAllInstallButtons();
-            });
+            })().catch(() => {});
             setTimeout(() => { if (dom.installStream) dom.installStream.hidden = true; }, 3500);
             setTimeout(() => processNextInstall(), 450);
             break;

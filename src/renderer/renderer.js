@@ -589,6 +589,7 @@ function ensureDetailsApi() {
     refreshAllInstallButtons,
     setAppList,
     loadApps,
+    applySearch,
     openActionConfirm: window.ui.confirmModal.openActionConfirm,
     rerenderActiveCategory,
     scrollShell,
@@ -1629,11 +1630,13 @@ appsDiv?.addEventListener('click', (e) => {
         const tile = actionBtn.closest('.app-tile');
         if (tile){ tile.classList.add('busy'); }
         showToast(t('toast.uninstalling', {name: appName}));
-        window.electronAPI.uninstallApp(appName).then(() => {
-          loadApps().then(()=> {
-            applySearch();
-            actionBtn.classList.remove('loading'); // Remove spinner after uninstall
-          });
+        window.electronAPI.uninstallApp(appName).then(async () => {
+          await window.electronAPI.invalidateAppsCache?.();
+          await loadApps();
+          applySearch();
+          actionBtn.classList.remove('loading');
+        }).catch(() => {
+          actionBtn.classList.remove('loading');
         });
       });
     } else if (action === 'cancel-install') {
