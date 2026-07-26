@@ -120,7 +120,9 @@ function detectBundles(catalogDesc) {
 function registerAppListHandlers(ipcMain, deps) {
   const { tErr, detectPackageManager, invalidatePackageManagerCache, userDataPath } = deps;
   const CACHE_FILE = path.join(userDataPath || path.join(os.homedir(), '.config', 'am-gui'), 'apps-cache.json');
-  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes (used only for stale metadata, cache always served)
+
+  let bgRefreshRunning = false;
 
   function readAppsCache() {
     try {
@@ -253,16 +255,24 @@ function registerAppListHandlers(ipcMain, deps) {
   ipcMain.handle('list-apps-detailed', async (event) => {
     const cached = readAppsCache();
     if (cached) {
-      if (cached.stale) {
-        // Refresh in background, don't block the response
+      // Always refresh in background on first call (cache serves instantly)
+      if (!bgRefreshRunning) {
+        bgRefreshRunning = true;
+        const oldInstalled = Array.isArray(cached.data.installed) ? cached.data.installed.length : 0;
+        const oldAll = Array.isArray(cached.data.all) ? cached.data.all.length : 0;
         setImmediate(async () => {
           try {
             const fresh = await fetchAppsFresh();
             if (fresh && fresh.pmFound) {
               writeAppsCache(fresh);
-              try { event.sender?.send('apps-cache-updated'); } catch (_) {}
+              const newInstalled = Array.isArray(fresh.installed) ? fresh.installed.length : 0;
+              const newAll = Array.isArray(fresh.all) ? fresh.all.length : 0;
+              if (newInstalled !== oldInstalled || newAll !== oldAll) {
+                try { event.sender?.send('apps-cache-updated'); } catch (_) {}
+              }
             }
           } catch (_) {}
+          setTimeout(() => { bgRefreshRunning = false; }, 30000);
         });
       }
       return cached.data;
