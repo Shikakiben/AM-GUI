@@ -4,7 +4,7 @@
   <p align="center">A simple graphical frontend to easily install, update, and manage AppImages and other portable formats on Linux, powered by <a href="https://github.com/ivan-hc/AM">AM</a>.</p>
   
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
-[![CI Build Status](https://github.com//Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
+[![CI Build Status](https://github.com/Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
   
   <p></p><img src="screenshots/light.png" width="800"/><p></p>
 
@@ -29,7 +29,7 @@ To integrate AM-GUI into your system, reinstall it via the app (search "am-gui")
 
 Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-GUI/issues) — your feedback is very helpful!
 
-**All credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work! I only handle the GUI, learning how to properly yell at GPT-4.1 to make sure that little f$@¤=# doesn't mess too much with the code.**
+**All credit goes to [Ivan](https://github.com/ivan-hc) for his amazing work!**
 
 ---
 
@@ -37,7 +37,7 @@ Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-G
 
 1. #### Requirements
 
-   [Node.js](https://nodejs.org/) (≥20, 22 recommended)
+   [Node.js](https://nodejs.org/) (≥22, 24 recommended)
 
    If it's not available in your package manager, see: https://nodejs.org/en/download
 
@@ -78,7 +78,7 @@ Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-G
 
 ## Acknowledgements
 
-Thanks to [Ivan](https://github.com/ivan-hc), [Samueru-sama](https://github.com/Samueru-sama) and all the [pkgforge community](https://github.com/pkgforge-dev) for their outstanding work building, managing and distributing AppImages and other portable formats on Linux.
+Thanks to [Ivan](https://github.com/ivan-hc), [Samueru-sama](https://github.com/Samueru-sama), [fiftydinar](https://github.com/fiftydinar) and all the [pkgforge community](https://github.com/pkgforge-dev) for their outstanding work building, managing and distributing AppImages and other portable formats on Linux.
 
 ---
 
