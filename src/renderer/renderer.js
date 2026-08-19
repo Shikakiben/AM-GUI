@@ -1272,6 +1272,53 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+// --- pla-install:// deep link (PLA website "Install" button) ---
+let pendingPlaInstallReq = null;
+let plaInstallAttempts = 0;
+
+async function handlePendingPlaInstall() {
+  if (!pendingPlaInstallReq) return;
+  const { name, scope } = pendingPlaInstallReq;
+  if (!name) { pendingPlaInstallReq = null; return; }
+  // Wait for the app list to be loaded before acting on the request
+  if (!state.allApps.length && plaInstallAttempts < 40) {
+    plaInstallAttempts++;
+    setTimeout(handlePendingPlaInstall, 250);
+    return;
+  }
+  plaInstallAttempts = 0;
+  pendingPlaInstallReq = null;
+  const tabAll = document.querySelector('.tab[data-category="all"]');
+  if (tabAll) tabAll.click();
+  const app = state.allApps.find(a => a.name === name || String(a.name).toLowerCase() === String(name).toLowerCase());
+  if (app) {
+    showDetails(app.name);
+    if (app.installed) {
+      showToast(t('toast.alreadyInstalled', { name: app.name }) || `Already installed: ${app.name}`);
+      return;
+    }
+  }
+  // Ask for confirmation first (same dialog as the in-app Install button)
+  const openConfirm = window.ui?.confirmModal?.openActionConfirm;
+  const confirmed = typeof openConfirm === 'function'
+    ? await openConfirm({
+        title: t('confirm.installTitle'),
+        message: t('confirm.installMsg', { name: `<strong>${name}</strong>` }),
+        okLabel: t('details.install')
+      })
+    : true;
+  if (!confirmed) return;
+  const resolvedScope = scope || (installerApi?.getInstallScope ? installerApi.getInstallScope() : installScope);
+  enqueueInstall(name, resolvedScope);
+}
+
+if (window.electronAPI && typeof window.electronAPI.onPlaInstall === 'function') {
+  window.electronAPI.onPlaInstall((req) => {
+    pendingPlaInstallReq = req || null;
+    handlePendingPlaInstall();
+  });
+}
+
 // Handle language change
 const settingsPanelLang = document.getElementById('settingsPanel');
 if (settingsPanelLang) {

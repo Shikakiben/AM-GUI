@@ -8,5 +8,6 @@ TryExec=am-gui
 Icon=AM-GUI.png
 Terminal=false
 StartupWMClass=AM-GUI
+MimeType=x-scheme-handler/pla-install;
 Categories=Utility;System;PackageManager;
 Keywords=am;appmanager;appimage;software;store;repository;package;manager;install;uninstall;update;apps;applications;games;electron;

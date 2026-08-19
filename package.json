@@ -56,6 +56,14 @@
     "directories": {
       "output": "dist"
     },
+    "protocols": [
+      {
+        "name": "PLA Install",
+        "schemes": [
+          "pla-install"
+        ]
+      }
+    ],
     "linux": {
       "target": [
         "dir"

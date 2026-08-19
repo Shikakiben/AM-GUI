@@ -25,6 +25,7 @@ const { registerSandboxHandlers } = require('./src/main/sandbox');
 const { registerInstallHandlers } = require('./src/main/install');
 const { registerAppListHandlers } = require('./src/main/appList');
 const { registerUninstallHandler } = require('./src/main/uninstall');
+const { PLA_INSTALL_SCHEME, extractPlaInstallUrl, parsePlaInstallUrl } = require('./src/main/plaInstall');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 function logGlobalError(err) {
@@ -43,13 +44,14 @@ let currentLocale = 'en';
 const activeInstalls = new Map();
 const activeUpdates = new Map();
 const passwordWaiters = new Map();
+let pendingPlaInstall = null; // pla-install:// URL received before the window is ready
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
   process.exit(0);
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, commandLine) => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
@@ -57,6 +59,9 @@ if (!gotTheLock) {
       mainWindow.setAlwaysOnTop(true);
       setTimeout(() => { if (mainWindow) mainWindow.setAlwaysOnTop(false); }, 100);
     }
+    // A second instance may carry a pla-install:// URL (e.g. from the PLA website)
+    const url = extractPlaInstallUrl(commandLine || process.argv);
+    if (url) forwardPlaInstall(url);
   });
 }
 
@@ -152,6 +157,46 @@ function createWindow() {
   return win;
 }
 
+// --- pla-install:// URL scheme (PLA website "Install" button) ---
+function registerPlaInstallProtocol() {
+  try {
+    if (process.defaultApp) {
+      // Dev mode: register with the Electron binary + the app entry script
+      if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient(PLA_INSTALL_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
+      }
+    } else {
+      app.setAsDefaultProtocolClient(PLA_INSTALL_SCHEME);
+    }
+  } catch (e) {
+    console.warn('pla-install protocol registration failed:', e);
+  }
+}
+
+function forwardPlaInstall(url) {
+  const parsed = parsePlaInstallUrl(url);
+  if (!parsed) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.setAlwaysOnTop(true);
+    setTimeout(() => { if (mainWindow) mainWindow.setAlwaysOnTop(false); }, 100);
+    mainWindow.webContents.send('pla-install', parsed);
+  } else {
+    pendingPlaInstall = parsed;
+  }
+}
+
+// A pla-install:// URL passed on the command line when the app starts
+pendingPlaInstall = parsePlaInstallUrl(extractPlaInstallUrl(process.argv));
+
+// macOS: URLs arrive via the open-url event
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (url) forwardPlaInstall(url);
+});
+
 // Register IPC handlers
 const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto, isExternalUpdateRunning, fsp, userDataPath: app.getPath('userData') };
 registerGpuHandlers(ipcMain, app);
@@ -206,7 +251,15 @@ ipcMain.handle('set-tray-locale', (_event, locale) => {
 
 app.whenReady().then(() => {
   try { iconCacheManager.registerProtocol(protocol); } catch (e) { console.warn('appicon protocol failed:', e); }
+  registerPlaInstallProtocol();
   const win = createWindow();
+  // Deliver a pending pla-install:// request once the page has finished loading
+  win.webContents.on('did-finish-load', () => {
+    if (pendingPlaInstall) {
+      win.webContents.send('pla-install', pendingPlaInstall);
+      pendingPlaInstall = null;
+    }
+  });
   try { initTray(win); } catch (e) { console.warn('initTray failed:', e); }
 });
 

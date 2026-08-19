@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onSandboxProgress: (cb) => ipcRenderer.on('sandbox-progress', (e, data) => cb && cb(data)),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   onBeforeClose: (cb) => ipcRenderer.on('before-close', () => cb && cb()),
+  onPlaInstall: (cb) => ipcRenderer.on('pla-install', (e, data) => cb && cb(data)),
   setTrayLocale: (locale) => ipcRenderer.invoke('set-tray-locale', locale)
 });
 try {
