@@ -1,3 +1,5 @@
 #!/bin/sh
 
-"/home/moi/AM-GUI/node_modules/electron/dist/electron" "/home/moi/AM-GUI/main.js" --gtk-version=3 "$@"
+APP_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+"$APP_DIR/node_modules/electron/dist/electron" "$APP_DIR/main.js" --gtk-version=3 "$@"
