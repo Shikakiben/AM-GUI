@@ -660,7 +660,7 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 .tab { padding: 10px 14px; border-radius: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; font-weight:600; font-size:17px; line-height:1; }
 .tab.active { color: var(--fg); border-color: var(--border) !important; background: var(--card) !important; }
 
-.content { padding: 8px 16px 16px; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; overflow-x: hidden; }
+.content { padding: 8px 16px 16px; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; overflow-x: clip; }
 
 /* Quand la vue détaillée masque le header, on annule le décalage des tabs */
 

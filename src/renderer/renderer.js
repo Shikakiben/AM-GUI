@@ -451,7 +451,6 @@ const detailsLong = document.getElementById('detailsLong');
 const detailsInstallBtn = document.getElementById('detailsInstallBtn');
 const detailsUninstallBtn = document.getElementById('detailsUninstallBtn');
 const detailsGallery = document.getElementById('detailsGallery');
-const detailsGalleryInner = document.getElementById('detailsGalleryInner');
 // Streaming install elements
 // Gallery removed: all images are in the description
 const installStream = document.getElementById('installStream');
@@ -752,7 +751,6 @@ try { document.addEventListener('category.override', () => { try { setTimeout(()
 // initial population of the banner
 if (featuredFeature && typeof featuredFeature.updateFromState === 'function') featuredFeature.updateFromState();
 
-const descriptionCache = new Map();
 // --- Multilingual support ---
 function getSystemLang() {
   try {
@@ -1554,9 +1552,6 @@ function showDetails(appName) {
     try { virtualListApi.disconnectObservers(); } catch (_) {}
   }
   if (appsDiv) appsDiv.hidden = true;
-  loadRemoteDescription(app.name).catch(err => {
-    if (detailsLong) detailsLong.textContent = t('details.errorDesc', {error: err?.message || err || t('error.unknown')});
-  });
 }
 
 function exitDetailsView() {
@@ -1898,96 +1893,6 @@ tabs.forEach(tab => {
 });
 
 // ...existing code...
-async function loadRemoteDescription(appName) {
-  // If in cache (<24h) we reuse
-  const cached = descriptionCache.get(appName);
-  if (cached && (Date.now() - cached.timestamp) < 24*3600*1000) {
-    applyDescription(appName, cached);
-    return;
-  }
-  const url = `https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/apps/${encodeURIComponent(appName)}.md`;
-  let markdown;
-  try {
-    const resp = await fetch(url, { method: 'GET' });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    markdown = await resp.text();
-  } catch (e) {
-    throw new Error('Échec fetch: ' + (e.message || e));
-  }
-  // Parser le Markdown en HTML avec marked
-  let shortDesc = '';
-  let longDesc = '';
-  try {
-  if (!window.marked) throw new Error('marked non chargé');
-  // Cut markdown at the first table line (| ...)
-  let md = markdown;
-  const lines = md.split(/\r?\n/);
-  const tableIdx = lines.findIndex(l => /^\s*\|/.test(l));
-  if (tableIdx !== -1) md = lines.slice(0, tableIdx).join('\n');
-  longDesc = window.marked.parse(md);
-  // For shortDesc, take the first non-empty line (excluding title)
-  const descLines = md.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-  shortDesc = descLines[0] || 'Description non fournie.';
-  } catch (_err) {
-    shortDesc = 'Description indisponible.';
-    longDesc = 'Impossible de parser le markdown.';
-  }
-  let images = [];
-  try {
-    const parser2 = new DOMParser();
-    const doc2 = parser2.parseFromString(longDesc, 'text/html');
-    const imgEls = Array.from(doc2.querySelectorAll('img'));
-    // Filter: avoid icons that are too small or decorative
-    const filtered = imgEls.filter(img => {
-      const src = img.getAttribute('src') || '';
-      if (!src) return false;
-      if (/icon|logo|badge|emoji/i.test(src)) return false;
-      // Exclure images svg petites
-      const w = parseInt(img.getAttribute('width') || '0', 10);
-      const h = parseInt(img.getAttribute('height') || '0', 10);
-      if ((w && w < 64) || (h && h < 64)) return false;
-      return true;
-    });
-    images = filtered.map(i => i.getAttribute('src')).filter(Boolean);
-    // Normaliser URLs relatives
-    images = images.map(u => {
-      if (/^https?:/i.test(u)) return u;
-      // Assumer relatif au dossier /apps/
-      return `https://portable-linux-apps.github.io/apps/${u.replace(/^\.\//,'')}`;
-    });
-    // Dedup + limit
-    const seen = new Set();
-    const finalImgs = [];
-    for (const u of images) { if (!seen.has(u)) { seen.add(u); finalImgs.push(u); } }
-    images = finalImgs.slice(0, 6);
-  } catch(_) { images = []; }
-
-  const record = { short: shortDesc, long: longDesc, images, timestamp: Date.now() };
-  descriptionCache.set(appName, record);
-  applyDescription(appName, record);
-}
-
-function applyDescription(appName, record) {
-  if (!detailsName) return;
-  const refName = (detailsName.dataset.app || detailsName.textContent.toLowerCase().replace(/\s+✓$/, ''));
-  if (refName !== appName.toLowerCase()) return;
-  if (detailsLong) detailsLong.innerHTML = record.long;
-  if (detailsGalleryInner && detailsGallery) {
-    detailsGalleryInner.innerHTML = '';
-    if (record.images && record.images.length) {
-      record.images.forEach(src => {
-        const div = document.createElement('div'); div.className='shot';
-        const img = document.createElement('img'); img.src = src; img.loading='lazy';
-        img.onerror = () => { div.remove(); };
-        img.addEventListener('click', () => window.ui.lightbox.openLightbox(record.images, record.images.indexOf(src), detailsName?.textContent || ''));
-        div.appendChild(img); detailsGalleryInner.appendChild(div);
-      });
-      detailsGallery.hidden = false;
-    } else { detailsGallery.hidden = true; }
-  // Gallery removed: all images are in the description Markdown
-// Lightbox removed
-  }
-}
 
 
 

@@ -2,6 +2,7 @@
 
 > Fichier de sauvegarde de la mémoire du dépôt (Copilot).
 > En cas de reset de VSCodium, copier ce contenu vers `/memories/repo/AM-GUI.md` pour restaurer la mémoire.
+> ⚠️ Les deux fichiers (`AM-GUI.dev-notes.md` et `/memories/repo/AM-GUI.md`) doivent toujours rester synchronisés.
 
 ## Rôle
 Frontend graphique Electron pour l'outil **AM** (ivan-hc) : installer, mettre à jour et gérer les AppImages et formats portables sur Linux.
@@ -35,3 +36,17 @@ Frontend graphique Electron pour l'outil **AM** (ivan-hc) : installer, mettre à
 - `start-am-gui.sh`, `scripts/get-dependencies.sh`, `scripts/make-appimage.sh`
 - Build AppImage via le template pkgforge (Anylinux-AppImages)
 - Fichier de cache des catégories : `categories-cache.json`
+
+## Portail PLA — format JSON (site réécrit, 2026)
+- Descriptions : `https://portable-linux-apps.github.io/app/<nom>.json`
+  - champs : `name`, `description` (markdown), `screenshots` (chemins relatifs `../screenshots/…`), `sites`, `sources`, `buttons` (`"Label::URL"`, `_` = espace)
+  - géré dans `src/renderer/features/details/index.js` (`loadRemoteDescription`)
+- Catégories : `https://portable-linux-apps.github.io/categories/<nom>.json`
+  - objet `{ appName: { description, archs } }`, apps = `Object.keys(json)`
+  - liste des noms extraite dynamiquement de `cat_page.in` (regex `class="category-link" href="…html"`)
+  - géré dans `src/main/categories.js`
+- Ancien format `.md` (racine du dépôt PLA + `apps/<nom>.md`) : supprimé.
+
+## Pièges
+- `.content` : ne jamais mettre `overflow-x: hidden` → transforme `overflow-y` en `auto` et fait de `.content` le vrai scrolleur (à la place de `.scroll-shell`), ce qui casse le reset du scroll au changement d'onglet. Utiliser `overflow-x: clip`.
+- Le reset scroll (`scrollShell.scrollTop = 0`) ne fonctionne que si `.scroll-shell` est bien l'élément scrollant.

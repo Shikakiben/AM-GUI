@@ -148,24 +148,27 @@ describe('main-process modules (integration)', () => {
   describe('categories handlers', () => {
     it('fetches, caches, reuses on 304 and deletes', async () => {
       const fileEtags = new Map();
-      const markdownByFile = {
-        'games.md': `| App | Desc |\n| --- | --- |\n| ***alpha*** | great app |`,
-        'tools.md': `| App | Desc |\n| --- | --- |\n| ***beta*** | tool desc |`
+      const categoryJsonByName = {
+        'game.json': { alpha: { description: 'great app', archs: ['x86_64'] } },
+        'tools.json': { beta: { description: 'tool desc', archs: ['x86_64'] } }
       };
+      const indexHtml = '<a class="category-link" href="game.html">Game</a>' +
+        '<a class="category-link" href="tools.html">Tools</a>' +
+        '<a href="index.html">Home</a>';
       undici.fetch = async (url, options = {}) => {
         const headers = options.headers || {};
-        if (url.endsWith('/contents')) {
-          return createResponse({ jsonData: [{ name: 'games.md' }, { name: 'tools.md' }, { name: 'README.md' }] });
+        if (url.includes('/cat_page.in')) {
+          return createResponse({ textData: indexHtml });
         }
         const fileName = path.basename(url);
-        if (!markdownByFile[fileName]) return createResponse({ status: 404, ok: false, textData: 'missing' });
+        if (!categoryJsonByName[fileName]) return createResponse({ status: 404, ok: false, textData: 'missing' });
         const previousEtag = fileEtags.get(fileName);
         if (headers['If-None-Match'] && previousEtag && headers['If-None-Match'] === previousEtag) {
           return createResponse({ status: 304, ok: false });
         }
         const nextEtag = `W/"etag-${fileName}-${Date.now()}"`;
         fileEtags.set(fileName, nextEtag);
-        return createResponse({ textData: markdownByFile[fileName], headers: { etag: nextEtag, 'last-modified': new Date().toUTCString() } });
+        return createResponse({ jsonData: categoryJsonByName[fileName], headers: { etag: nextEtag, 'last-modified': new Date().toUTCString() } });
       };
 
       const { registerCategoryHandlers } = require(path.join(repoRoot, 'src/main/categories'));

@@ -5,6 +5,47 @@
     return Promise.resolve(value);
   }
 
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // The `buttons` field is a list of "Label::URL" entries (space-separated
+  // in the source text, possibly already split into an array in JSON).
+  // Labels use "_" for spaces (e.g. "Download_AppImage::https://…").
+  function parseButtons(raw) {
+    let items = [];
+    if (Array.isArray(raw)) items = raw;
+    else if (typeof raw === 'string') items = raw.split(/\s+/).filter(Boolean);
+    else return [];
+    const result = [];
+    for (const item of items) {
+      if (typeof item !== 'string') continue;
+      const idx = item.indexOf('::');
+      if (idx !== -1) {
+        const label = item.slice(0, idx).trim().replace(/_/g, ' ');
+        const url = item.slice(idx + 2).trim();
+        if (url) result.push({ label: label || url, url });
+      } else if (item.trim()) {
+        result.push({ label: item.trim().replace(/_/g, ' '), url: item.trim() });
+      }
+    }
+    return result;
+  }
+
+  // Resolve relative asset paths (e.g. "../screenshots/x.webp") against the
+  // published app page location.
+  function resolveAssetUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    try { return new URL(s, 'https://portable-linux-apps.github.io/app/').href; } catch (_) { return s; }
+  }
+
   function init(options = {}) {
     const state = options.state;
     if (!state) {
@@ -89,12 +130,27 @@
         applyDescription(appName, cached);
         return;
       }
-      const url = `https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/apps/${encodeURIComponent(appName)}.md`;
+      const url = `https://portable-linux-apps.github.io/app/${encodeURIComponent(appName)}.json`;
       let markdown;
+      let buttons = [];
+      let sites = [];
+      let sources = [];
+      let screenshots = [];
       try {
         const response = await fetch(url, { method: 'GET' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
-        markdown = await response.text();
+        const data = await response.json();
+        markdown = typeof data.description === 'string' ? data.description : '';
+        buttons = parseButtons(data.buttons);
+        sites = Array.isArray(data.sites)
+          ? data.sites.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ label: s.trim(), url: s.trim() }))
+          : [];
+        sources = Array.isArray(data.sources)
+          ? data.sources.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ label: s.trim(), url: s.trim() }))
+          : [];
+        screenshots = Array.isArray(data.screenshots)
+          ? data.screenshots.filter((s) => typeof s === 'string' && s.trim()).map((s) => resolveAssetUrl(s.trim())).filter(Boolean)
+          : [];
       } catch (error) {
         const tMsg = typeof window.t === 'function' ? window.t('error.fetchFailed', { msg: error.message || error }) : null;
         throw new Error(tMsg || ('Fetch failed: ' + (error.message || error)));
@@ -107,9 +163,6 @@
           throw new Error(tMsg || 'marked not loaded');
         }
         let md = markdown;
-        const lines = md.split(/\r?\n/);
-        const tableIdx = lines.findIndex((line) => /^\s*\|/.test(line));
-        if (tableIdx !== -1) md = lines.slice(0, tableIdx).join('\n');
         longDesc = window.marked.parse(md);
         const descLines = md.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
         const noDesc = typeof window.t === 'function' ? window.t('details.noDescription') : null;
@@ -117,6 +170,24 @@
       } catch (_) {
         shortDesc = 'Description indisponible.';
         longDesc = 'Impossible de parser le markdown.';
+      }
+      const tFn = typeof window.t === 'function' ? window.t : (key) => key;
+      const linkSection = (headingKey, links) => {
+        if (!links.length) return '';
+        const heading = tFn(headingKey) || headingKey;
+        const items = links
+          .map((l) => `<li><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)}</a></li>`)
+          .join('');
+        return `<h3>${escapeHtml(heading)}</h3><ul class="details-additional-links">${items}</ul>`;
+      };
+      const screenshotsHtml = screenshots.length
+        ? screenshots.map((src) => `<img src="${escapeHtml(src)}" alt="Screenshot" loading="lazy">`).join('')
+        : '';
+      if (screenshotsHtml || sites.length || sources.length || buttons.length) {
+        longDesc += screenshotsHtml
+          + linkSection('details.sites', sites)
+          + linkSection('details.sources', sources)
+          + linkSection('details.additionalLinks', buttons);
       }
       const record = { short: shortDesc, long: longDesc, timestamp: Date.now() };
       descriptionCache.set(appName, record);
