@@ -1,7 +1,7 @@
 const { Tray, Menu, nativeImage, app } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { getTrayLabels } = require('./trayI18n');
+const { getTrayLabels } = require('../i18n/translations');
 
 let tray = null;
 let currentMainWindow = null;

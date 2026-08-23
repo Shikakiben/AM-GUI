@@ -21,44 +21,25 @@
     return luminance(rgb.r,rgb.g,rgb.b) > 0.6; // threshold tuned for readability
   }
 
-  // Cache for extracted colors per URL/name to avoid repeated work
-  const _colorCache = new Map();
+  // Generate a stable color from a string (name → hex)
+  function nameToColor(name) {
+    if (!name) return null;
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      hash = hash & hash;
+    }
+    const h = Math.abs(hash) % 360;
+    // HSL → RGB
+    const s = 0.45, l = 0.55;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); };
+    const r = Math.round(f(0) * 255), g = Math.round(f(8) * 255), b = Math.round(f(4) * 255);
+    return rgbToHex(r, g, b);
+  }
+
   function rgbToHex(r,g,b){
     return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
-  }
-  // Extract a simple average color from an image URL (uses canvas). Returns hex or null.
-  function extractDominantColor(url){
-    if (!url) return Promise.resolve(null);
-    if (_colorCache.has(url)) return Promise.resolve(_colorCache.get(url));
-    return new Promise(resolve => {
-      try {
-        const img = new Image();
-        img.crossOrigin = 'Anonymous';
-        img.src = url;
-        img.onload = () => {
-          try {
-            const size = 32;
-            const canvas = document.createElement('canvas');
-            canvas.width = size; canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, size, size);
-            const data = ctx.getImageData(0,0,size,size).data;
-            let r=0,g=0,b=0,count=0;
-            for (let i=0;i<data.length;i+=4){
-              const alpha = data[i+3];
-              if (alpha < 32) continue; // skip mostly transparent
-              r += data[i]; g += data[i+1]; b += data[i+2]; count++;
-            }
-            if (!count) { _colorCache.set(url,null); resolve(null); return; }
-            r = Math.round(r/count); g = Math.round(g/count); b = Math.round(b/count);
-            const hex = rgbToHex(r,g,b);
-            _colorCache.set(url, hex);
-            resolve(hex);
-          } catch(e){ _colorCache.set(url,null); resolve(null); }
-        };
-        img.onerror = () => { _colorCache.set(url,null); resolve(null); };
-      } catch(e){ resolve(null); }
-    });
   }
 
   function renderItem(item, container) {
@@ -135,13 +116,8 @@
       if (item && item.color) {
         applyColorHex(item.color);
       } else {
-        // try extracting from icon; do not block render
-        const iconUrl = getIconUrl(item.name||'');
-        applyColorHex(null); // clear first
-        extractDominantColor(iconUrl).then(hex => {
-          if (!hex) return;
-          applyColorHex(hex);
-        }).catch(()=>{});
+        // generate color from app name (reliable, no canvas/protocol dependency)
+        applyColorHex(nameToColor(item.name));
       }
       const btns = dots.querySelectorAll('.dot');
       btns.forEach((b,i)=> b.classList.toggle('active', i===idx));

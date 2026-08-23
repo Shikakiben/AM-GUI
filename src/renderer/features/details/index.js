@@ -5,6 +5,47 @@
     return Promise.resolve(value);
   }
 
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // The `buttons` field is a list of "Label::URL" entries (space-separated
+  // in the source text, possibly already split into an array in JSON).
+  // Labels use "_" for spaces (e.g. "Download_AppImage::https://…").
+  function parseButtons(raw) {
+    let items = [];
+    if (Array.isArray(raw)) items = raw;
+    else if (typeof raw === 'string') items = raw.split(/\s+/).filter(Boolean);
+    else return [];
+    const result = [];
+    for (const item of items) {
+      if (typeof item !== 'string') continue;
+      const idx = item.indexOf('::');
+      if (idx !== -1) {
+        const label = item.slice(0, idx).trim().replace(/_/g, ' ');
+        const url = item.slice(idx + 2).trim();
+        if (url) result.push({ label: label || url, url });
+      } else if (item.trim()) {
+        result.push({ label: item.trim().replace(/_/g, ' '), url: item.trim() });
+      }
+    }
+    return result;
+  }
+
+  // Resolve relative asset paths (e.g. "../screenshots/x.webp") against the
+  // published app page location.
+  function resolveAssetUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    try { return new URL(s, 'https://portable-linux-apps.github.io/app/').href; } catch (_) { return s; }
+  }
+
   function init(options = {}) {
     const state = options.state;
     if (!state) {
@@ -13,23 +54,23 @@
     }
 
     const baseInstallSession = options.activeInstallSession || {};
-    const getActiveInstallSession = typeof options.getActiveInstallSession === 'function'
-      ? options.getActiveInstallSession
-      : () => baseInstallSession;
-    const getIconUrl = typeof options.getIconUrl === 'function' ? options.getIconUrl : (name) => `appicon://${name}.png`;
-    const showToast = typeof options.showToast === 'function' ? options.showToast : () => {};
-    const t = typeof options.translate === 'function' ? options.translate : (key) => key;
-    const enqueueInstall = typeof options.enqueueInstall === 'function' ? options.enqueueInstall : () => {};
-    const getInstallScope = typeof options.getInstallScope === 'function' ? options.getInstallScope : () => null;
-    const removeFromQueue = typeof options.removeFromQueue === 'function' ? options.removeFromQueue : () => {};
-    const applyDetailsSandboxBadge = typeof options.applyDetailsSandboxBadge === 'function' ? options.applyDetailsSandboxBadge : null;
-    const refreshAllInstallButtons = typeof options.refreshAllInstallButtons === 'function' ? options.refreshAllInstallButtons : () => {};
-    const setAppList = typeof options.setAppList === 'function' ? options.setAppList : () => {};
-    const loadApps = typeof options.loadApps === 'function' ? options.loadApps : async () => {};
-    const openActionConfirm = typeof options.openActionConfirm === 'function' ? options.openActionConfirm : fallbackPromise;
-    const rerenderActiveCategory = typeof options.rerenderActiveCategory === 'function' ? options.rerenderActiveCategory : null;
-    const updateScopeButtonUI = typeof options.updateScopeButtonUI === 'function' ? options.updateScopeButtonUI : () => {};
-    const onExitDetails = typeof options.onExitDetails === 'function' ? options.onExitDetails : () => {};
+    const safe = (fn, fb) => typeof fn === 'function' ? fn : fb;
+    const getActiveInstallSession = safe(options.getActiveInstallSession, () => baseInstallSession);
+    const getIconUrl = safe(options.getIconUrl, name => `appicon://${name}.png`);
+    const showToast = safe(options.showToast, () => {});
+    const t = safe(options.translate, key => key);
+    const enqueueInstall = safe(options.enqueueInstall, () => {});
+    const getInstallScope = safe(options.getInstallScope, () => null);
+    const removeFromQueue = safe(options.removeFromQueue, () => {});
+    const applyDetailsSandboxBadge = safe(options.applyDetailsSandboxBadge, null);
+    const refreshAllInstallButtons = safe(options.refreshAllInstallButtons, () => {});
+    const setAppList = safe(options.setAppList, () => {});
+    const loadApps = safe(options.loadApps, async () => {});
+    const applySearch = safe(options.applySearch, () => {});
+    const openActionConfirm = safe(options.openActionConfirm, fallbackPromise);
+    const rerenderActiveCategory = safe(options.rerenderActiveCategory, null);
+    const updateScopeButtonUI = safe(options.updateScopeButtonUI, () => {});
+    const onExitDetails = safe(options.onExitDetails, () => {});
 
     const scrollShell = options.scrollShell || null;
     const appsContainer = options.appsContainer || null;
@@ -89,12 +130,27 @@
         applyDescription(appName, cached);
         return;
       }
-      const url = `https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/apps/${encodeURIComponent(appName)}.md`;
+      const url = `https://portable-linux-apps.github.io/app/${encodeURIComponent(appName)}.json`;
       let markdown;
+      let buttons = [];
+      let sites = [];
+      let sources = [];
+      let screenshots = [];
       try {
         const response = await fetch(url, { method: 'GET' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
-        markdown = await response.text();
+        const data = await response.json();
+        markdown = typeof data.description === 'string' ? data.description : '';
+        buttons = parseButtons(data.buttons);
+        sites = Array.isArray(data.sites)
+          ? data.sites.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ label: s.trim(), url: s.trim() }))
+          : [];
+        sources = Array.isArray(data.sources)
+          ? data.sources.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ label: s.trim(), url: s.trim() }))
+          : [];
+        screenshots = Array.isArray(data.screenshots)
+          ? data.screenshots.filter((s) => typeof s === 'string' && s.trim()).map((s) => resolveAssetUrl(s.trim())).filter(Boolean)
+          : [];
       } catch (error) {
         const tMsg = typeof window.t === 'function' ? window.t('error.fetchFailed', { msg: error.message || error }) : null;
         throw new Error(tMsg || ('Fetch failed: ' + (error.message || error)));
@@ -107,9 +163,6 @@
           throw new Error(tMsg || 'marked not loaded');
         }
         let md = markdown;
-        const lines = md.split(/\r?\n/);
-        const tableIdx = lines.findIndex((line) => /^\s*\|/.test(line));
-        if (tableIdx !== -1) md = lines.slice(0, tableIdx).join('\n');
         longDesc = window.marked.parse(md);
         const descLines = md.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
         const noDesc = typeof window.t === 'function' ? window.t('details.noDescription') : null;
@@ -117,6 +170,24 @@
       } catch (_) {
         shortDesc = 'Description indisponible.';
         longDesc = 'Impossible de parser le markdown.';
+      }
+      const tFn = typeof window.t === 'function' ? window.t : (key) => key;
+      const linkSection = (headingKey, links) => {
+        if (!links.length) return '';
+        const heading = tFn(headingKey) || headingKey;
+        const items = links
+          .map((l) => `<li><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)}</a></li>`)
+          .join('');
+        return `<h3>${escapeHtml(heading)}</h3><ul class="details-additional-links">${items}</ul>`;
+      };
+      const screenshotsHtml = screenshots.length
+        ? screenshots.map((src) => `<img src="${escapeHtml(src)}" alt="Screenshot" loading="lazy">`).join('')
+        : '';
+      if (screenshotsHtml || sites.length || sources.length || buttons.length) {
+        longDesc += screenshotsHtml
+          + linkSection('details.sites', sites)
+          + linkSection('details.sources', sources)
+          + linkSection('details.additionalLinks', buttons);
       }
       const record = { short: shortDesc, long: longDesc, timestamp: Date.now() };
       descriptionCache.set(appName, record);
@@ -286,10 +357,17 @@
             }
             showToast(t('toast.cancelRequested'));
             try {
-              const scope = state.currentDetailsScope || getInstallScope();
-              await window.electronAPI.amAction('uninstall', name, scope);
+              await window.electronAPI.uninstallApp(name);
+              await window.electronAPI.invalidateAppsCache?.();
               await loadApps();
-              showDetails(state.currentDetailsApp || name);
+              applySearch();
+              // Directly update buttons
+              detailsInstallBtn?.classList.remove('loading');
+              detailsInstallBtn.disabled = false;
+              detailsInstallBtn.hidden = false;
+              detailsInstallBtn.textContent = t('details.install');
+              detailsInstallBtn.setAttribute('data-action', 'install');
+              detailsUninstallBtn.hidden = true;
             } catch (_) {}
             return;
           }
@@ -345,13 +423,24 @@
         detailsUninstallBtn.disabled = true;
         showToast(t('toast.uninstalling', { name }));
         try {
-          await window.electronAPI.amAction('uninstall', name, scope);
+          await window.electronAPI.uninstallApp(name);
         } catch (_) {}
-        // Always refresh and update UI
-        const appId = name + '|' + scope;
+        // Invalidate cache + reload + refresh grid
+        await window.electronAPI.invalidateAppsCache?.();
         await loadApps();
-        await new Promise(r => setTimeout(r, 100));
-        showDetails(appId);
+        applySearch();
+        // Directly update buttons (don't rely on showDetails finding the right scope)
+        detailsUninstallBtn.classList.remove('loading');
+        detailsUninstallBtn.disabled = false;
+        detailsUninstallBtn.hidden = true;
+        if (detailsInstallBtn) {
+          detailsInstallBtn.hidden = false;
+          detailsInstallBtn.classList.remove('loading');
+          detailsInstallBtn.disabled = false;
+          detailsInstallBtn.textContent = t('details.install');
+          detailsInstallBtn.setAttribute('data-action', 'install');
+          detailsInstallBtn.setAttribute('aria-label', t('details.install'));
+        }
       });
     }
 

@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -25,8 +25,5 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Verify main-process modules
-        run: node scripts/verify-main-modules.js
-
-      - name: Verify renderer queue logic
-        run: node scripts/verify-renderer-queue.js
+      - name: Run tests (unit + integration)
+        run: npm test

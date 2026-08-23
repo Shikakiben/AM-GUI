@@ -660,7 +660,7 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 .tab { padding: 10px 14px; border-radius: 10px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; font-weight:600; font-size:17px; line-height:1; }
 .tab.active { color: var(--fg); border-color: var(--border) !important; background: var(--card) !important; }
 
-.content { padding: 8px 16px 16px; max-width: 1200px; margin: 0 auto; width: 100%; }
+.content { padding: 8px 16px 16px; max-width: 1200px; margin: 0 auto; width: 100%; box-sizing: border-box; overflow-x: clip; }
 
 /* Quand la vue détaillée masque le header, on annule le décalage des tabs */
 
@@ -679,6 +679,7 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
   grid-auto-rows: auto;
   align-items: start;
   align-content: start;
+  overflow-x: hidden;
 }
 .app-tile { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; gap:12px; cursor:pointer; align-items:flex-start; box-shadow:var(--shadow); transition:background .15s,border-color .15s; height:auto; min-height:0; max-height:none; }
 .app-tile.busy { opacity:.55; }
@@ -1032,6 +1033,10 @@ body.details-mode #appDetails { opacity:1; transform:translateY(0); }
 .updated-name { font-weight:600; font-size:13px; }
 .updated-version { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .updated-scope-tag { font-size:10px; color:var(--accent); margin-left:4px; opacity:.8; }
+.changed-item { border-color:#e6a817; background:linear-gradient(135deg, rgba(230,168,23,0.06), rgba(230,168,23,0.02)); }
+.script-changed-msg { color:#c78b0a; font-weight:500; }
+.script-link { color:var(--accent); text-decoration:none; font-size:11px; margin-left:4px; }
+.script-link:hover { text-decoration:underline; }
 .updates-actions-row { display:flex; flex-direction:row; align-items:center; gap:4px; justify-content:center; }
 
 .updates-toggle-icon {
@@ -1058,6 +1063,8 @@ body.details-mode #appDetails { opacity:1; transform:translateY(0); }
 @media (prefers-color-scheme: dark){
   .updates-terminal { background:rgba(9,12,18,0.85); border-color:#101a27; box-shadow:0 18px 40px rgba(0,0,0,.55); }
   .updates-terminal-body { border-color:#101a27; background:#03080f; }
+  .changed-item { border-color:#8a6d14; background:linear-gradient(135deg, rgba(230,168,23,0.10), rgba(230,168,23,0.03)); }
+  .script-changed-msg { color:#e2a817; }
 }
 .advanced-panel .placeholder-strong { margin:0 0 8px; font-size:15px; font-weight:700; opacity:.9; }
 .advanced-panel .placeholder-sub { margin:0; font-size:12px; opacity:.7; }

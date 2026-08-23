@@ -1,4 +1,4 @@
-const { tErr } = require('./trayI18n');
+const { tErr } = require('../i18n/translations');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -48,22 +48,25 @@ async function mapWithConcurrency(limit, items, iteratorFn) {
   return results;
 }
 
-const repo = 'Portable-Linux-Apps/Portable-Linux-Apps.github.io';
-const apiBase = `https://api.github.com/repos/${repo}/contents`;
-const rawBase = `https://raw.githubusercontent.com/${repo}/main`;
+const SITE_BASE = 'https://portable-linux-apps.github.io';
+const CATEGORY_INDEX_URL = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/cat_page.in';
 const fetch = undici.fetch;
 
-function parseApps(markdown) {
-  const apps = [];
-  const lines = markdown.split(/\r?\n/);
-  for (const line of lines) {
-    if ((line.match(/\|/g) || []).length < 2) continue;
-    const matches = [...line.matchAll(/\*\*\*(.*?)\*\*\*/g)];
-    for (const match of matches) {
-      if (match[1]) apps.push(match[1].trim());
-    }
+function parseCategoryNames(html) {
+  const names = [];
+  const re = /class="category-link"\s+href="([a-z0-9-]+)\.html"/g;
+  let match;
+  while ((match = re.exec(html)) !== null) {
+    if (match[1] && !names.includes(match[1])) names.push(match[1]);
   }
-  return apps;
+  return names;
+}
+
+function appsFromCategoryJson(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+  return Object.keys(data)
+    .filter((name) => typeof name === 'string' && name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function registerCategoryHandlers(ipcMain, cacheDir) {
@@ -107,56 +110,50 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
         readJsonSafe(categoriesMetaPath, {})
       ]);
       const previousByName = new Map((prevCategories || []).map((cat) => [cat.name, Array.isArray(cat.apps) ? cat.apps : []]));
-      const res = await fetch(apiBase, { headers: { 'User-Agent': 'AM-GUI' } });
-      if (!res.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: res.status }));
-      const files = await res.json();
-      const mdFiles = files.filter((f) => {
-        if (!f.name.endsWith('.md')) return false;
-        const lower = f.name.toLowerCase();
-        if (lower === 'apps.md' || lower === 'index.md') return false;
-        if (lower.includes('readme') || lower.includes('changelog') || lower.includes('contribut')) return false;
-        return true;
-      });
-      if (!mdFiles.length) throw new Error(tErr('errNoCategories', 'No categories found'));
+      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' } });
+      if (!idxRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: idxRes.status }));
+      const html = await idxRes.text();
+      const catNames = parseCategoryNames(html);
+      if (!catNames.length) throw new Error(tErr('errNoCategories', 'No categories found'));
 
       const nextMeta = {};
       const results = await mapWithConcurrency(
         MAX_CATEGORY_FETCH_CONCURRENCY,
-        mdFiles,
-        async (file) => {
-          const catName = file.name.replace(/\.md$/, '');
+        catNames,
+        async (catName) => {
+          const url = `${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`;
           const headers = { 'User-Agent': 'AM-GUI' };
-          const previousMeta = prevMeta && prevMeta[file.name];
+          const previousMeta = prevMeta && prevMeta[catName];
           if (previousMeta?.etag) headers['If-None-Match'] = previousMeta.etag;
           if (previousMeta?.lastModified) headers['If-Modified-Since'] = previousMeta.lastModified;
 
-          let mdResponse;
+          let catResponse;
           try {
-            mdResponse = await fetch(`${rawBase}/${file.name}`, { headers });
+            catResponse = await fetch(url, { headers });
           } catch (err) {
-            console.warn('[categories] fetch failed for', file.name, err?.message || err);
-            if (previousMeta) nextMeta[file.name] = previousMeta;
+            console.warn('[categories] fetch failed for', catName, err?.message || err);
+            if (previousMeta) nextMeta[catName] = previousMeta;
             return null;
           }
 
-          if (mdResponse.status === 304) {
-            if (previousMeta) nextMeta[file.name] = previousMeta;
+          if (catResponse.status === 304) {
+            if (previousMeta) nextMeta[catName] = previousMeta;
             if (previousByName.has(catName)) {
               return { name: catName, apps: previousByName.get(catName) };
             }
             return null;
           }
-          if (!mdResponse.ok) {
-            console.warn('[categories] HTTP', mdResponse.status, 'pour', file.name);
-            if (previousMeta) nextMeta[file.name] = previousMeta;
+          if (!catResponse.ok) {
+            console.warn('[categories] HTTP', catResponse.status, 'pour', catName);
+            if (previousMeta) nextMeta[catName] = previousMeta;
             return null;
           }
-          const mdText = await mdResponse.text();
-          const apps = parseApps(mdText);
-          const etag = mdResponse.headers?.get?.('etag');
-          const lastModified = mdResponse.headers?.get?.('last-modified');
+          const data = await catResponse.json();
+          const apps = appsFromCategoryJson(data);
+          const etag = catResponse.headers?.get?.('etag');
+          const lastModified = catResponse.headers?.get?.('last-modified');
           if (etag || lastModified) {
-            nextMeta[file.name] = Object.fromEntries(
+            nextMeta[catName] = Object.fromEntries(
               Object.entries({ etag, lastModified }).filter(([, v]) => !!v)
             );
           }
@@ -179,22 +176,16 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
   ipcMain.handle('fetch-first-category', async () => {
     try {
-      const res = await fetch(apiBase, { headers: { 'User-Agent': 'AM-GUI' } });
-      if (!res.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: res.status }));
-      const files = await res.json();
-      const mdFiles = files.filter((f) => {
-        if (!f.name.endsWith('.md')) return false;
-        const lower = f.name.toLowerCase();
-        if (lower.includes('readme') || lower.includes('changelog') || lower.includes('contribut')) return false;
-        return true;
-      });
-      if (!mdFiles.length) throw new Error(tErr('errNoCategories', 'No categories found'));
-      const file = mdFiles[0];
-      const catName = file.name.replace(/\.md$/, '');
-      const mdRes = await fetch(`${rawBase}/${file.name}`, { headers: { 'User-Agent': 'AM-GUI' } });
-      if (!mdRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: mdRes.status }));
-      const mdText = await mdRes.text();
-      const apps = parseApps(mdText);
+      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' } });
+      if (!idxRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: idxRes.status }));
+      const html = await idxRes.text();
+      const catNames = parseCategoryNames(html);
+      if (!catNames.length) throw new Error(tErr('errNoCategories', 'No categories found'));
+      const catName = catNames[0];
+      const catRes = await fetch(`${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`, { headers: { 'User-Agent': 'AM-GUI' } });
+      if (!catRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: catRes.status }));
+      const data = await catRes.json();
+      const apps = appsFromCategoryJson(data);
       return { ok: true, category: { name: catName, apps } };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
