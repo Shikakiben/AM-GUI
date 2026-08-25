@@ -24,7 +24,7 @@
     </div>
     <div class="header-center" role="search" aria-label="Recherche">
       <div class="search">
-        <span class="search-icon" aria-hidden="true">🔍</span>
+        <i data-lucide="search" class="search-icon" style="width: 1.1em; height: 1.1em; vertical-align: middle;" aria-hidden="true"></i>
         <input id="searchInput" type="search" placeholder="Rechercher des applications…" data-i18n-placeholder="search.placeholder" autocomplete="off" />
       </div>
     </div>
@@ -356,6 +356,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.473.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="src/renderer/config/constants.js"></script>
   <script src="src/renderer/utils.js"></script>
@@ -394,4 +395,9 @@
       </div>
     </div>
   </div>
+  <script>
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  </script>
 </body>

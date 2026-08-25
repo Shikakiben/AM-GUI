@@ -13,20 +13,21 @@
     const iconMap = getIconMap(iconMapOverride);
     const translate = typeof t === 'function' ? t : (key) => key;
     let label = translate('tabs.categories');
-    let icon = '📦';
+    let icon = 'package';
     if (state && state.activeCategory && state.activeCategory !== 'all') {
       const key = state.activeCategory.trim().toLowerCase();
-      icon = iconMap[key] || '📦';
+      icon = iconMap[key] || 'package';
       if (key === 'autre') {
         label = translate('categories.other');
       } else {
         label = (window.utils && typeof window.utils.prettifyAppName === 'function') ? window.utils.prettifyAppName(state.activeCategory) : state.activeCategory;
       }
     } else {
-      icon = '🗃️';
+      icon = 'layout-grid';
       label = translate('categories.all');
     }
-    categoriesDropdownBtn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${label}</span> <span class="cat-arrow">▼</span>`;
+    categoriesDropdownBtn.innerHTML = `<i data-lucide="${icon}" class="cat-icon" style="width: 1.1em; height: 1.1em; margin-right: 6px; vertical-align: text-bottom;"></i> <span>${label}</span> <span class="cat-arrow">▼</span>`;
+    if (window.lucide) window.lucide.createIcons({ root: categoriesDropdownBtn });
   }
 
   function createCategoryButton(name, onClick, iconMap) {
@@ -34,9 +35,9 @@
     btn.type = 'button';
     btn.className = 'category-btn';
     const key = name.trim().toLowerCase();
-    const icon = iconMap[key] || '📦';
+    const icon = iconMap[key] || 'package';
     const displayName = (window.utils && typeof window.utils.prettifyAppName === 'function') ? window.utils.prettifyAppName(name) : name;
-    btn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${displayName}</span>`;
+    btn.innerHTML = `<i data-lucide="${icon}" class="cat-icon" style="width: 1.1em; height: 1.1em; margin-right: 6px; vertical-align: text-bottom;"></i> <span>${displayName}</span>`;
     btn.onclick = onClick;
     return btn;
   }
@@ -203,7 +204,7 @@
           }
         }, iconMap);
         btnAll.querySelector('span:last-child').textContent = translate('categories.all');
-        btnAll.querySelector('.cat-icon').textContent = '🗃️';
+        btnAll.querySelector('.cat-icon').setAttribute('data-lucide', 'layout-grid');
         if (state.activeCategory === 'all') btnAll.classList.add('active');
         categoriesDropdownMenu.appendChild(btnAll);
 
@@ -237,9 +238,11 @@
         const btnOther = createCategoryButton('autre', () => {}, iconMap);
         btnOther.querySelector('span:last-child').textContent = translate('categories.other');
         btnOther.disabled = true;
-        btnOther.innerHTML += ' <span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">⏳</span>';
+        btnOther.innerHTML += ' <i data-lucide="loader" class="cat-spinner" style="width: 1em; height: 1em; margin-left:8px; vertical-align: text-bottom;"></i>';
         if (state.activeCategory === 'autre') btnOther.classList.add('active');
         categoriesDropdownMenu.appendChild(btnOther);
+
+        if (window.lucide) window.lucide.createIcons({ root: categoriesDropdownMenu });
         setTimeout(() => {
           const allCategorizedNames = new Set();
           categories.forEach(cat => {

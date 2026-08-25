@@ -1897,3 +1897,6 @@ body.pm-popup-open { overflow: hidden; }
 }
 
 
+
+.cat-spinner { animation: cat-spin 1s linear infinite; }
+@keyframes cat-spin { 100% { transform: rotate(360deg); } }
