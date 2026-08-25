@@ -117,11 +117,28 @@
       });
     }
 
+    function statusBadgesHtml(record) {
+      if (!record) return '';
+      const tFn = typeof window.t === 'function' ? window.t : (key) => key;
+      const badges = [];
+      if (record.archived) badges.push(`<div class="app-status-badge archived">${escapeHtml(tFn('details.archived'))}</div>`);
+      if (record.obsolete != null) badges.push(`<div class="app-status-badge obsolete">${escapeHtml(tFn('details.obsolete', { year: String(record.obsolete) }))}</div>`);
+      return badges.join('');
+    }
+
     function applyDescription(appName, record) {
       if (!detailsName) return;
       const reference = detailsName.dataset.app || detailsName.textContent.toLowerCase().replace(/\s+✓$/, '');
       if (reference !== appName.toLowerCase()) return;
-      if (detailsLong) detailsLong.innerHTML = record.long;
+      if (detailsLong) detailsLong.innerHTML = statusBadgesHtml(record) + record.long;
+    }
+
+    function refreshDescription() {
+      const appId = state.currentDetailsApp;
+      if (!appId) return;
+      const plainName = appId.includes('|') ? appId.slice(0, appId.lastIndexOf('|')) : appId;
+      const record = descriptionCache.get(plainName);
+      if (record) applyDescription(plainName, record);
     }
 
     async function loadRemoteDescription(appName) {
@@ -136,6 +153,8 @@
       let sites = [];
       let sources = [];
       let screenshots = [];
+      let archived = false;
+      let obsolete = null;
       try {
         const response = await fetch(url, { method: 'GET' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -151,6 +170,8 @@
         screenshots = Array.isArray(data.screenshots)
           ? data.screenshots.filter((s) => typeof s === 'string' && s.trim()).map((s) => resolveAssetUrl(s.trim())).filter(Boolean)
           : [];
+        archived = data.archived === true;
+        obsolete = typeof data.obsolete === 'number' ? data.obsolete : null;
       } catch (error) {
         const tMsg = typeof window.t === 'function' ? window.t('error.fetchFailed', { msg: error.message || error }) : null;
         throw new Error(tMsg || ('Fetch failed: ' + (error.message || error)));
@@ -189,7 +210,7 @@
           + linkSection('details.sources', sources)
           + linkSection('details.additionalLinks', buttons);
       }
-      const record = { short: shortDesc, long: longDesc, timestamp: Date.now() };
+      const record = { short: shortDesc, long: longDesc, archived, obsolete, timestamp: Date.now() };
       descriptionCache.set(appName, record);
       applyDescription(appName, record);
     }
@@ -449,7 +470,8 @@
 
     return Object.freeze({
       showDetails,
-      exitDetailsView
+      exitDetailsView,
+      refreshDescription
     });
   }
 
