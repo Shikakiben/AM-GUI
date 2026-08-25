@@ -68,6 +68,25 @@ body.view-cards .app-tile-skeleton {
   border-radius: 10px;
   box-shadow: var(--shadow);
 }
+/* Badges Archivée / Obsolète dans les détails */
+.app-status-badge {
+  display: inline-block;
+  margin: 0 0 12px 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.app-status-badge.archived {
+  background: var(--border);
+  color: var(--fg);
+}
+.app-status-badge.obsolete {
+  background: rgba(192, 57, 43, 0.12);
+  color: #c0392b;
+  border: 1px solid rgba(192, 57, 43, 0.4);
+}
 /* Centrage spécifique pour certains éléments */
 .centered {
   text-align: center;

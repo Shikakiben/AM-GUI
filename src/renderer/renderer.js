@@ -1135,6 +1135,8 @@ function applyTranslations() {
       showNonAppimageModal(sandboxState.currentApp, reason);
     }
   } catch(_) {}
+  // Re-render les badges de la description (archived/obsolete) dans la langue courante
+  try { detailsApi?.refreshDescription?.(); } catch (_) {}
   if (popupWasOpen) {
     showMissingPmPopup();
   }
