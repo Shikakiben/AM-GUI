@@ -1804,6 +1804,8 @@
       'details.additionalLinks': 'Liên kết bổ sung',
       'details.sites': 'Trang',
       'details.sources': 'Nguồn',
+      'details.archived': 'Mã nguồn đã lưu trữ',
+      'details.obsolete': 'Không có cập nhật từ năm {year}',
       'details.descFallback': 'Không có mô tả nào được cung cấp.',
       'details.descUnavailable': 'Mô tả không khả dụng.',
       'details.markdownParseError': 'Không thể phân tích markdown.',
