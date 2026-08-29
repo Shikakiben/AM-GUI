@@ -71,8 +71,11 @@ function appsFromCategoryJson(data) {
 
 function registerCategoryHandlers(ipcMain, cacheDir) {
   if (!ipcMain) throw new Error('ipcMain instance is required');
-  const categoriesCachePath = path.join(cacheDir, 'categories-cache.json');
-  const categoriesMetaPath = path.join(cacheDir, 'categories-cache.meta.json');
+  if (typeof cacheDir !== 'string' || !path.isAbsolute(cacheDir) || cacheDir.split(path.sep).includes('..')) {
+    throw new Error('Invalid cache directory');
+  }
+  const categoriesCachePath = `${cacheDir}${path.sep}categories-cache.json`;
+  const categoriesMetaPath = `${cacheDir}${path.sep}categories-cache.meta.json`;
 
   async function updateCategoriesCache(categories) {
     try {
@@ -110,7 +113,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
         readJsonSafe(categoriesMetaPath, {})
       ]);
       const previousByName = new Map((prevCategories || []).map((cat) => [cat.name, Array.isArray(cat.apps) ? cat.apps : []]));
-      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' } });
+      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' }, redirect: 'error' });
       if (!idxRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: idxRes.status }));
       const html = await idxRes.text();
       const catNames = parseCategoryNames(html);
@@ -129,7 +132,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
           let catResponse;
           try {
-            catResponse = await fetch(url, { headers });
+            catResponse = await fetch(url, { headers, redirect: 'error' });
           } catch (err) {
             console.warn('[categories] fetch failed for', catName, err?.message || err);
             if (previousMeta) nextMeta[catName] = previousMeta;
@@ -176,13 +179,13 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
   ipcMain.handle('fetch-first-category', async () => {
     try {
-      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' } });
+      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' }, redirect: 'error' });
       if (!idxRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: idxRes.status }));
       const html = await idxRes.text();
       const catNames = parseCategoryNames(html);
       if (!catNames.length) throw new Error(tErr('errNoCategories', 'No categories found'));
       const catName = catNames[0];
-      const catRes = await fetch(`${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`, { headers: { 'User-Agent': 'AM-GUI' } });
+      const catRes = await fetch(`${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`, { headers: { 'User-Agent': 'AM-GUI' }, redirect: 'error' });
       if (!catRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: catRes.status }));
       const data = await catRes.json();
       const apps = appsFromCategoryJson(data);
