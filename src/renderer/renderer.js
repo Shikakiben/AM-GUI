@@ -1151,8 +1151,22 @@ function syncTrayLocale() {
   } catch(_) {}
 }
 
+// Génère les options de langue du panneau de réglages depuis window.translations
+// (les libellés sont ensuite remplis par applyTranslations via data-i18n).
+function buildLanguageOptions() {
+  const container = document.getElementById('langOptions');
+  if (!container) return;
+  const langs = Object.keys(window.translations || {})
+    .filter((k) => k.length === 2 && typeof window.translations[k] === 'object')
+    .sort();
+  container.innerHTML = langs.map((lang) =>
+    `<label><input type="radio" name="langPref" value="${lang}"> <span data-i18n="settings.${lang}"></span></label>`
+  ).join('');
+}
+
 // Apply language and prepare controls
 function initLanguagePreferences() {
+  buildLanguageOptions();
   applyTranslations();
   syncTrayLocale();
   // Update HTML lang attribute

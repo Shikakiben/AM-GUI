@@ -17,13 +17,14 @@ Frontend graphique Electron pour l'outil **AM** (ivan-hc) : installer, mettre à
 - `npm test` / `npm run test:main` / `test:renderer` / `test:integration`
 - `npm run lint` → `eslint main.js preload.js src/**/*.js`
 - `npm run dist` → `electron-builder --linux dir`
-- `npm run download-icons` → `node scripts/download-icons.js --limit=500 --concurrency=8`
+- `npm run build:i18n` → `node src/i18n/build-i18n.js` (régénère translations.js depuis locales/*.json)
 
 ## Architecture
 - `main.js` : point d'entrée Electron ; `preload.js` : pont IPC
 - `src/main/` : processus principal — appList, appManAuto, categories, gpu, iconCache, install, packageManager, sandbox, tray, uninstall, updates
 - `src/renderer/` : renderer — `features/` (appLoader, categories, details, featured, installer, sandbox, search, updates), `services/preferences.js`, `ui/` (confirmModal, lightbox, passwordPrompt, settingsPanel, syncButton, toast, virtualList), `utils/`
-- `src/i18n/translations.js` : traductions
+- `src/i18n/` : `locales/*.json` (source de vérité, 4 sections ui/tray/contextMenu/errors) → `build-i18n.js` génère `translations.js` (ne pas éditer à la main) ; `README.md` pour les traducteurs
+  - **Pourquoi JSON et pas `.po`/`.xliff`** (décision issue #74) : le renderer n'a AUCUNE étape de build (balises `<script>` simples, pas de bundler). `.po`/`.xliff` demanderaient un parseur runtime ou un build step. Le JSON donne la plupart des bénéfices des outils de traduction (Crowdin/Weblate/Poedit importent le JSON) sans build step. Migration vers `.po` possible plus tard en échangeant juste le format source + adaptant le générateur (les traducteurs ne verraient pas la différence).
 - `src/assets/tray/` : icônes tray (extraResources du build)
 - `test/` : main / renderer / integration
 
@@ -33,7 +34,7 @@ Frontend graphique Electron pour l'outil **AM** (ivan-hc) : installer, mettre à
 - Tests : `test/main/plaInstall.test.js`.
 
 ## Divers
-- `start-am-gui.sh`, `scripts/get-dependencies.sh`, `scripts/make-appimage.sh`
+- `start-am-gui.sh`, `appimage-build/get-dependencies.sh`, `appimage-build/make-appimage.sh`
 - Build AppImage via le template pkgforge (Anylinux-AppImages)
 - Fichier de cache des catégories : `categories-cache.json`
 

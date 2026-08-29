@@ -367,13 +367,6 @@ body.view-cards .app-tile-skeleton {
 .choice-dialog-body {
   user-select: text;
 }
-/* Liste de choix pour installation multiple */
-.multi-choice-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 18px 0;
-}
 .multi-choice-item {
   padding: 12px 22px;
   border: 1.5px solid var(--border);
