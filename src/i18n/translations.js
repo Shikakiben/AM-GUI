@@ -682,7 +682,7 @@
       'sandbox.forbidden.ok': 'Capito',
       'details.back': '← Indietro',
       'details.desc': 'Descrizione',
-      'details.install': 'Instalare',
+      'details.install': 'Installa',
       'details.uninstall': 'Disinstalla',
       'install.scope.user': 'Utente',
       'install.scope.system': 'Sistema',
