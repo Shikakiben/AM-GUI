@@ -946,6 +946,57 @@ body.view-cards .app-tile .tile-short { font-size:13px; max-height:4.1em; overfl
 .details-section-title { margin:0 0 8px; font-size:15px; }
 /* (supprimé doublon .details-long) */
 
+/* --- Galerie de captures (apps avec plusieurs images) ------------------- */
+/* Reprend le carrousel du site PLA : flèches, points, clavier. Pas d'auto-
+   défilement : c'est le lecteur qui décide quand passer à l'image suivante. */
+.details-long .gallery { margin:16px 0 20px; text-align:center; }
+.details-long .gallery-inner {
+  position:relative; display:flex; align-items:center; justify-content:center;
+  gap:4px; height:420px; overflow:hidden;
+}
+/* Priorité sur `.details-long img` (même spécificité, mais tableau plus long) */
+.details-long .gallery-inner img {
+  max-width:100%; max-height:420px; width:auto; min-width:0; flex:1;
+  margin:0; object-fit:contain; border-radius:10px; border:1px solid var(--border);
+  box-shadow:var(--shadow); cursor:zoom-in;
+}
+@keyframes gallery-fade-in { from { opacity:.35; } to { opacity:1; } }
+.details-long .gallery-inner img.gallery-fade { animation:gallery-fade-in .18s ease; }
+@media (prefers-reduced-motion: reduce) { .details-long .gallery-inner img.gallery-fade { animation:none; } }
+.details-long .gallery-btn {
+  flex-shrink:0; width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+  background:var(--card-contrast); border:1px solid var(--border); border-radius:50%;
+  color:var(--muted); font-size:13px; line-height:1; cursor:pointer; user-select:none;
+  transition:border-color .15s, color .15s;
+}
+.details-long .gallery-btn:hover:not(:disabled) { border-color:var(--primary); color:var(--primary); }
+.details-long .gallery-btn:disabled { opacity:.3; cursor:default; }
+.details-long .gallery-btn:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.details-long .gallery-dots { display:flex; justify-content:center; gap:8px; margin-top:10px; }
+.details-long .gallery-dot {
+  width:10px; height:10px; padding:0; border-radius:50%;
+  border:1px solid var(--border); background:transparent; cursor:pointer;
+  transition:background .15s, border-color .15s;
+}
+.details-long .gallery-dot:hover { border-color:var(--primary); }
+.details-long .gallery-dot:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.details-long .gallery-dot.active { background:var(--primary); border-color:var(--primary); }
+
+/* --- Flèches du lightbox (visibles uniquement pour une galerie) --------- */
+/* Le lightbox a un fond sombre quel que soit le thème : styles clairs. */
+.md-lightbox-btn {
+  flex-shrink:0; width:46px; height:46px; margin:0 14px; padding:0;
+  display:none; align-items:center; justify-content:center; border-radius:50%;
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.3);
+  color:#fff; font-size:18px; line-height:1; cursor:pointer; user-select:none;
+  transition:background .15s, border-color .15s, opacity .15s;
+}
+#mdLightbox.has-gallery .md-lightbox-btn { display:flex; }
+.md-lightbox-btn:hover:not(:disabled) { background:rgba(255,255,255,.26); border-color:rgba(255,255,255,.6); }
+.md-lightbox-btn:disabled { opacity:.25; cursor:default; }
+.md-lightbox-btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+@media (max-width: 700px) { .md-lightbox-btn { width:38px; height:38px; margin:0 8px; } }
+
 /* Spinner universel pour tous les éléments */
 .btn.loading { position:relative; }
 .btn-refresh.loading::after {

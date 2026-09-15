@@ -90,6 +90,11 @@
     const installProgressEtaLabel = elements.installProgressEtaLabel || document.getElementById('installStreamEta');
 
     const descriptionCache = new Map();
+    // Screenshot gallery (markup, lightbox, keyboard, wheel). It adds no
+    // translation keys: the arrow labels reuse featured.prev / featured.next.
+    const galleryApi = (window.ui?.gallery?.init)
+      ? window.ui.gallery.init({ t, isActive: () => document.body.classList.contains('details-mode') })
+      : null;
 
     function currentSession() {
       const session = getActiveInstallSession();
@@ -98,23 +103,6 @@
 
     function isInstallRunningFor(session, appName) {
       return !!(session.id && !session.done && session.name === appName);
-    }
-
-    function initMarkdownLightbox() {
-      const mdLightbox = document.getElementById('mdLightbox');
-      const mdLightboxImg = document.getElementById('mdLightboxImg');
-      if (!mdLightbox || !mdLightboxImg || !detailsLong) return;
-      detailsLong.addEventListener('click', (event) => {
-        const target = event.target;
-        if (target && target.tagName === 'IMG') {
-          mdLightboxImg.src = target.src;
-          mdLightbox.style.display = 'flex';
-        }
-      });
-      mdLightbox.addEventListener('click', () => {
-        mdLightbox.style.display = 'none';
-        mdLightboxImg.src = '';
-      });
     }
 
     function statusBadgesHtml(record) {
@@ -130,7 +118,10 @@
       if (!detailsName) return;
       const reference = detailsName.dataset.app || detailsName.textContent.toLowerCase().replace(/\s+✓$/, '');
       if (reference !== appName.toLowerCase()) return;
-      if (detailsLong) detailsLong.innerHTML = statusBadgesHtml(record) + record.long;
+      if (!detailsLong) return;
+      detailsLong.innerHTML = statusBadgesHtml(record) + record.long;
+      // Puts the reader back on the screenshot they were looking at.
+      if (galleryApi) galleryApi.refresh(detailsLong, reference);
     }
 
     function refreshDescription() {
@@ -201,9 +192,7 @@
           .join('');
         return `<h3>${escapeHtml(heading)}</h3><ul class="details-additional-links">${items}</ul>`;
       };
-      const screenshotsHtml = screenshots.length
-        ? screenshots.map((src) => `<img src="${escapeHtml(src)}" alt="Screenshot" loading="lazy">`).join('')
-        : '';
+      const screenshotsHtml = galleryApi ? galleryApi.html(screenshots, appName) : '';
       if (screenshotsHtml || sites.length || sources.length || buttons.length) {
         longDesc += screenshotsHtml
           + linkSection('details.sites', sites)
@@ -465,7 +454,7 @@
       });
     }
 
-    initMarkdownLightbox();
+    if (galleryApi && detailsLong) galleryApi.attach(detailsLong);
     attachEventListeners();
 
     return Object.freeze({

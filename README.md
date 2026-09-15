@@ -6,11 +6,18 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 [![CI Build Status](https://github.com/Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
   [![AnyLinux](https://img.shields.io/badge/AnyLinux-compatible-green?logo=linux&logoColor=white)](https://pkgforge-dev.github.io/Anylinux-AppImages/)
-  <p></p><img src="screenshots/light.png" width="800"/><p></p>
+  <p></p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/light.png">
+    <img src="screenshots/light.png" width="800" alt="AM-GUI screenshot"/>
+  </picture>
+  <p></p>
 
 </div>
   
-* [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  (AppImage — Beta)
+* [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest) — AppImage
+* [Beta builds](https://github.com/Shikakiben/AM-GUI/releases/tag/nightly) — rebuilt from the `test` branch (pre-release, for testing)
 
 **This AppImage bundles everything, and should work on any linux distro, even on musl based ones.**
 
@@ -25,7 +32,7 @@ To integrate AM-GUI into your system, reinstall it via the app (search "am-gui")
 
 ---
 
-⚠️ **This project is under development — some features may be incomplete or may not work.**  
+⚠️ **AM-GUI is under active development — some features may still be incomplete.**  
 
 Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-GUI/issues) — your feedback is very helpful!
 
