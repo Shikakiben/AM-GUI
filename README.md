@@ -10,7 +10,8 @@
 
 </div>
   
-* [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest)  (AppImage — Beta)
+* [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest) — AppImage
+* [Beta builds](https://github.com/Shikakiben/AM-GUI/releases/tag/nightly) — rebuilt from the `test` branch (pre-release, for testing)
 
 **This AppImage bundles everything, and should work on any linux distro, even on musl based ones.**
 
@@ -25,7 +26,7 @@ To integrate AM-GUI into your system, reinstall it via the app (search "am-gui")
 
 ---
 
-⚠️ **This project is under development — some features may be incomplete or may not work.**  
+⚠️ **AM-GUI is under active development — some features may still be incomplete.**  
 
 Please don't hesitate to report issues [here](https://github.com/Shikakiben/AM-GUI/issues) — your feedback is very helpful!
 
