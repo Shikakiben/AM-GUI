@@ -2392,11 +2392,7 @@
       if (locale && locale !== 'auto') currentLocale = locale;
     }
 
-    function getCurrentLocale() {
-      return currentLocale;
-    }
-
-    module.exports = { translations, getTrayLabels, getContextMenuLabels, tErr, setLocale, getCurrentLocale };
+    module.exports = { translations, getTrayLabels, getContextMenuLabels, tErr, setLocale };
   } else {
     window.i18n = window.i18n || {};
     window.i18n.catalog = translations;

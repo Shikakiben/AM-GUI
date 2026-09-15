@@ -86,18 +86,6 @@ let setAppListImpl = function(list) {
 };
 
 function setAppList(list) {
-  // Enriches the tiles with translated descriptions from the PLA site
-  // (state.categoryDesc is fed by the categories cache).
-  const catDesc = state.categoryDesc;
-  if (catDesc && catDesc.size && Array.isArray(list)) {
-    list = list.map((item) => {
-      if (item && typeof item === 'object' && item.name && !item.__section) {
-        const d = catDesc.get(item.name);
-        if (d) return Object.assign({}, item, { desc: d });
-      }
-      return item;
-    });
-  }
   return setAppListImpl(list);
 }
 
@@ -796,33 +784,6 @@ function getLangPref() {
 }
 window.getLangPref = getLangPref;
 
-// Builds the name → translated description map from PLA categories.
-function applyCategoryDescriptions(categories) {
-  const map = new Map();
-  for (const cat of (Array.isArray(categories) ? categories : [])) {
-    const d = cat && cat.descriptions;
-    if (d && typeof d === 'object') {
-      for (const [name, desc] of Object.entries(d)) {
-        if (typeof desc === 'string' && desc) map.set(name, desc);
-      }
-    }
-  }
-  state.categoryDesc = map;
-}
-
-// Hook registered by categories/cache.js: applies translated descriptions
-// whenever the categories cache is (re)loaded or refreshed.
-try {
-  window.features = window.features || {};
-  window.features.categories = window.features.categories || {};
-  window.features.categories._onUpdated = (categories) => {
-    try {
-      applyCategoryDescriptions(categories);
-      if (typeof applySearch === 'function') applySearch();
-    } catch (_) {}
-  };
-} catch (_) {}
-
 function t(key) {
   const lang = getLangPref();
   let str = (translations[lang] && translations[lang][key]) || (translations['en'] && translations['en'][key]) || (translations['fr'] && translations['fr'][key]) || key;
@@ -1410,8 +1371,8 @@ try {
   }
 } catch (_) {}
 
-// Refreshes language-dependent data: translated tile descriptions (via the
-// categories cache) and, if opted in, the AM/AppMan locale.
+// Refreshes language-dependent data: the tray labels and, if opted in,
+// the AM/AppMan locale.
 function syncLanguageDependents() {
   (async () => {
     try {
@@ -1425,17 +1386,6 @@ function syncLanguageDependents() {
             await window.electronAPI.syncAmLocale(getLangPref());
           }
         } catch (_) {}
-      }
-      // Reload categories in the new language so tile descriptions get
-      // translated (disk cache purge → network fetch).
-      if (window.electronAPI && typeof window.electronAPI.deleteCategoriesCache === 'function') {
-        await window.electronAPI.deleteCategoriesCache();
-      }
-      if (window.categories && typeof window.categories.resetCache === 'function') {
-        window.categories.resetCache();
-      }
-      if (window.categories && typeof window.categories.loadCategories === 'function') {
-        await window.categories.loadCategories({ backgroundRefresh: false });
       }
     } catch (_) {}
   })();

@@ -1,5 +1,4 @@
-const { tErr, getCurrentLocale } = require('../i18n/translations');
-const { createPlaFetch } = require('../i18n/pla-fetch');
+const { tErr } = require('../i18n/translations');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -49,22 +48,14 @@ async function mapWithConcurrency(limit, items, iteratorFn) {
   return results;
 }
 
+// PLA app data (JSON) is served from the site root: /app/<name>.json and
+// /categories/<name>.json. Only the HTML pages live in language folders
+// (/en/, /it/), and the category list only exists there — the root index page
+// has no category links. Category slugs are identical in every language, so
+// en/ is used (it is also the site's fallback language).
+const SITE_BASE = 'https://portable-linux-apps.github.io';
+const CATEGORY_INDEX_URL = 'https://portable-linux-apps.github.io/en/index.html';
 const fetch = undici.fetch;
-
-// Normalized preferred language (same rule as pla-fetch.js).
-// Stored in the cache to detect a language change and re-fetch.
-function currentPlaLang() {
-  try {
-    const base = String(getCurrentLocale() || 'en').slice(0, 2).toLowerCase();
-    return /^[a-z]{2}$/.test(base) ? base : 'en';
-  } catch (_) {
-    return 'en';
-  }
-}
-
-// Fetches PLA resources prefixed by the UI language,
-// with automatic fallback to en/ on failure.
-const fetchPla = createPlaFetch(currentPlaLang, undici.fetch);
 
 function parseCategoryNames(html) {
   const names = [];
@@ -77,17 +68,10 @@ function parseCategoryNames(html) {
 }
 
 function appsFromCategoryJson(data) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return { apps: [], descriptions: {} };
-  const apps = [];
-  const descriptions = {};
-  for (const name of Object.keys(data)) {
-    if (typeof name !== 'string' || !name) continue;
-    apps.push(name);
-    const desc = data[name] && typeof data[name].description === 'string' ? data[name].description : null;
-    if (desc) descriptions[name] = desc;
-  }
-  apps.sort((a, b) => a.localeCompare(b));
-  return { apps, descriptions };
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+  return Object.keys(data)
+    .filter((name) => typeof name === 'string' && name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function registerCategoryHandlers(ipcMain, cacheDir) {
@@ -95,20 +79,19 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
   const categoriesCachePath = path.join(cacheDir, 'categories-cache.json');
   const categoriesMetaPath = path.join(cacheDir, 'categories-cache.meta.json');
 
-  // New format: { lang, categories } — the old format (plain array)
-  // is migrated on the fly with lang = null.
+  // The cache file holds the plain categories array. Builds from 2026-09
+  // stored { lang, categories }: tolerate that shape so an existing cache
+  // file does not break (it is rewritten as an array on the next fetch).
   async function readCategoriesCache() {
     const raw = await readJsonSafe(categoriesCachePath, null);
-    if (Array.isArray(raw)) return { categories: raw, lang: null };
-    if (raw && typeof raw === 'object' && Array.isArray(raw.categories)) {
-      return { categories: raw.categories, lang: typeof raw.lang === 'string' ? raw.lang : null };
-    }
-    return { categories: [], lang: null };
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === 'object' && Array.isArray(raw.categories)) return raw.categories;
+    return [];
   }
 
-  async function updateCategoriesCache(categories, lang) {
+  async function updateCategoriesCache(categories) {
     try {
-      await writeJsonSafe(categoriesCachePath, { lang, categories });
+      await writeJsonSafe(categoriesCachePath, categories);
     } catch (e) {
       console.error('Error writing categories cache:', e);
     }
@@ -128,8 +111,8 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
   ipcMain.handle('get-categories-cache', async () => {
     try {
-      const { categories, lang } = await readCategoriesCache();
-      return { ok: true, categories, lang };
+      const categories = await readCategoriesCache();
+      return { ok: true, categories };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
     }
@@ -137,13 +120,13 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
   ipcMain.handle('fetch-all-categories', async () => {
     try {
-      const [{ categories: prevCategories }, prevMeta] = await Promise.all([
+      const [prevCategories, prevMeta] = await Promise.all([
         readCategoriesCache(),
         readJsonSafe(categoriesMetaPath, {})
       ]);
       const previousByName = new Map((prevCategories || []).map((cat) => [cat.name, Array.isArray(cat.apps) ? cat.apps : []]));
-      const previousDescByName = new Map((prevCategories || []).map((cat) => [cat.name, (cat.descriptions && typeof cat.descriptions === 'object') ? cat.descriptions : {}]));
-      const idxRes = await fetchPla('index.html', { headers: { 'User-Agent': 'AM-GUI' } });
+      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' } });
+      if (!idxRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: idxRes.status }));
       const html = await idxRes.text();
       const catNames = parseCategoryNames(html);
       if (!catNames.length) throw new Error(tErr('errNoCategories', 'No categories found'));
@@ -160,7 +143,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
           let catResponse;
           try {
-            catResponse = await fetchPla(`categories/${encodeURIComponent(catName)}.json`, { headers });
+            catResponse = await fetch(`${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`, { headers });
           } catch (err) {
             console.warn('[categories] fetch failed for', catName, err?.message || err);
             if (previousMeta) nextMeta[catName] = previousMeta;
@@ -170,7 +153,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
           if (catResponse.status === 304) {
             if (previousMeta) nextMeta[catName] = previousMeta;
             if (previousByName.has(catName)) {
-              return { name: catName, apps: previousByName.get(catName), descriptions: previousDescByName.get(catName) || {} };
+              return { name: catName, apps: previousByName.get(catName) };
             }
             return null;
           }
@@ -180,7 +163,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
             return null;
           }
           const data = await catResponse.json();
-          const { apps, descriptions } = appsFromCategoryJson(data);
+          const apps = appsFromCategoryJson(data);
           const etag = catResponse.headers?.get?.('etag');
           const lastModified = catResponse.headers?.get?.('last-modified');
           if (etag || lastModified) {
@@ -188,19 +171,18 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
               Object.entries({ etag, lastModified }).filter(([, v]) => !!v)
             );
           }
-          return { name: catName, apps, descriptions };
+          return { name: catName, apps };
         }
       );
 
       const categories = results.filter(Boolean);
       const finalCategories = categories.length ? categories : prevCategories;
       const finalMeta = Object.keys(nextMeta).length ? nextMeta : prevMeta || {};
-      const finalLang = currentPlaLang();
       await Promise.all([
-        updateCategoriesCache(finalCategories, finalLang),
+        updateCategoriesCache(finalCategories),
         writeJsonSafe(categoriesMetaPath, finalMeta).catch((err) => console.warn('Error writing categories meta:', err))
       ]);
-      return { ok: true, categories: finalCategories, lang: finalLang };
+      return { ok: true, categories: finalCategories };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
     }
@@ -208,15 +190,17 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
   ipcMain.handle('fetch-first-category', async () => {
     try {
-      const idxRes = await fetchPla('index.html', { headers: { 'User-Agent': 'AM-GUI' } });
+      const idxRes = await fetch(CATEGORY_INDEX_URL, { headers: { 'User-Agent': 'AM-GUI' } });
+      if (!idxRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: idxRes.status }));
       const html = await idxRes.text();
       const catNames = parseCategoryNames(html);
       if (!catNames.length) throw new Error(tErr('errNoCategories', 'No categories found'));
       const catName = catNames[0];
-      const catRes = await fetchPla(`categories/${encodeURIComponent(catName)}.json`, { headers: { 'User-Agent': 'AM-GUI' } });
+      const catRes = await fetch(`${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`, { headers: { 'User-Agent': 'AM-GUI' } });
+      if (!catRes.ok) throw new Error(tErr('errGitHubRequest', 'GitHub request error: {msg}', { msg: catRes.status }));
       const data = await catRes.json();
-      const { apps, descriptions } = appsFromCategoryJson(data);
-      return { ok: true, category: { name: catName, apps, descriptions } };
+      const apps = appsFromCategoryJson(data);
+      return { ok: true, category: { name: catName, apps } };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
     }

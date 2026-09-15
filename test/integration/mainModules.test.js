@@ -186,7 +186,6 @@ describe('main-process modules (integration)', () => {
       assert.ok(firstFetch.ok, `fetch-all-categories ok: ${firstFetch.error}`);
       assert.strictEqual(firstFetch.categories.length, 2);
       assert.ok(firstFetch.categories[0].apps.includes('alpha'), 'category parsing works');
-      assert.strictEqual(firstFetch.categories[0].descriptions.alpha, 'great app', 'descriptions are kept for tile rendering');
 
       const cached = await ipcHandlers.get('get-categories-cache')();
       assert.ok(cached.ok && cached.categories.length === 2, 'get-categories-cache returns data');
