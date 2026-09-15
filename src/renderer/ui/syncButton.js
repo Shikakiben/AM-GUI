@@ -60,7 +60,7 @@ function replaceSyncButton(newBtn) {
     }
 }
 
-// Export global pour usage via <script>
+// Global export for use via <script>
 window.syncButton = {
   createSyncButton,
   replaceSyncButton

@@ -16,7 +16,7 @@ const fsp = fs.promises;
 const { registerCategoryHandlers } = require('./src/main/categories');
 const { initTray, destroyTray, setTrayLocale } = require('./src/main/tray');
 const { getContextMenuLabels, tErr, setLocale } = require('./src/i18n/translations');
-const { detectPackageManager, invalidatePackageManagerCache } = require('./src/main/packageManager');
+const { detectPackageManager, invalidatePackageManagerCache, translatePackageManagerLocale } = require('./src/main/packageManager');
 const { createIconCacheManager } = require('./src/main/iconCache');
 const { installAppManAuto } = require('./src/main/appManAuto');
 const { registerGpuHandlers } = require('./src/main/gpu');
@@ -248,6 +248,9 @@ ipcMain.handle('set-tray-locale', (_event, locale) => {
   if (locale && locale !== 'auto') currentLocale = locale;
   setLocale(locale);
 });
+
+// Sync AM/AppMan locale (opt-in from the renderer settings)
+ipcMain.handle('sync-am-locale', (_event, lang) => translatePackageManagerLocale(lang));
 
 app.whenReady().then(() => {
   try { iconCacheManager.registerProtocol(protocol); } catch (e) { console.warn('appicon protocol failed:', e); }

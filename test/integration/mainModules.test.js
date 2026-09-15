@@ -157,7 +157,7 @@ describe('main-process modules (integration)', () => {
         '<a href="index.html">Home</a>';
       undici.fetch = async (url, options = {}) => {
         const headers = options.headers || {};
-        if (url.includes('/cat_page.in')) {
+        if (url.endsWith('/index.html')) {
           return createResponse({ textData: indexHtml });
         }
         const fileName = path.basename(url);

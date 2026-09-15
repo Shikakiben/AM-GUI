@@ -17,13 +17,14 @@ Frontend graphique Electron pour l'outil **AM** (ivan-hc) : installer, mettre à
 - `npm test` / `npm run test:main` / `test:renderer` / `test:integration`
 - `npm run lint` → `eslint main.js preload.js src/**/*.js`
 - `npm run dist` → `electron-builder --linux dir`
-- `npm run download-icons` → `node scripts/download-icons.js --limit=500 --concurrency=8`
+- `npm run build:i18n` → `node src/i18n/build-i18n.js` (régénère translations.js depuis locales/*.json)
 
 ## Architecture
 - `main.js` : point d'entrée Electron ; `preload.js` : pont IPC
 - `src/main/` : processus principal — appList, appManAuto, categories, gpu, iconCache, install, packageManager, sandbox, tray, uninstall, updates
 - `src/renderer/` : renderer — `features/` (appLoader, categories, details, featured, installer, sandbox, search, updates), `services/preferences.js`, `ui/` (confirmModal, lightbox, passwordPrompt, settingsPanel, syncButton, toast, virtualList), `utils/`
-- `src/i18n/translations.js` : traductions
+- `src/i18n/` : `locales/*.json` (source de vérité, 4 sections ui/tray/contextMenu/errors) → `build-i18n.js` génère `translations.js` (ne pas éditer à la main) ; `README.md` pour les traducteurs
+  - **Pourquoi JSON et pas `.po`/`.xliff`** (décision issue #74) : le renderer n'a AUCUNE étape de build (balises `<script>` simples, pas de bundler). `.po`/`.xliff` demanderaient un parseur runtime ou un build step. Le JSON donne la plupart des bénéfices des outils de traduction (Crowdin/Weblate/Poedit importent le JSON) sans build step. Migration vers `.po` possible plus tard en échangeant juste le format source + adaptant le générateur (les traducteurs ne verraient pas la différence).
 - `src/assets/tray/` : icônes tray (extraResources du build)
 - `test/` : main / renderer / integration
 
@@ -33,21 +34,35 @@ Frontend graphique Electron pour l'outil **AM** (ivan-hc) : installer, mettre à
 - Tests : `test/main/plaInstall.test.js`.
 
 ## Divers
-- `start-am-gui.sh`, `scripts/get-dependencies.sh`, `scripts/make-appimage.sh`
+- `start-am-gui.sh`, `appimage-build/get-dependencies.sh`, `appimage-build/make-appimage.sh`
 - Build AppImage via le template pkgforge (Anylinux-AppImages)
 - Fichier de cache des catégories : `categories-cache.json`
+- **Sync langue AM/AppMan (opt-in)** : checkbox `settings.syncAmLocale` (localStorage `syncAmLocale`) → au changement de langue, IPC `sync-am-locale` → `translatePackageManagerLocale()` dans `packageManager.js` (exécute `<pm> translate <code>`, timeout 60 s, AM ≥ 9.8). ⚠️ Modifie la config d'AM de l'utilisateur (sort du mode auto).
 
 ## Portail PLA — format JSON (site réécrit, 2026)
-- Descriptions : `https://portable-linux-apps.github.io/app/<nom>.json`
-  - champs : `name`, `description` (markdown), `screenshots` (chemins relatifs `../screenshots/…`), `sites`, `sources`, `buttons` (`"Label::URL"`, `_` = espace)
+- ⚠️ **Les JSON sont servis depuis la racine du site** (le site a reverté le préfixe de langue le 2026-09-14) :
+  - `/categories/<nom>.json`, `/app/<nom>.json`, `/apps.json` → **racine** ; les URLs `/<lang>/…json` renvoient **404**
+  - **Seules les pages HTML** vivent dans des dossiers de langue (`/en/`, `/it/`)
+  - La liste des catégories n'existe **que** dans une page de langue → `CATEGORY_INDEX_URL` = `https://portable-linux-apps.github.io/en/index.html`
+    (34 catégories ; slugs **identiques** en `en` et `it` ; `en` = langue de repli du site ; la page racine `/index.html` n'en liste aucune)
+  - ⚠️ L'ancien `cat_page.in` est devenu un **template** (variables `$LANG`, `$CAT_NAME`) : inutilisable pour extraire la liste
+- **Aucune logique de langue côté AM-GUI** : les URLs PLA sont fixes. Le module `src/i18n/pla-fetch.js` (préfixe langue + fallback)
+  a été supprimé le 2026-09-14, ainsi que la fonctionnalité « descriptions traduites des tuiles » (voir ci-dessous).
+- **Descriptions des tuiles** : elles viennent d'`am -l` (`desc` dans `appList.js`). Le site fournit aussi des descriptions
+  dans `/categories/<nom>.json`, mais elles sont **identiques** (même source AM : `◆ anydesk : Unofficial. Remote desktop application.`)
+  et **en anglais uniquement** → aucun gain, d'où le retrait du code.
+- Descriptions (page détails) : `https://portable-linux-apps.github.io/app/<nom>.json`
+  - champs : `name`, `description` (markdown), `screenshots` (chemins relatifs), `sites`, `sources`, `buttons` (`"Label::URL"`, `_` = espace)
   - champs optionnels (PR #192 mergé 2026-08-24) : `archived` (bool), `obsolete` (u16 = année) → badge dans les détails
   - wording badge neutre (aligné AM qui affiche `is ARCHIVED` / `of <year>`) : `details.archived` = « Source archivée », `details.obsolete` = « Pas de mise à jour depuis {year} »
   - géré dans `src/renderer/features/details/index.js` (`loadRemoteDescription`)
 - Catégories : `https://portable-linux-apps.github.io/categories/<nom>.json`
   - objet `{ appName: { description, archs } }`, apps = `Object.keys(json)`
-  - liste des noms extraite dynamiquement de `cat_page.in` (regex `class="category-link" href="…html"`)
   - géré dans `src/main/categories.js`
-- Liste complète : `https://portable-linux-apps.github.io/apps.json` (même format que categories, 3510 apps).
+  - **Cache** : `categories-cache.json` = **tableau simple**. La lecture tolère l'ancien format `{ lang, categories }` (utilisé
+    brièvement en 2026-09) et le réécrit en tableau au fetch suivant.
+- Icônes : `https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/<nom>.png`
+- Liste complète : `https://portable-linux-apps.github.io/apps.json` (même format que categories, ~3500 apps).
   - ⚠️ NE PAS l'utiliser pour remplacer `am -l` dans `appList.js` : elle n'a que `description`+`archs` (pas installé/version/scope/diamond) et ajouterait un fetch réseau au démarrage. `am -l` local + cache reste mieux.
 - Ancien format `.md` (racine du dépôt PLA + `apps/<nom>.md`) : supprimé.
 

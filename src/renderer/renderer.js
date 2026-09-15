@@ -618,6 +618,7 @@ let syncBtn = null;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const openExternalCheckbox = document.getElementById('openExternalLinksCheckbox');
+const syncAmLocaleCheckbox = document.getElementById('syncAmLocaleCheckbox');
 const purgeIconsBtn = document.getElementById('purgeIconsBtn');
 const purgeIconsResult = document.getElementById('purgeIconsResult');
 const tabs = document.querySelectorAll('.tab');
@@ -781,6 +782,7 @@ function getLangPref() {
   if (pref === 'auto') return getSystemLang();
   return pref;
 }
+window.getLangPref = getLangPref;
 
 function t(key) {
   const lang = getLangPref();
@@ -1135,7 +1137,7 @@ function applyTranslations() {
       showNonAppimageModal(sandboxState.currentApp, reason);
     }
   } catch(_) {}
-  // Re-render les badges de la description (archived/obsolete) dans la langue courante
+  // Re-render description badges (archived/obsolete) in the current language
   try { detailsApi?.refreshDescription?.(); } catch (_) {}
   if (popupWasOpen) {
     showMissingPmPopup();
@@ -1151,8 +1153,22 @@ function syncTrayLocale() {
   } catch(_) {}
 }
 
+// Generates the settings language options from window.translations
+// (labels are then filled by applyTranslations via data-i18n).
+function buildLanguageOptions() {
+  const container = document.getElementById('langOptions');
+  if (!container) return;
+  const langs = Object.keys(window.translations || {})
+    .filter((k) => k.length === 2 && typeof window.translations[k] === 'object')
+    .sort();
+  container.innerHTML = langs.map((lang) =>
+    `<label><input type="radio" name="langPref" value="${lang}"> <span data-i18n="settings.${lang}"></span></label>`
+  ).join('');
+}
+
 // Apply language and prepare controls
 function initLanguagePreferences() {
+  buildLanguageOptions();
   applyTranslations();
   syncTrayLocale();
   // Update HTML lang attribute
@@ -1174,6 +1190,7 @@ function initLanguagePreferences() {
           // Mark handled to avoid delegated double handling
           try { window.__langChangeHandled = true; } catch(_){ }
           rerenderActiveCategory();
+          syncLanguageDependents();
         });
       } catch(_){}
     });
@@ -1246,7 +1263,7 @@ window.addEventListener('DOMContentLoaded', async () => {
           if (window.categories && typeof window.categories.loadCategories === 'function') {
             await window.categories.loadCategories({ showToast });
           }
-          // Bascule sur l'onglet Applications
+          // Switch to the Applications tab
           const tabApplications = document.querySelector('.tab[data-category="all"]');
           if (tabApplications) tabApplications.click();
           showToast(t('toast.refreshing'));
@@ -1331,8 +1348,47 @@ if (settingsPanelLang) {
       try { applyTranslations(); } catch(_){ }
       try { document.documentElement.setAttribute('lang', getLangPref()); } catch(_){ }
       rerenderActiveCategory();
+      syncLanguageDependents();
     }
   });
+}
+
+// Sync AM/AppMan locale checkbox (persisted in localStorage)
+try {
+  if (syncAmLocaleCheckbox) {
+    syncAmLocaleCheckbox.checked = localStorage.getItem('syncAmLocale') === '1';
+    syncAmLocaleCheckbox.addEventListener('change', () => {
+      try { localStorage.setItem('syncAmLocale', syncAmLocaleCheckbox.checked ? '1' : '0'); } catch (_) {}
+      // Sync immediately when checked, so the current language applies right away.
+      if (syncAmLocaleCheckbox.checked) {
+        try {
+          if (window.electronAPI && typeof window.electronAPI.syncAmLocale === 'function') {
+            window.electronAPI.syncAmLocale(getLangPref());
+          }
+        } catch (_) {}
+      }
+    });
+  }
+} catch (_) {}
+
+// Refreshes language-dependent data: the tray labels and, if opted in,
+// the AM/AppMan locale.
+function syncLanguageDependents() {
+  (async () => {
+    try {
+      if (window.electronAPI && typeof window.electronAPI.setTrayLocale === 'function') {
+        await window.electronAPI.setTrayLocale(getLangPref());
+      }
+      // Opt-in: also sync AM/AppMan's language (translate command).
+      if (syncAmLocaleCheckbox && syncAmLocaleCheckbox.checked) {
+        try {
+          if (window.electronAPI && typeof window.electronAPI.syncAmLocale === 'function') {
+            await window.electronAPI.syncAmLocale(getLangPref());
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  })();
 }
 
 // --- Preferences (theme & default mode) ---
@@ -1350,7 +1406,7 @@ if (!localStorage.getItem('defaultMode')) {
   localStorage.setItem('defaultMode', state.viewMode || 'grid');
 }
 
-// Copier une commande (am/appman) au clic
+// Copy an (am/appman) command on click
 document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest && ev.target.closest('.copy-cmd');
   if (!btn) return;
@@ -1374,7 +1430,7 @@ document.addEventListener('click', (ev) => {
   const href = a.getAttribute('href');
   if (!href || !/^https?:\/\//i.test(href)) return;
   if (!loadOpenExternalPref()) {
-    // Ouvrir dans une popup simple
+    // Open in a simple popup
     ev.preventDefault();
     ev.stopPropagation();
     window.open(href, '_blank', 'noopener,noreferrer,width=980,height=700');
@@ -1861,7 +1917,7 @@ tabs.forEach(tab => {
       window.categories.updateDropdownLabel(state, t, CATEGORY_ICON_MAP);
     }
     applySearch();
-    // Fermer tout prompt de choix interactif lors du changement d’onglet
+    // Close any interactive choice prompt when switching tabs
     document.querySelectorAll('.choice-dialog').forEach(e => e.remove());
     const isUpdatesTab = state.activeCategory === 'updates';
     const isAdvancedTab = state.activeCategory === 'advanced';

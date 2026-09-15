@@ -32,7 +32,25 @@ function invalidatePackageManagerCache() {
   cachedPmTimestamp = 0;
 }
 
+// Runs "<pm> translate <lang>" so AM/AppMan CLI output follows AM-GUI's
+// language. Non-interactive (code passed as argument) and best-effort.
+async function translatePackageManagerLocale(lang) {
+  const code = String(lang || '').slice(0, 2).toLowerCase();
+  if (!/^[a-z]{2}$/.test(code)) return { ok: false, error: 'Invalid locale code' };
+  const { pm } = await detectPackageManager();
+  if (!pm) return { ok: false, error: 'No package manager found' };
+  const e = require('child_process').exec;
+  return new Promise((resolve) => {
+    e(`${pm} translate ${code}`, { timeout: 60000 }, (err, stdout, stderr) => {
+      const output = `${stdout || ''}${stderr || ''}`.trim();
+      if (err) return resolve({ ok: false, error: output || err.message });
+      resolve({ ok: true, pm, lang: code, output });
+    });
+  });
+}
+
 module.exports = {
   detectPackageManager,
-  invalidatePackageManagerCache
+  invalidatePackageManagerCache,
+  translatePackageManagerLocale
 };

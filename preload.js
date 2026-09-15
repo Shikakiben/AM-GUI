@@ -53,7 +53,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeWindow: () => ipcRenderer.invoke('close-window'),
   onBeforeClose: (cb) => ipcRenderer.on('before-close', () => cb && cb()),
   onPlaInstall: (cb) => ipcRenderer.on('pla-install', (e, data) => cb && cb(data)),
-  setTrayLocale: (locale) => ipcRenderer.invoke('set-tray-locale', locale)
+  setTrayLocale: (locale) => ipcRenderer.invoke('set-tray-locale', locale),
+  syncAmLocale: (lang) => ipcRenderer.invoke('sync-am-locale', lang)
 });
 try {
   const lArg = process.argv.find(a => a.startsWith('--locale='));

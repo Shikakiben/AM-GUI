@@ -428,7 +428,7 @@
         }
         if (dom.updatedAppsIcons) dom.updatedAppsIcons.innerHTML = '';
       }
-      // --- Changed scripts (scripts d'installation modifiés) ---
+      // --- Changed scripts (modified install scripts) ---
       var changedScripts = parseChangedScripts(sanitized);
       pendingChangedScripts = changedScripts.map(function (cs) { return cs.name; });
       if (changedScripts.length > 0) {

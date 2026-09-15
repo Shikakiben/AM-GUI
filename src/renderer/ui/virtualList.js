@@ -143,9 +143,9 @@
           const isInstalling = session.id && !session.done && session.name === name;
           const pos = getQueuePosition(name);
           if (isInstalling) {
-            actionsHTML = `<div class="actions"><button class="inline-action install" data-action="cancel-install" data-app="${name}">Installation… ✕</button></div>`;
+            actionsHTML = `<div class="actions"><button class="inline-action install" data-action="cancel-install" data-app="${name}">${t('install.listViewCancel')}</button></div>`;
           } else if (pos !== -1) {
-            actionsHTML = `<div class="actions"><button class="inline-action queue-remove" data-action="remove-queue" data-app="${name}">En file (#${pos}) ✕</button></div>`;
+            actionsHTML = `<div class="actions"><button class="inline-action queue-remove" data-action="remove-queue" data-app="${name}">${t('install.queued', { pos })}</button></div>`;
           } else {
             actionsHTML = ''; // hide primary Installer button in list view
           }
@@ -157,7 +157,7 @@
       let stateBadge = '';
       if (state.viewMode !== 'list' && !installed) {
         if (session.id && !session.done && session.name === name) {
-          stateBadge = ' <span class="install-state-badge installing" data-state="installing">Installation…<button class="queue-remove-badge inline-action" data-action="cancel-install" data-app="'+name+'" title="Annuler" aria-label="Annuler">✕</button></span>';
+          stateBadge = ' <span class="install-state-badge installing" data-state="installing">'+t('install.installing')+'<button class="queue-remove-badge inline-action" data-action="cancel-install" data-app="'+name+'" title="'+t('install.cancelShort')+'" aria-label="'+t('install.cancelShort')+'">✕</button></span>';
         } else {
           const pos = getQueuePosition(name);
           if (pos !== -1) stateBadge = ' <span class="install-state-badge queued" data-state="queued">En file (#'+pos+')<button class="queue-remove-badge inline-action" data-action="remove-queue" data-app="'+name+'" title="'+t('queue.removeBadge')+'" aria-label="'+t('queue.removeBadgeAria')+'">✕</button></span>';

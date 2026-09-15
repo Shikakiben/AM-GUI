@@ -48,8 +48,13 @@ async function mapWithConcurrency(limit, items, iteratorFn) {
   return results;
 }
 
+// PLA app data (JSON) is served from the site root: /app/<name>.json and
+// /categories/<name>.json. Only the HTML pages live in language folders
+// (/en/, /it/), and the category list only exists there — the root index page
+// has no category links. Category slugs are identical in every language, so
+// en/ is used (it is also the site's fallback language).
 const SITE_BASE = 'https://portable-linux-apps.github.io';
-const CATEGORY_INDEX_URL = 'https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/cat_page.in';
+const CATEGORY_INDEX_URL = 'https://portable-linux-apps.github.io/en/index.html';
 const fetch = undici.fetch;
 
 function parseCategoryNames(html) {
@@ -74,6 +79,16 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
   const categoriesCachePath = path.join(cacheDir, 'categories-cache.json');
   const categoriesMetaPath = path.join(cacheDir, 'categories-cache.meta.json');
 
+  // The cache file holds the plain categories array. Builds from 2026-09
+  // stored { lang, categories }: tolerate that shape so an existing cache
+  // file does not break (it is rewritten as an array on the next fetch).
+  async function readCategoriesCache() {
+    const raw = await readJsonSafe(categoriesCachePath, null);
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === 'object' && Array.isArray(raw.categories)) return raw.categories;
+    return [];
+  }
+
   async function updateCategoriesCache(categories) {
     try {
       await writeJsonSafe(categoriesCachePath, categories);
@@ -96,7 +111,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
   ipcMain.handle('get-categories-cache', async () => {
     try {
-      const categories = await readJsonSafe(categoriesCachePath, []);
+      const categories = await readCategoriesCache();
       return { ok: true, categories };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
@@ -106,7 +121,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
   ipcMain.handle('fetch-all-categories', async () => {
     try {
       const [prevCategories, prevMeta] = await Promise.all([
-        readJsonSafe(categoriesCachePath, []),
+        readCategoriesCache(),
         readJsonSafe(categoriesMetaPath, {})
       ]);
       const previousByName = new Map((prevCategories || []).map((cat) => [cat.name, Array.isArray(cat.apps) ? cat.apps : []]));
@@ -121,7 +136,6 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
         MAX_CATEGORY_FETCH_CONCURRENCY,
         catNames,
         async (catName) => {
-          const url = `${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`;
           const headers = { 'User-Agent': 'AM-GUI' };
           const previousMeta = prevMeta && prevMeta[catName];
           if (previousMeta?.etag) headers['If-None-Match'] = previousMeta.etag;
@@ -129,7 +143,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
 
           let catResponse;
           try {
-            catResponse = await fetch(url, { headers });
+            catResponse = await fetch(`${SITE_BASE}/categories/${encodeURIComponent(catName)}.json`, { headers });
           } catch (err) {
             console.warn('[categories] fetch failed for', catName, err?.message || err);
             if (previousMeta) nextMeta[catName] = previousMeta;
@@ -144,7 +158,7 @@ function registerCategoryHandlers(ipcMain, cacheDir) {
             return null;
           }
           if (!catResponse.ok) {
-            console.warn('[categories] HTTP', catResponse.status, 'pour', catName);
+            console.warn('[categories] HTTP', catResponse.status, 'for', catName);
             if (previousMeta) nextMeta[catName] = previousMeta;
             return null;
           }

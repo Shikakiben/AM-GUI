@@ -1,19 +1,19 @@
-name: build-AppImage
+name: build-AppImage (nightly)
 concurrency:
-  group: build-${{ github.ref }}
+  # Fixed group (not based on github.ref) so nightly runs never overlap and
+  # overwrite each other's assets.
+  group: nightly-build
   cancel-in-progress: true
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version (ex: 1.1.0)'
-        required: true
-        type: string
-
+  workflow_dispatch: {}
+  # Disabled for now: a daily release is pointless while the "test" branch
+  # does not change every day. Uncomment both lines to build automatically
+  # every day at 00:00 UTC.
+  # schedule:
+  #   - cron: '0 0 * * *'
 
 jobs:
-  
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
@@ -23,16 +23,20 @@ jobs:
           - runs-on: ubuntu-latest
             name: Build AppImage
             arch: x86_64
-           #comment out these 3 lines if aarch64 is not wanted
+          # comment out these 3 lines if aarch64 is not wanted
           - runs-on: ubuntu-24.04-arm
             name: Build AppImage
-            arch: aarch64 
-        
+            arch: aarch64
+
     container: ghcr.io/pkgforge-dev/archlinux:latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # The nightly always builds the "test" (beta/devel) branch.
+          ref: test
       - name: Set version
-        run: echo "VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+        run: |
+          echo "VERSION=beta-nightly" >> $GITHUB_ENV
       - name: Preparing Container
         uses: pkgforge-dev/anylinux-setup-action@0964f2258d6c93d1391359978dde081fd8b3c6af # v2
       - name: Install Dependencies
@@ -46,7 +50,6 @@ jobs:
           path: dist
 
   release:
-    if: ${{ github.ref_name == 'main' }}
     needs: [build]
     permissions: write-all
     runs-on: ubuntu-latest
@@ -55,5 +58,8 @@ jobs:
         with:
           pattern: AppImage-*
           merge-multiple: true
-      - name: Release AppImage
-        uses: pkgforge-dev/make-stable-appimage-release@4ed3d48ccb065352b6e6c0db6d39885b201c54a0 #v1.1
+        continue-on-error: true
+      - name: Release Nightly AppImage
+        uses: pkgforge-dev/make-nightly-appimage-release@17cbe90fc0796286e424619a54a82a3a880efe4c # v1.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
