@@ -3,7 +3,8 @@
 set -eu
 
 ARCH=$(uname -m)
-VERSION="${VERSION:-beta-0.1}"
+# No default version: the workflows always pass VERSION (workflow input).
+VERSION="${VERSION:?VERSION is required (ex: VERSION=1.1.0)}"
 export ARCH VERSION
 export OUTPATH=./dist
 export ADD_HOOKS="self-updater.hook:fix-namespaces.hook"
