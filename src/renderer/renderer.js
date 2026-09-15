@@ -1,22 +1,7 @@
-// Ultra-light lightbox for Markdown images (initialization after DOM ready)
-function initMarkdownLightbox() {
-  const mdLightbox = document.getElementById('mdLightbox');
-  const mdLightboxImg = document.getElementById('mdLightboxImg');
-  const detailsLong = document.getElementById('detailsLong');
-  if (mdLightbox && mdLightboxImg && detailsLong) {
-    detailsLong.addEventListener('click', e => {
-      const t = e.target;
-      if (t && t.tagName === 'IMG') {
-        mdLightboxImg.src = t.src;
-        mdLightbox.style.display = 'flex';
-      }
-    });
-    mdLightbox.addEventListener('click', () => {
-      mdLightbox.style.display = 'none';
-      mdLightboxImg.src = '';
-    });
-  }
-}
+// The Markdown lightbox is owned by the details feature (opening, closing,
+// gallery arrows, wheel and arrow keys): see features/details/index.js.
+// Keeping a second set of listeners here made the gallery arrows close the
+// lightbox as well, so this duplicate was removed.
 const loadedIcons = new Set();
 const scrollShell = document.querySelector('.scroll-shell');
 const appConstants = window.constants || {};
@@ -450,9 +435,7 @@ const detailsName = document.getElementById('detailsName');
 const detailsLong = document.getElementById('detailsLong');
 const detailsInstallBtn = document.getElementById('detailsInstallBtn');
 const detailsUninstallBtn = document.getElementById('detailsUninstallBtn');
-const detailsGallery = document.getElementById('detailsGallery');
 // Streaming install elements
-// Gallery removed: all images are in the description
 const installStream = document.getElementById('installStream');
 const installStreamStatus = document.getElementById('installStreamStatus');
 
@@ -798,7 +781,6 @@ function t(key) {
   return str;
 }
 window.ui.confirmModal?.init({ t: t });
-window.ui.lightbox?.init();
 
 function setPmPopupStatus(key, vars) {
   if (!pmPopupStatus) return;
@@ -1219,11 +1201,9 @@ const settingsPanelApi = window.ui?.settingsPanel?.init?.({
 }) || null;
 
 if (window.ui?.confirmModal?.init) window.ui.confirmModal.init({ t });
-if (window.ui?.lightbox?.init) window.ui.lightbox.init({ t });
 
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    initMarkdownLightbox();
     initIconObserver();
     // Ensure spinner and results are hidden at startup
     setUpdateSpinnerBusy(false);
@@ -1556,8 +1536,6 @@ function showDetails(appName) {
   if (detailsName) detailsName.dataset.app = app.name.toLowerCase();
   applyDetailsSandboxBadge(app.name);
   if (detailsLong) detailsLong.textContent = t('details.loadingDesc', {name: app.name});
-  if (detailsGallery) detailsGallery.hidden = true;
-  // Gallery removed: nothing to hide
   if (detailsInstallBtn) {
     detailsInstallBtn.hidden = !!app.installed;
     detailsInstallBtn.setAttribute('data-name', app.name);

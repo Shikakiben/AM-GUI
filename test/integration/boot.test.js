@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const INDEX_HTML = path.join(ROOT, 'index.html');
 
 const EXPECTED_FEATURES = ['sandbox', 'updates', 'installer', 'appLoader', 'search', 'details', 'featured'];
-const EXPECTED_UI = ['toast', 'virtualList', 'settingsPanel', 'passwordPrompt', 'layout', 'confirmModal', 'lightbox'];
+const EXPECTED_UI = ['toast', 'virtualList', 'settingsPanel', 'passwordPrompt', 'layout', 'confirmModal', 'gallery'];
 
 describe('renderer boot (full page load)', () => {
   let window;
