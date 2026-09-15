@@ -6,7 +6,13 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/Shikakiben/AM-GUI/total?logo=github&label=GitHub%20Downloads)](https://github.com/Shikakiben/AM-GUI/releases/latest)
 [![CI Build Status](https://github.com/Shikakiben/AM-GUI/actions/workflows/appimage.yml/badge.svg)](https://github.com/Shikakiben/AM-GUI/releases/latest)
   [![AnyLinux](https://img.shields.io/badge/AnyLinux-compatible-green?logo=linux&logoColor=white)](https://pkgforge-dev.github.io/Anylinux-AppImages/)
-  <p></p><img src="screenshots/light.png" width="800"/><p></p>
+  <p></p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshots/dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="screenshots/light.png">
+    <img src="screenshots/light.png" width="800" alt="AM-GUI screenshot"/>
+  </picture>
+  <p></p>
 
 </div>
   
