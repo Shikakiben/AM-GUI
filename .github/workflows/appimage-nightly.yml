@@ -10,8 +10,8 @@ on:
   # Disabled for now: a daily release is pointless while the "test" branch
   # does not change every day. Uncomment both lines to build automatically
   # every day at 00:00 UTC.
-  # schedule:
-  #   - cron: '0 0 * * *'
+  schedule:
+    - cron: '0 0 * * *'
 
 jobs:
   build:
