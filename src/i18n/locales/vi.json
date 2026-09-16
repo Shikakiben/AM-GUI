@@ -177,6 +177,8 @@
     "settings.fr": "Tiếng Pháp",
     "settings.gpuLabel": "Tắt tăng tốc GPU (để khắc phục lỗi đồ họa)",
     "settings.gpuTitle": "Tăng tốc GPU",
+    "settings.icons": "Biểu tượng",
+    "settings.monoIcons": "Dùng biểu tượng đơn sắc thay cho emoji",
     "settings.installScope": "Phạm vi cài đặt",
     "settings.installScopeHint": "Chỉ áp dụng khi dùng AM, không phải AppMan.",
     "settings.it": "Tiếng Ý",

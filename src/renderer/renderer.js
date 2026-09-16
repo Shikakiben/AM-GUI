@@ -33,6 +33,8 @@ const saveOpenExternalPref = safe(appPreferences.saveOpenExternalPref, (val) => 
   try { localStorage.setItem('openExternalLinks', val ? '1' : '0'); }
   catch (_) {}
 });
+const getIconStyle = safe(appPreferences.getIconStyle, () => 'emoji');
+const saveIconStyle = safe(appPreferences.saveIconStyle, () => {});
 const getIconUrl = safe(appUtils.getIconUrl, name => `appicon://${name}.png`);
 const debounce = safe(appUtils.debounce, (fn, delay) => {
   let timer;
@@ -226,7 +228,9 @@ function buildTile(item){
   tile.className = 'app-tile';
   tile.setAttribute('data-app', appId);
   const isSandboxedTile = installed && isAppSandboxed(name);
-  const badgeSymbol = isSandboxedTile ? '🔒' : '✓';
+  const badgeSymbol = isSandboxedTile
+    ? (window.ui?.icons?.choose?.('lock', '🔒', 'badge-icon') || '🔒')
+    : '✓';
   const badgeText = t('installed.badge');
   const badgeHTML = installed
     ? `<span class="installed-badge" aria-label="${badgeText}" title="${badgeText}" style="position:absolute;top:2px;right:2px;">${badgeSymbol}</span>`
@@ -601,6 +605,7 @@ let syncBtn = null;
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const openExternalCheckbox = document.getElementById('openExternalLinksCheckbox');
+const monoIconsCheckbox = document.getElementById('monoIconsCheckbox');
 const syncAmLocaleCheckbox = document.getElementById('syncAmLocaleCheckbox');
 const purgeIconsBtn = document.getElementById('purgeIconsBtn');
 const purgeIconsResult = document.getElementById('purgeIconsResult');
@@ -1151,6 +1156,7 @@ function buildLanguageOptions() {
 // Apply language and prepare controls
 function initLanguagePreferences() {
   buildLanguageOptions();
+  applyIconStyle();
   applyTranslations();
   syncTrayLocale();
   // Update HTML lang attribute
@@ -1179,6 +1185,19 @@ function initLanguagePreferences() {
   } catch(_) {}
 }
 
+// Icon style: fills the [data-icon] placeholders declared in index.html, then
+// asks the renderers that build markup in JS to follow. Applied on startup and
+// on every settings change, so no restart is needed.
+function applyIconStyle(style) {
+  const resolved = style || getIconStyle();
+  try { window.ui?.icons?.applyAll(document, resolved); } catch (_) {}
+  // The category label and the tiles build their markup in JS, so they have to
+  // be redrawn; the dropdown menu itself is rebuilt every time it is opened.
+  try { window.categories?.updateDropdownLabel?.(state, t, CATEGORY_ICON_MAP); } catch (_) {}
+  try { if (typeof rerenderActiveCategory === 'function') rerenderActiveCategory(); } catch (_) {}
+  return resolved;
+}
+
 const settingsPanelApi = window.ui?.settingsPanel?.init?.({
   settingsBtn,
   settingsPanel,
@@ -1193,6 +1212,10 @@ const settingsPanelApi = window.ui?.settingsPanel?.init?.({
   applyThemePreference,
   loadOpenExternalPref,
   saveOpenExternalPref,
+  monoIconsCheckbox,
+  getIconStyle,
+  saveIconStyle,
+  onIconStyleChange: (style) => applyIconStyle(style),
   onIconCachePurged: handleIconCachePurged,
   onInstallScopeChange: (scope) => {
     if (installerApi) installerApi.setInstallScope?.(scope); else installScope = scope;

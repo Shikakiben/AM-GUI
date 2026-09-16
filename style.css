@@ -491,7 +491,10 @@ body.details-mode .scroll-shell { top:calc(var(--header-h) + var(--subbar-h)); }
 .btn-settings .gear-icon {
   display: block;
   line-height: 1;
-  font-size: 1.56em;
+  /* Was 1.56em to blow up U+2699, which has a text-presentation glyph only
+     half an em wide. The gear is now the proper emoji form (U+2699 U+FE0F), so
+     the compensation is gone and it matches every other icon in the UI. */
+  font-size: 1em;
   transition: none;
 }
 .btn-settings:hover .gear-icon { transform: none; }
@@ -945,6 +948,15 @@ body.view-cards .app-tile .tile-short { font-size:13px; max-height:4.1em; overfl
 .install-stream-log::-webkit-scrollbar-track { background:transparent; }
 .details-section-title { margin:0 0 8px; font-size:15px; }
 /* (supprimé doublon .details-long) */
+
+/* --- Icônes monochromes (option, ui/icons.js) --------------------------- */
+/* The SVG carries its own size (width/height="1em" in the markup), so it needs
+   nothing here to be the right size: these rules only tune the alignment, the
+   same way a font's metrics would for an emoji. */
+.ui-icon { flex-shrink: 0; vertical-align: -0.125em; }
+/* The search icon sits in an absolutely positioned box: no baseline shift. */
+.header-center .search .search-icon .ui-icon { display: block; vertical-align: middle; }
+.installed-badge .ui-icon { display: block; }
 
 /* --- Galerie de captures (apps avec plusieurs images) ------------------- */
 /* Reprend le carrousel du site PLA : flèches, points, clavier. Pas d'auto-
