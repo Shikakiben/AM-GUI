@@ -1,22 +1,25 @@
-name: build-AppImage (nightly)
+name: build-AppImage (beta)
 concurrency:
-  # Fixed group (not based on github.ref) so nightly runs never overlap and
+  # Fixed group (not based on github.ref) so beta runs never overlap and
   # overwrite each other's assets.
-  group: nightly-build
+  group: beta-build
   cancel-in-progress: true
 
+# Manual trigger on purpose: a rebuild with no source change still produces a
+# different AppImage (rolling Arch container + npm install), so beta testers
+# would re-download for nothing, and this repo can go weeks without a push.
+# Trigger it by hand once the day's changes are ready.
 on:
   workflow_dispatch: {}
-  # Disabled for now: a daily release is pointless while the "test" branch
-  # does not change every day. Uncomment both lines to build automatically
-  # every day at 00:00 UTC.
-  # schedule:
-  #   - cron: '0 0 * * *'
 
 jobs:
   build:
     name: "${{ matrix.name }} (${{ matrix.arch }})"
     runs-on: ${{ matrix.runs-on }}
+    outputs:
+      # SHA actually built (the "test" branch, not the branch the workflow was
+      # dispatched from) -> used as the tag target and in the release notes.
+      sha: ${{ steps.checkout.outputs.commit }}
     strategy:
       matrix:
         include:
@@ -31,12 +34,13 @@ jobs:
     container: ghcr.io/pkgforge-dev/archlinux:latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        id: checkout
         with:
-          # The nightly always builds the "test" (beta/devel) branch.
+          # The beta always builds the "test" (beta/devel) branch.
           ref: test
       - name: Set version
         run: |
-          echo "VERSION=beta-nightly" >> $GITHUB_ENV
+          echo "VERSION=beta" >> $GITHUB_ENV
       - name: Preparing Container
         uses: pkgforge-dev/anylinux-setup-action@0964f2258d6c93d1391359978dde081fd8b3c6af # v2
       - name: Install Dependencies
@@ -59,7 +63,26 @@ jobs:
           pattern: AppImage-*
           merge-multiple: true
         continue-on-error: true
-      - name: Release Nightly AppImage
-        uses: pkgforge-dev/make-nightly-appimage-release@17cbe90fc0796286e424619a54a82a3a880efe4c # v1.1
+      - name: Set build date
+        run: echo "DATE=$(date -u +%F)" >> $GITHUB_ENV
+      - name: Delete previous beta release
+        continue-on-error: true
+        run: gh release delete beta --repo "$GITHUB_REPOSITORY" --cleanup-tag -y
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release Beta AppImage
+        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe # v2.4.2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: beta
+          # Keeps the tag on the commit that was really built.
+          target_commitish: ${{ needs.build.outputs.sha }}
+          name: "Beta build (${{ env.DATE }})"
+          body: |
+            Beta build of AM-GUI, rebuilt from the `test` branch — commit ${{ needs.build.outputs.sha }}.
+
+            ⚠️ **This is a development version and may contain bugs. Use at your own risk.**
+          prerelease: true
+          make_latest: false
+          generate_release_notes: false
+          files: |
+            *.AppImage*
