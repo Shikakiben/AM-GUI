@@ -17,7 +17,7 @@
 </div>
   
 * [Latest Release](https://github.com/Shikakiben/AM-GUI/releases/latest) — AppImage
-* [Beta builds](https://github.com/Shikakiben/AM-GUI/releases/tag/nightly) — rebuilt from the `test` branch (pre-release, for testing)
+* [Beta builds](https://github.com/Shikakiben/AM-GUI/releases/tag/beta) — rebuilt from the `test` branch on demand (pre-release, for testing)
 
 **This AppImage bundles everything, and should work on any linux distro, even on musl based ones.**
 

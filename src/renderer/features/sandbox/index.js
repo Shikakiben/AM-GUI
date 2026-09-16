@@ -381,8 +381,15 @@ const sandboxState = {
     const badge = iconWrapper.querySelector('.installed-badge');
     if (!badge) return;
     const label = isActive ? _.t('sandbox.status.active') : _.t('installed.badge');
-    const symbol = isActive ? '\uD83D\uDD12' : '\u2713';
-    badge.textContent = symbol;
+    const icons = window.ui && window.ui.icons;
+    // The lock is an emoji, so it follows the icon style like the category
+    // icons do; the plain check mark is a text symbol either way.
+    const symbol = isActive
+      ? (icons && typeof icons.choose === 'function'
+          ? icons.choose('lock', '\uD83D\uDD12', 'badge-icon')
+          : '\uD83D\uDD12')
+      : '\u2713';
+    badge.innerHTML = symbol;
     badge.setAttribute('aria-label', label);
     badge.title = label;
   }

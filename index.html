@@ -26,19 +26,23 @@
     </div>
     <div class="header-center" role="search" aria-label="Recherche">
       <div class="search">
-        <span class="search-icon" aria-hidden="true">🔍</span>
+        <span class="search-icon" data-icon="search" aria-hidden="true">🔍</span>
         <input id="searchInput" type="search" data-i18n-placeholder="search.placeholder" autocomplete="off" />
       </div>
     </div>
     <div class="header-right">
       <div class="global-actions">
-  <button id="settingsBtn" class="btn btn-outline btn-settings" title="Paramètres (Ctrl+,)" aria-haspopup="true" aria-expanded="false" aria-controls="settingsPanel"><span class="gear-icon" aria-hidden="true">⚙</span></button>
+  <button id="settingsBtn" class="btn btn-outline btn-settings" title="Paramètres (Ctrl+,)" aria-haspopup="true" aria-expanded="false" aria-controls="settingsPanel"><span class="gear-icon" data-icon="settings" aria-hidden="true">⚙️</span></button>
   <div id="settingsPanel" class="settings-panel settings-panel-right" role="dialog" aria-modal="false" aria-label="Paramètres" hidden tabindex="-1">
           <div class="settings-group">
             <div class="settings-title" data-i18n="settings.theme"></div>
             <label><input type="radio" name="themePref" value="system" checked> <span data-i18n="settings.auto"></span></label>
             <label><input type="radio" name="themePref" value="light"> <span data-i18n="settings.light"></span></label>
             <label><input type="radio" name="themePref" value="dark"> <span data-i18n="settings.dark"></span></label>
+          </div>
+          <div class="settings-group">
+            <div class="settings-title" data-i18n="settings.icons"></div>
+            <label style="font-size:13px;"><input type="checkbox" id="monoIconsCheckbox"> <span data-i18n="settings.monoIcons"></span></label>
           </div>
           <div class="settings-group">
             <div class="settings-title" data-i18n="settings.lang"></div>
@@ -91,7 +95,7 @@
           <button class="mode-option" data-mode="grid" role="menuitem" aria-pressed="true" data-i18n="modeMenu.grid"><span class="mode-icon" aria-hidden="true">▦</span> Grille</button>
           <button class="mode-option" data-mode="list" role="menuitem" aria-pressed="false" data-i18n="modeMenu.list"><span class="mode-icon" aria-hidden="true">≣</span> Liste</button>
           <button class="mode-option" data-mode="icons" role="menuitem" aria-pressed="false" data-i18n="modeMenu.icons"><span class="mode-icon" aria-hidden="true">◻︎</span> Icônes</button>
-          <button class="mode-option" data-mode="cards" role="menuitem" aria-pressed="false" data-i18n="modeMenu.cards"><span class="mode-icon" aria-hidden="true">🂠</span> Cartes</button>
+          <button class="mode-option" data-mode="cards" role="menuitem" aria-pressed="false" data-i18n="modeMenu.cards"><span class="mode-icon" data-icon="credit-card" aria-hidden="true">🂠</span> Cartes</button>
         </div>
       </div>
     </div>
@@ -164,8 +168,8 @@
         <span class="cmd-desc" data-i18n="advanced.cmd.install"></span>
       </li>
       <li class="cmd-row">
-        <button type="button" class="copy-cmd" data-copy="am -q &lt;mot-clé&gt;">am -q &lt;mot-clé&gt;</button>
-        <button type="button" class="copy-cmd" data-copy="appman -q &lt;mot-clé&gt;">appman -q &lt;mot-clé&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="am -q &lt;keyword&gt;">am -q &lt;keyword&gt;</button>
+        <button type="button" class="copy-cmd" data-copy="appman -q &lt;keyword&gt;">appman -q &lt;keyword&gt;</button>
         <span class="cmd-desc" data-i18n="advanced.cmd.query"></span>
       </li>
       <li class="cmd-row">
@@ -209,7 +213,7 @@
           <button id="detailsInstallBtn" class="btn btn-primary" data-i18n="details.install"></button>
           <button id="detailsForceCancelBtn" class="btn btn-outline danger" title="Forcer l'annulation" aria-label="Forcer l'annulation" hidden style="padding:6px 10px;">✕</button>
           <button id="detailsUninstallBtn" class="btn btn-outline" data-i18n="details.uninstall"></button>
-          <button id="installScopeBtn" class="btn btn-outline" type="button" hidden>👤 <span data-i18n="install.scope.user"></span></button>
+          <button id="installScopeBtn" class="btn btn-outline" type="button" hidden><span data-icon="user" aria-hidden="true">👤</span> <span data-i18n="install.scope.user"></span></button>
           <button id="sandboxOpenBtn" class="btn btn-soft-neutral sandbox-toggle-btn" type="button">
             <span data-i18n="sandbox.title"></span>
             <span id="sandboxButtonStatus" class="sandbox-pill" data-status="unknown">—</span>
@@ -371,6 +375,7 @@
   <script src="src/renderer/features/details/index.js"></script>  <script src="src/renderer/features/appLoader.js"></script>
   <script src="src/renderer/features/installer/index.js"></script>  <script src="src/renderer/features/sandbox/index.js"></script>  <script src="src/renderer/features/updates/index.js"></script>  <script src="src/renderer/features/featured/index.js"></script>  <script src="src/renderer/ui/syncButton.js"></script>
   <script src="src/renderer/ui/confirmModal.js"></script>
+  <script src="src/renderer/ui/icons.js"></script>
   <script src="src/renderer/ui/gallery.js"></script>
   <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>

@@ -7,36 +7,64 @@
     return (window.constants && window.constants.CATEGORY_ICON_MAP) || {};
   }
 
+  function isMonoIcons() {
+    const icons = window.ui && window.ui.icons;
+    return !!icons && typeof icons.preferred === 'function' && icons.preferred();
+  }
+
+  // The glyph alone: the emoji, or its SVG replacement when the monochrome
+  // style is on. Both are inline glyphs that carry their own size (1em), so the
+  // surrounding markup never has to differ between the two styles.
+  function categoryGlyph(key, iconMap, fallback) {
+    const emoji = (iconMap && iconMap[key]) || '\uD83D\uDCE6';
+    const icons = window.ui && window.ui.icons;
+    if (!isMonoIcons() || !icons || typeof icons.icon !== 'function') return emoji;
+    const name = (typeof icons.lucideNameForCategory === 'function' && icons.lucideNameForCategory(key)) || fallback;
+    return icons.icon(name) || emoji;
+  }
+
+  function categoryIcon(key, iconMap, fallback) {
+    return `<span class="cat-icon">${categoryGlyph(key, iconMap, fallback)}</span>`;
+  }
+
+  // Spinning "loading" marker of the "Other" entry while categories load.
+  function spinnerIcon() {
+    const icons = window.ui && window.ui.icons;
+    if (icons && typeof icons.choose === 'function') {
+      return icons.choose('loader', '<span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">\u23F3</span>', 'cat-spinner');
+    }
+    return '<span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">\u23F3</span>';
+  }
+
   function updateDropdownLabel(state, t, iconMapOverride) {
     const categoriesDropdownBtn = document.getElementById('categoriesDropdownBtn');
     if (!categoriesDropdownBtn) return;
     const iconMap = getIconMap(iconMapOverride);
     const translate = typeof t === 'function' ? t : (key) => key;
     let label = translate('tabs.categories');
-    let icon = '📦';
+    let icon = categoryIcon('', iconMap, 'package');
     if (state && state.activeCategory && state.activeCategory !== 'all') {
       const key = state.activeCategory.trim().toLowerCase();
-      icon = iconMap[key] || '📦';
+      icon = categoryIcon(key, iconMap, 'package');
       if (key === 'autre') {
         label = translate('categories.other');
       } else {
         label = (window.utils && typeof window.utils.prettifyAppName === 'function') ? window.utils.prettifyAppName(state.activeCategory) : state.activeCategory;
       }
     } else {
-      icon = '🗃️';
+      icon = categoryIcon('all', iconMap, 'layout-grid');
       label = translate('categories.all');
     }
-    categoriesDropdownBtn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${label}</span> <span class="cat-arrow">▼</span>`;
+    categoriesDropdownBtn.innerHTML = `${icon} <span>${label}</span> <span class="cat-arrow">▼</span>`;
   }
 
   function createCategoryButton(name, onClick, iconMap) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'category-btn';
-    const key = name.trim().toLowerCase();
-    const icon = iconMap[key] || '📦';
+    const key = String(name || '').trim().toLowerCase();
     const displayName = (window.utils && typeof window.utils.prettifyAppName === 'function') ? window.utils.prettifyAppName(name) : name;
-    btn.innerHTML = `<span class="cat-icon">${icon}</span> <span>${displayName}</span>`;
+    btn.innerHTML = `${categoryIcon(key, iconMap, 'package')} <span>${displayName}</span>`;
     btn.onclick = onClick;
     return btn;
   }
@@ -203,7 +231,7 @@
           }
         }, iconMap);
         btnAll.querySelector('span:last-child').textContent = translate('categories.all');
-        btnAll.querySelector('.cat-icon').textContent = '🗃️';
+        btnAll.querySelector('.cat-icon').innerHTML = categoryGlyph('all', iconMap, 'layout-grid');
         if (state.activeCategory === 'all') btnAll.classList.add('active');
         categoriesDropdownMenu.appendChild(btnAll);
 
@@ -237,7 +265,7 @@
         const btnOther = createCategoryButton('autre', () => {}, iconMap);
         btnOther.querySelector('span:last-child').textContent = translate('categories.other');
         btnOther.disabled = true;
-        btnOther.innerHTML += ' <span class="cat-spinner" style="margin-left:8px;font-size:0.9em;">⏳</span>';
+        btnOther.innerHTML += ' ' + spinnerIcon();
         if (state.activeCategory === 'autre') btnOther.classList.add('active');
         categoriesDropdownMenu.appendChild(btnOther);
         setTimeout(() => {

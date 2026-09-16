@@ -1,0 +1,88 @@
+name: build-AppImage (beta)
+concurrency:
+  # Fixed group (not based on github.ref) so beta runs never overlap and
+  # overwrite each other's assets.
+  group: beta-build
+  cancel-in-progress: true
+
+# Manual trigger on purpose: a rebuild with no source change still produces a
+# different AppImage (rolling Arch container + npm install), so beta testers
+# would re-download for nothing, and this repo can go weeks without a push.
+# Trigger it by hand once the day's changes are ready.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: "${{ matrix.name }} (${{ matrix.arch }})"
+    runs-on: ${{ matrix.runs-on }}
+    outputs:
+      # SHA actually built (the "test" branch, not the branch the workflow was
+      # dispatched from) -> used as the tag target and in the release notes.
+      sha: ${{ steps.checkout.outputs.commit }}
+    strategy:
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            name: Build AppImage
+            arch: x86_64
+          # comment out these 3 lines if aarch64 is not wanted
+          - runs-on: ubuntu-24.04-arm
+            name: Build AppImage
+            arch: aarch64
+
+    container: ghcr.io/pkgforge-dev/archlinux:latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        id: checkout
+        with:
+          # The beta always builds the "test" (beta/devel) branch.
+          ref: test
+      - name: Set version
+        run: |
+          echo "VERSION=beta" >> $GITHUB_ENV
+      - name: Preparing Container
+        uses: pkgforge-dev/anylinux-setup-action@0964f2258d6c93d1391359978dde081fd8b3c6af # v2
+      - name: Install Dependencies
+        run: /bin/sh ./appimage-build/get-dependencies.sh
+      - name: Make AppImage
+        run: /bin/sh ./appimage-build/make-appimage.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: AppImage-${{ matrix.arch }}
+          path: dist
+
+  release:
+    needs: [build]
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: AppImage-*
+          merge-multiple: true
+        continue-on-error: true
+      - name: Set build date
+        run: echo "DATE=$(date -u +%F)" >> $GITHUB_ENV
+      - name: Delete previous beta release
+        continue-on-error: true
+        run: gh release delete beta --repo "$GITHUB_REPOSITORY" --cleanup-tag -y
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release Beta AppImage
+        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe # v2.4.2
+        with:
+          tag_name: beta
+          # Keeps the tag on the commit that was really built.
+          target_commitish: ${{ needs.build.outputs.sha }}
+          name: "Beta build (${{ env.DATE }})"
+          body: |
+            Beta build of AM-GUI, rebuilt from the `test` branch — commit ${{ needs.build.outputs.sha }}.
+
+            ⚠️ **This is a development version and may contain bugs. Use at your own risk.**
+          prerelease: true
+          make_latest: false
+          generate_release_notes: false
+          files: |
+            *.AppImage*

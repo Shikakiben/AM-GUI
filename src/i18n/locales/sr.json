@@ -177,6 +177,8 @@
     "settings.fr": "Francuski",
     "settings.gpuLabel": "Isključi GPU ubrzanje (radi otklanjanja grafičkih grešaka)",
     "settings.gpuTitle": "GPU ubrzanje",
+    "settings.icons": "Ikonice",
+    "settings.monoIcons": "Koristi jednobojne ikonice umesto emodžija",
     "settings.installScope": "Opseg instalacije",
     "settings.installScopeHint": "Važi samo za AM, ne za AppMan.",
     "settings.it": "Italijanski",

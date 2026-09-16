@@ -177,6 +177,8 @@
     "settings.fr": "Francouzština",
     "settings.gpuLabel": "Zakázat akceleraci GPU (chcete-li opravit grafické chyby)",
     "settings.gpuTitle": "Akcelerace GPU",
+    "settings.icons": "Ikony",
+    "settings.monoIcons": "Použít jednobarevné ikony místo emoji",
     "settings.installScope": "Rozsah instalace",
     "settings.installScopeHint": "Platí pouze pro AM, ne pro AppMan.",
     "settings.it": "Italština",

@@ -29,11 +29,30 @@
     } catch (_){ }
   }
 
+  // 'emoji' (default) keeps the colourful category emojis, 'mono' swaps the
+  // pictographs for the inline Lucide SVGs of ui/icons.js.
+  function getIconStyle() {
+    try {
+      return localStorage.getItem('iconStyle') === 'mono' ? 'mono' : 'emoji';
+    } catch (_) {
+      return 'emoji';
+    }
+  }
+
+  function saveIconStyle(val) {
+    try {
+      if (val === 'mono') localStorage.setItem('iconStyle', 'mono');
+      else localStorage.removeItem('iconStyle');
+    } catch (_){ }
+  }
+
   const api = Object.freeze({
     getThemePref,
     applyThemePreference,
     loadOpenExternalPref,
-    saveOpenExternalPref
+    saveOpenExternalPref,
+    getIconStyle,
+    saveIconStyle
   });
 
   window.services = window.services || {};

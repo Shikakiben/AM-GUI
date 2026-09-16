@@ -177,6 +177,8 @@
     "settings.fr": "Francese",
     "settings.gpuLabel": "Disattiva accelerazione GPU (per correggere bug grafici)",
     "settings.gpuTitle": "Accelerazione GPU",
+    "settings.icons": "Icone",
+    "settings.monoIcons": "Usa icone monocromatiche invece delle emoji",
     "settings.installScope": "Ambito di installazione",
     "settings.installScopeHint": "Si applica solo con AM, non con AppMan.",
     "settings.it": "Italiano",

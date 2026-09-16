@@ -6,6 +6,7 @@
     const settingsPanel = options.settingsPanel || document.getElementById('settingsPanel');
     const disableGpuCheckbox = options.disableGpuCheckbox || document.getElementById('disableGpuCheckbox');
     const openExternalCheckbox = options.openExternalCheckbox || document.getElementById('openExternalLinksCheckbox');
+    const monoIconsCheckbox = options.monoIconsCheckbox || document.getElementById('monoIconsCheckbox');
     const purgeIconsBtn = options.purgeIconsBtn || document.getElementById('purgeIconsBtn');
     const purgeIconsResult = options.purgeIconsResult || document.getElementById('purgeIconsResult');
     const electronAPI = options.electronAPI || window.electronAPI;
@@ -15,6 +16,9 @@
     const applyThemePreference = options.applyThemePreference || (() => {});
     const loadOpenExternalPref = options.loadOpenExternalPref || (() => false);
     const saveOpenExternalPref = options.saveOpenExternalPref || (() => {});
+    const getIconStyle = options.getIconStyle || (() => 'emoji');
+    const saveIconStyle = options.saveIconStyle || (() => {});
+    const onIconStyleChange = options.onIconStyleChange || (() => {});
     const onOpen = options.onOpen || (() => {});
     const onClose = options.onClose || (() => {});
     const onIconCachePurged = options.onIconCachePurged || (() => {});
@@ -80,6 +84,16 @@
       openExternalCheckbox.checked = loadOpenExternalPref();
       openExternalCheckbox.addEventListener('change', () => {
         saveOpenExternalPref(openExternalCheckbox.checked);
+      });
+    }
+
+    // Monochrome icons: applied straight away, no restart needed.
+    if (monoIconsCheckbox) {
+      monoIconsCheckbox.checked = getIconStyle() === 'mono';
+      monoIconsCheckbox.addEventListener('change', () => {
+        const style = monoIconsCheckbox.checked ? 'mono' : 'emoji';
+        saveIconStyle(style);
+        onIconStyleChange(style);
       });
     }
 
