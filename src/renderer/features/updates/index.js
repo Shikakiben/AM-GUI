@@ -183,7 +183,7 @@
         return;
       }
       try { term.reset(); }
-      catch (e) { term.clear?.(); }
+      catch (_) { term.clear?.(); }
       if (updatesXtermFit) setTimeout(() => updatesXtermFit?.fit(), 30);
     }
 
@@ -300,8 +300,12 @@
 
       const QUAL = '(?:\\s+\\((?:AppMan|AM)\\))?';
       const VER = '[^\\s()]+';
+      // AM appends a note when the version is unchanged but the checksum is not
+      // ("(checksum changed)"), and translates it — so accept any parenthetical
+      // there instead of matching the English wording.
+      const NOTE = '(?:\\s+\\([^)]*\\))?';
       const ROW_RE = new RegExp(
-        '^\\s*\\d+\\.\\s+([A-Za-z0-9._-]+)\\s+' + VER + QUAL + '\\s+' + VER + QUAL + '(?:\\s+\\(checksum changed\\))?\\s*$'
+        '^\\s*\\d+\\.\\s+([A-Za-z0-9._-]+)\\s+' + VER + QUAL + '\\s+' + VER + QUAL + NOTE + '\\s*$'
       );
       for (let i = 0; i < blockLines.length; i++) {
         const line = blockLines[i].trim();
@@ -309,8 +313,9 @@
         const m = line.match(/^\s*\d+\.\s+([A-Za-z0-9._-]+)\s+(.*)/);
         if (!m) continue;
         const name = m[1].toLowerCase();
-        const allTokens = m[2].match(/\S+/g) || [];
-        const tokens = allTokens.filter(function (t) { return t !== '(AppMan)' && t !== '(AM)' && t !== '(checksum' && t !== 'changed)'; });
+        // Drop every "(...)" group — "(AppMan)", "(AM)" and the note, whatever
+        // the language — before reading the two versions.
+        const tokens = (m[2].replace(/\([^)]*\)/g, ' ').match(/\S+/g) || []);
         if (tokens.length < 2) continue;
         const oldVer = tokens[tokens.length - 2];
         const newVer = tokens[tokens.length - 1];
@@ -329,18 +334,26 @@
       return { updated: updated, newVersions: newVersions, hasStructure: true };
     }
 
+    // AM prints this warning in the language configured for AM itself (the
+    // "translate" option), so the sentence cannot be matched. The bullet and the
+    // link to the installation script are never translated though: this is a
+    // "◆ <name>" line followed by the URL of the install script of <name>.
+    //
+    // The URL is what tells this warning apart from the other "◆" lines AM can
+    // print ("◆ File: ...", "◆ Downloading ...", "◆ Updates check finished!",
+    // ...), which a bare bullet test would mistake for app names.
     function parseChangedScripts(text) {
       const changed = [];
       const lines = text.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        const m = line.match(/^◆\s+([A-Za-z0-9._-]+)\s+has changed,\s+you may need to reinstall it/i);
-        if (m) {
-          const name = m[1].toLowerCase();
-          const urlLine = lines[i + 1]?.trim() || '';
-          const urlMatch = urlLine.match(/(https:\/\/github\.com\/[^\s]+)/);
-          changed.push({ name: name, url: urlMatch ? urlMatch[1] : null });
-        }
+        if (!line.startsWith('\u25c6')) continue;
+        const name = (line.slice(1).trim().split(/\s+/)[0] || '').toLowerCase();
+        if (!/^[a-z0-9][a-z0-9._+-]*$/.test(name)) continue;
+        const urlLine = (lines[i + 1] || '').trim();
+        const urlMatch = urlLine.match(/(https:\/\/github\.com\/[^\s]*\/programs\/[^/\s]+\/([^\s/?#]+))/);
+        if (!urlMatch || urlMatch[2].toLowerCase() !== name) continue;
+        changed.push({ name: name, url: urlMatch[1] });
       }
       return changed;
     }
@@ -482,7 +495,7 @@
           await _.loadApps();
           _.applySearch();
         }
-      } catch (e) {}
+      } catch (_) {}
     }
 
     async function fetchUpdatesOutput() {
