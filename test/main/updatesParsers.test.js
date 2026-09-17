@@ -50,8 +50,9 @@ function parseUpdatedBlock(text) {
   const blockLines = lines.slice(startIdx);
   const QUAL = '(?:\\s+\\((?:AppMan|AM)\\))?';
   const VER = '[^\\s()]+';
+  const NOTE = '(?:\\s+\\([^)]*\\))?';
   const ROW_RE = new RegExp(
-    '^\\s*\\d+\\.\\s+([A-Za-z0-9._-]+)\\s+' + VER + QUAL + '\\s+' + VER + QUAL + '(?:\\s+\\(checksum changed\\))?\\s*$'
+    '^\\s*\\d+\\.\\s+([A-Za-z0-9._-]+)\\s+' + VER + QUAL + '\\s+' + VER + QUAL + NOTE + '\\s*$'
   );
   for (let i = 0; i < blockLines.length; i++) {
     const line = blockLines[i].trim();
@@ -59,8 +60,9 @@ function parseUpdatedBlock(text) {
     const m = line.match(/^\s*\d+\.\s+([A-Za-z0-9._-]+)\s+(.*)/);
     if (!m) continue;
     const name = m[1].toLowerCase();
-    const allTokens = m[2].match(/\S+/g) || [];
-    const tokens = allTokens.filter(t => t !== '(AppMan)' && t !== '(AM)' && t !== '(checksum' && t !== 'changed)');
+    // Drop every "(...)" group — "(AppMan)", "(AM)" and the translated note —
+    // before reading the two versions.
+    const tokens = (m[2].replace(/\([^)]*\)/g, ' ').match(/\S+/g) || []);
     if (tokens.length < 2) continue;
     const oldVer = tokens[tokens.length - 2];
     const newVer = tokens[tokens.length - 1];
@@ -78,13 +80,13 @@ function parseChangedScripts(text) {
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    const m = line.match(/^◆\s+([A-Za-z0-9._-]+)\s+has changed,\s+you may need to reinstall it/i);
-    if (m) {
-      const name = m[1].toLowerCase();
-      const urlLine = lines[i + 1]?.trim() || '';
-      const urlMatch = urlLine.match(/(https:\/\/github\.com\/[^\s]+)/);
-      changed.push({ name, url: urlMatch ? urlMatch[1] : null });
-    }
+    if (!line.startsWith('\u25c6')) continue;
+    const name = (line.slice(1).trim().split(/\s+/)[0] || '').toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._+-]*$/.test(name)) continue;
+    const urlLine = (lines[i + 1] || '').trim();
+    const urlMatch = urlLine.match(/(https:\/\/github\.com\/[^\s]*\/programs\/[^/\s]+\/([^\s/?#]+))/);
+    if (!urlMatch || urlMatch[2].toLowerCase() !== name) continue;
+    changed.push({ name, url: urlMatch[1] });
   }
   return changed;
 }
@@ -154,6 +156,30 @@ describe('parseUpdatedBlock', () => {
     assert.strictEqual(ffVer.new, '120.0');
   });
 
+  it('reads rows whose trailing note is translated', () => {
+    // "(somme de contrôle modifiée)" is AM's French translation of
+    // "(checksum changed)": same version, different checksum.
+    const result = parseUpdatedBlock([
+      '-----------------------------------------------------------------------------',
+      ' dummy header',
+      '-----------------------------------------------------------------------------',
+      ' more dummy',
+      '-----------------------------------------------------------------------------',
+      ' Les applications suivantes ont été mises à jour :',
+      '',
+      '     App                Précédente  Actuelle ',
+      '-----------------------------------------------------------------------------',
+      ' 1.  thunderbird        128.0      128.0     (somme de contrôle modifiée)',
+      ' 2.  firefox            118.0      120.0',
+      '-----------------------------------------------------------------------------',
+    ].join('\n'));
+    assert.ok(result.updated.has('thunderbird|system'), 'thunderbird should be detected');
+    assert.ok(result.updated.has('firefox|system'));
+    const tb = result.newVersions.get('thunderbird|system');
+    assert.strictEqual(tb.old, '128.0');
+    assert.strictEqual(tb.new, '128.0');
+  });
+
   it('returns hasStructure=false when no separator block found', () => {
     const result = parseUpdatedBlock('no table here');
     assert.strictEqual(result.hasStructure, false);
@@ -180,6 +206,18 @@ describe('parseChangedScripts', () => {
     ' To fix the above, just run "appman reinstall", without arguments',
   ].join('\n');
 
+  // Same output with AM translated to French ("am translate fr"): the sentence
+  // changes, the bullet and the URL do not.
+  const frenchOutput = [
+    ' V\u00e9rification des modifications des scripts d\u2019installation dans la base de donn\u00e9es en ligne...',
+    ' \u25c6 qbittorrent a chang\u00e9, vous devrez peut-\u00eatre le r\u00e9installer, voir',
+    '   https://github.com/ivan-hc/AM/blob/main/programs/x86_64/qbittorrent',
+    ' \u25c6 qbittorrent est verrouill\u00e9, voir',
+    '   https://github.com/ivan-hc/AM/blob/main/programs/x86_64/another-app',
+    ' \u25c6 Updates check finished! ',
+    ' Pour corriger ce qui pr\u00e9c\u00e8de, ex\u00e9cutez simplement "am reinstall", sans arguments',
+  ].join('\n');
+
   it('detects all changed scripts with URLs', () => {
     const result = parseChangedScripts(realOutput);
     assert.strictEqual(result.length, 3);
@@ -190,15 +228,32 @@ describe('parseChangedScripts', () => {
     assert.strictEqual(result[2].name, 'mpv');
   });
 
+  it('detects changed scripts when AM is not in English', () => {
+    const result = parseChangedScripts(frenchOutput);
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0].name, 'qbittorrent');
+    assert.strictEqual(result[0].url, 'https://github.com/ivan-hc/AM/blob/main/programs/x86_64/qbittorrent');
+  });
+
   it('returns empty array when no scripts changed', () => {
     const result = parseChangedScripts('no changes found');
     assert.deepStrictEqual(result, []);
   });
 
-  it('handles script without URL gracefully', () => {
-    const result = parseChangedScripts('◆ testapp has changed, you may need to reinstall it');
-    assert.strictEqual(result.length, 1);
-    assert.strictEqual(result[0].name, 'testapp');
-    assert.strictEqual(result[0].url, null);
+  it('ignores a bullet line whose URL is not the script of that app', () => {
+    const result = parseChangedScripts(
+      '\u25c6 gimp a chang\u00e9, vous devrez peut-\u00eatre le r\u00e9installer, voir\n' +
+      '   https://github.com/ivan-hc/AM/blob/main/programs/x86_64/mpv'
+    );
+    assert.deepStrictEqual(result, []);
+  });
+
+  it('ignores the other bullet lines AM can print during an update', () => {
+    const result = parseChangedScripts(
+      '\u25c6 Updates check finished! \n' +
+      ' \u25c6 Downloading modules/management.am...\n' +
+      ' \u25c6 File: /home/user/AppImages/foo.AppImage'
+    );
+    assert.deepStrictEqual(result, []);
   });
 });
