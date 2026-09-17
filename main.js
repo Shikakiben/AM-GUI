@@ -78,10 +78,12 @@ try {
 const shouldDisableGpu = hasDisableGpuFlag || disableGpuPref;
 if (shouldDisableGpu && typeof app.disableHardwareAcceleration === 'function') {
   app.disableHardwareAcceleration();
-} else {
-  app.commandLine.appendSwitch('disable-gpu-vsync');
-  app.commandLine.appendSwitch('disable-frame-rate-limit');
 }
+// NOTE: do not re-add 'disable-gpu-vsync' / 'disable-frame-rate-limit' here.
+// They remove the frame rate cap, so any spinner left running (the "Run
+// updates" button spins for the whole update) makes the compositor produce
+// thousands of frames per second: ~95% CPU in the renderer, a busy GPU process
+// and a machine that freezes while the update runs.
 
 // Electron 36+ defaults to GTK4 which crashes on mixed-GTK systems.
 // Official Electron fix: https://www.electronjs.org/docs/latest/breaking-changes#changed-gtk-4-is-default-when-running-gnome
@@ -111,6 +113,11 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
+      // Keep the renderer at full speed when the window is hidden or occluded:
+      // xterm parses its write buffer through setTimeout() and the updates log
+      // is written there, so with the default throttling the backlog piles up
+      // and the UI freezes when the window comes back, until it is parsed.
+      backgroundThrottling: false,
       additionalArguments: [`--de=${deTag}`, `--locale=${sysLocale}`]
     }
   });
