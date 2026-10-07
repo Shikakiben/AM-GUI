@@ -146,6 +146,10 @@ function registerAppListHandlers(ipcMain, deps) {
     } catch (_) { /* silent */ }
   }
 
+  function clearAppsCache() {
+    try { fs.unlinkSync(CACHE_FILE); } catch (_) { /* silent */ }
+  }
+
   // Separate fetch function reusable by background refresh
   async function fetchAppsFresh() {
     const { pm, bothFound } = await detectPackageManager();
@@ -253,8 +257,14 @@ function registerAppListHandlers(ipcMain, deps) {
   }
 
   ipcMain.handle('list-apps-detailed', async (event) => {
+    // Always detect the package manager first: the on-disk cache may have been
+    // written when a different PM was installed (or while one still existed).
+    // Serving it blindly would make AM-GUI believe `pmFound: true` forever and
+    // never show the "missing package manager" popup / auto-install offer.
+    const { pm } = await detectPackageManager();
     const cached = readAppsCache();
-    if (cached) {
+    const cacheTrusted = cached && pm && cached.data && cached.data.pmName === pm;
+    if (cacheTrusted) {
       // Always refresh in background on first call (cache serves instantly)
       if (!bgRefreshRunning) {
         bgRefreshRunning = true;
@@ -277,7 +287,8 @@ function registerAppListHandlers(ipcMain, deps) {
       }
       return cached.data;
     }
-    // No cache: fetch fresh
+    // Untrusted cache (no PM, or PM changed): drop it and fetch fresh.
+    if (cached) clearAppsCache();
     const result = await fetchAppsFresh();
     if (result && result.pmFound && !result.error) writeAppsCache(result);
     return result;
