@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const Module = require('module');
 
 const MODULE_PATH = path.resolve(__dirname, '../../src/main/appList.js');
 
@@ -117,12 +118,27 @@ describe('detectBundles', () => {
 describe('list-apps-detailed cache validation', () => {
   let tmpUserData;
   let fakeIpcMain;
+  const originalRequire = Module.prototype.require;
 
   function setup(detectResult) {
     tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'amgui-applist-'));
     fakeIpcMain = {
       _handlers: {},
       handle(name, fn) { this._handlers[name] = fn; },
+    };
+    // fetchAppsFresh() shells out to `<pm> -l` / `<pm> -f`. Never run the real
+    // package manager in a unit test: stub child_process.exec so it returns
+    // immediately with empty output instead.
+    Module.prototype.require = function (id) {
+      if (id === 'child_process') {
+        return {
+          exec: (_cmd, _opts, cb) => {
+            const done = typeof _opts === 'function' ? _opts : cb;
+            if (done) done(null, '', '');
+          },
+        };
+      }
+      return originalRequire.apply(this, arguments);
     };
     const { registerAppListHandlers } = require(MODULE_PATH);
     registerAppListHandlers(fakeIpcMain, {
@@ -142,6 +158,7 @@ describe('list-apps-detailed cache validation', () => {
   }
 
   afterEach(() => {
+    Module.prototype.require = originalRequire;
     if (tmpUserData) { try { fs.rmSync(tmpUserData, { recursive: true, force: true }); } catch (_) {} }
   });
 

@@ -14,10 +14,11 @@ let installAppManAutoFn;
 const fakePty = {
   spawn() {
     const child = {
+      written: [],
       onData(cb) { child._onData = cb; },
       onExit(cb) { child._onExit = cb; },
       kill() {},
-      write() {},
+      write(d) { child.written.push(d); },
       on() {},
     };
     return child;
@@ -140,5 +141,92 @@ describe('install-send-choice handler', () => {
     const result = await handlers['install-send-choice'](null, null, '1');
     assert.strictEqual(result.ok, false);
     assert.ok(result.error);
+  });
+
+  it('should return error when id is unknown', async () => {
+    const result = await handlers['install-send-choice'](null, 'nope', '1');
+    assert.strictEqual(result.ok, false);
+    assert.ok(result.error);
+  });
+
+  // Free-form prompts: an empty string means "just press Enter", which is a
+  // valid answer (e.g. accept the default local install path). It must be
+  // forwarded as a bare newline, not rejected.
+  it('accepts an empty string as a valid answer (pressed Enter)', async () => {
+    detectPmResult = { pm: 'am' };
+    const started = await handlers['install-start'](makeEvent(), 'firefox');
+    const child = activeInstalls.get(started.id);
+
+    const result = await handlers['install-send-choice'](null, started.id, '');
+
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(child.written, ['\n']);
+    if (child._onExit) child._onExit({ exitCode: 0 });
+  });
+
+  it('writes a typed free-form answer followed by a newline', async () => {
+    detectPmResult = { pm: 'am' };
+    const started = await handlers['install-start'](makeEvent(), 'firefox');
+    const child = activeInstalls.get(started.id);
+
+    const result = await handlers['install-send-choice'](null, started.id, '/home/user/Apps');
+
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(child.written, ['/home/user/Apps\n']);
+    if (child._onExit) child._onExit({ exitCode: 0 });
+  });
+
+  it('rejects a non-string, non-number choice', async () => {
+    detectPmResult = { pm: 'am' };
+    const started = await handlers['install-start'](makeEvent(), 'firefox');
+    const child = activeInstalls.get(started.id);
+
+    const result = await handlers['install-send-choice'](null, started.id, null);
+
+    assert.strictEqual(result.ok, false);
+    assert.ok(result.error);
+    assert.deepStrictEqual(child.written, []);
+    if (child._onExit) child._onExit({ exitCode: 0 });
+  });
+});
+
+describe('free-form prompt detection', () => {
+  // A free-form prompt (e.g. "where do you want to install the apps?") has no
+  // numbered options. When AM goes quiet, AM-GUI must surface the WHOLE block,
+  // not just the last line, so the user keeps the context.
+  it('forwards the whole block, not only the last line', async () => {
+    detectPmResult = { pm: 'am' };
+    const sent = [];
+    // install-progress is sent as wc.send(channel, payload), so collect arg 2.
+    const started = await handlers['install-start'](makeEvent((_channel, msg) => sent.push(msg)), 'mpv');
+    const child = activeInstalls.get(started.id);
+
+    let prompt;
+    try {
+      const block = [
+        '----------------------------',
+        '>>> Configure AppMan',
+        '----------------------------',
+        ' Where do you want to install the apps?',
+        '',
+        ' Write the path or just press Enter to use the default:',
+        '----------------------------',
+      ].join('\r\n');
+      child._onData(block);
+
+      // The silence watchdog waits ~2.5s before firing.
+      await new Promise((r) => setTimeout(r, 2700));
+      prompt = sent.find((m) => m.kind === 'choice-prompt');
+    } finally {
+      // Always exit the child: it clears the 10-minute kill timer that would
+      // otherwise keep the test process alive.
+      if (child._onExit) child._onExit({ exitCode: 0 });
+    }
+
+    assert.ok(prompt, 'a choice-prompt should have been sent');
+    assert.strictEqual(prompt.freeform, true);
+    assert.deepStrictEqual(prompt.options, []);
+    assert.match(prompt.prompt, /Configure AppMan/);
+    assert.match(prompt.prompt, /just press Enter to use the default:/);
   });
 });
