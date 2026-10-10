@@ -1,6 +1,9 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const Module = require('module');
 
 const MODULE_PATH = path.resolve(__dirname, '../../src/main/appList.js');
 
@@ -109,5 +112,77 @@ describe('detectBundles', () => {
     const catalogDesc = new Map([['libreoffice-writer', 'installs the full "libreoffice" suite']]);
     const result = detectBundles(catalogDesc);
     assert.deepStrictEqual(result, { 'libreoffice-writer': 'libreoffice' });
+  });
+});
+
+describe('list-apps-detailed cache validation', () => {
+  let tmpUserData;
+  let fakeIpcMain;
+  const originalRequire = Module.prototype.require;
+
+  function setup(detectResult) {
+    tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'amgui-applist-'));
+    fakeIpcMain = {
+      _handlers: {},
+      handle(name, fn) { this._handlers[name] = fn; },
+    };
+    // fetchAppsFresh() shells out to `<pm> -l` / `<pm> -f`. Never run the real
+    // package manager in a unit test: stub child_process.exec so it returns
+    // immediately with empty output instead.
+    Module.prototype.require = function (id) {
+      if (id === 'child_process') {
+        return {
+          exec: (_cmd, _opts, cb) => {
+            const done = typeof _opts === 'function' ? _opts : cb;
+            if (done) done(null, '', '');
+          },
+        };
+      }
+      return originalRequire.apply(this, arguments);
+    };
+    const { registerAppListHandlers } = require(MODULE_PATH);
+    registerAppListHandlers(fakeIpcMain, {
+      tErr: (_, msg) => msg,
+      detectPackageManager: async () => detectResult,
+      invalidatePackageManagerCache: () => {},
+      userDataPath: tmpUserData,
+    });
+    return fakeIpcMain._handlers['list-apps-detailed'];
+  }
+
+  function writeCache(data) {
+    fs.writeFileSync(
+      path.join(tmpUserData, 'apps-cache.json'),
+      JSON.stringify({ timestamp: Date.now(), data })
+    );
+  }
+
+  afterEach(() => {
+    Module.prototype.require = originalRequire;
+    if (tmpUserData) { try { fs.rmSync(tmpUserData, { recursive: true, force: true }); } catch (_) {} }
+  });
+
+  // Regression: a cache written while AppMan was installed must not be served
+  // once no package manager is detected, otherwise AM-GUI reports pmFound:true
+  // forever and never offers the auto-install popup.
+  it('ignores and deletes a stale cache when no PM is detected', async () => {
+    const handler = setup({ pm: null, bothFound: false });
+    writeCache({ installed: [], all: [{ name: 'firefox' }], pmFound: true, pmName: 'appman', bundleChildOf: {} });
+
+    const result = await handler({ sender: { send() {} } });
+
+    assert.strictEqual(result.pmFound, false);
+    assert.strictEqual(fs.existsSync(path.join(tmpUserData, 'apps-cache.json')), false);
+  });
+
+  it('discards a cache whose PM no longer matches the detected one', async () => {
+    const handler = setup({ pm: 'am', bothFound: false });
+    writeCache({ installed: [], all: [{ name: 'firefox' }], pmFound: true, pmName: 'appman', bundleChildOf: {} });
+
+    const result = await handler({ sender: { send() {} } });
+
+    // The poisoned cache must not have been served as-is.
+    assert.notStrictEqual(result.pmName, 'appman');
+    assert.deepStrictEqual(result.all, []);
   });
 });

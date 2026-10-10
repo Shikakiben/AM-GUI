@@ -335,13 +335,26 @@ body.view-cards .app-tile-skeleton {
 }
 .choice-dialog-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 .choice-dialog-head h3 {
   margin: 0;
   font-size: 18px;
+}
+/* AM prompts can be multi-line blocks (context + question). Show them verbatim,
+   keeping the line breaks and wrapping long lines instead of overflowing. */
+.choice-dialog-prompt {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+  max-height: 45vh;
+  overflow-y: auto;
+  flex: 1;
 }
 .choice-dialog-close {
   border: none;
@@ -392,6 +405,29 @@ body.view-cards .app-tile-skeleton {
 .multi-choice-item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+.choice-dialog-freeform {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 280px;
+}
+.choice-dialog-input {
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-contrast, var(--card));
+  color: var(--fg);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+}
+.choice-dialog-input:focus {
+  border-color: var(--primary);
+}
+.choice-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 :root {
   --bg: #f6f8fa;

@@ -39,6 +39,38 @@ function registerInstallHandlers(ipcMain, deps) {
     send({ kind: 'start', name });
     const killTimer = setTimeout(() => { try { child.kill('SIGTERM'); } catch (_) {} }, 10 * 60 * 1000);
 
+    // Free-form prompt detection. AM prints a whole block ("Where do you want to
+    // install the apps? ... Write the path:") and then waits for stdin. We
+    // cannot match translated text, so we use the shape instead: when AM stops
+    // printing for a while and the last line ends with ':' or '?', it is waiting
+    // for an answer. The whole block is forwarded verbatim, so it stays in the
+    // user's language, keeps its context, and AM-GUI never has to understand it.
+    let promptBuffer = [];
+    let lastFiredPrompt = null;
+    let silentTimer = null;
+    const SILENCE_MS = 2500;
+    const MAX_PROMPT_LINES = 40;
+
+    function armSilenceWatch() {
+      if (silentTimer) clearTimeout(silentTimer);
+      silentTimer = setTimeout(() => {
+        silentTimer = null;
+        // AM frames its messages with divider lines; drop those at the edges so
+        // the block shown to the user starts and ends on real text.
+        const lines = promptBuffer.slice();
+        while (lines.length && /^[-=]{10,}$/.test(lines[0])) lines.shift();
+        while (lines.length && /^[-=]{10,}$/.test(lines[lines.length - 1])) lines.pop();
+        if (!lines.length) return;
+        const last = lines[lines.length - 1];
+        if (!/[:?]$/.test(last) || /\?\d+$/.test(last)) return;
+        const block = lines.join('\n').trim();
+        if (!block || block === lastFiredPrompt) return;
+        lastFiredPrompt = block;
+        promptBuffer = [];
+        send({ kind: 'choice-prompt', options: [], prompt: block, freeform: true });
+      }, SILENCE_MS);
+    }
+
     function flushLines(chunk, isErr) {
       const txt = chunk.toString();
       output += txt;
@@ -57,6 +89,10 @@ function registerInstallHandlers(ipcMain, deps) {
         else stdoutRemainder = lines.pop();
         for (let idx = 0; idx < lines.length; idx++) {
           const line = lines[idx].trim();
+          if (line) {
+            promptBuffer.push(line);
+            if (promptBuffer.length > MAX_PROMPT_LINES) promptBuffer.shift();
+          }
           if (!line) continue;
           if ((/[:?]\s*$/.test(line)) && !/\?\d+$/.test(line)) {
             let hasNumberedOption = false;
@@ -66,6 +102,8 @@ function registerInstallHandlers(ipcMain, deps) {
               if (/^\s*\d+[\.|\)]/.test(pl)) { hasNumberedOption = true; break; }
               break;
             }
+            // No numbered options below: not a menu. Leave it to the silence
+            // watchdog so we never pop a dialog while AM is still printing.
             if (!hasNumberedOption) continue;
             const options = [];
             for (let j = idx + 1; j < lines.length; j++) {
@@ -90,18 +128,25 @@ function registerInstallHandlers(ipcMain, deps) {
               const nb = parseInt(b.match(/\d+/)?.[0] || '0', 10);
               return na - nb;
             });
-            send({ kind: 'choice-prompt', options, prompt: line });
+            if (options.length) {
+              const block = promptBuffer.join('\n').trim() || line;
+              lastFiredPrompt = block;
+              promptBuffer = [];
+              send({ kind: 'choice-prompt', options, prompt: block });
+            }
           }
         }
       } else {
         if (isErr) stderrRemainder = lines[0];
         else stdoutRemainder = lines[0];
       }
+      armSilenceWatch();
     }
 
     child.onData((d) => flushLines(d, false));
     child.onExit((evt) => {
       clearTimeout(killTimer);
+      if (silentTimer) { clearTimeout(silentTimer); silentTimer = null; }
       if (stdoutRemainder && stdoutRemainder.trim()) send({ kind: 'line', line: stdoutRemainder.trim(), stream: 'stdout' });
       if (stderrRemainder && stderrRemainder.trim()) send({ kind: 'line', line: stderrRemainder.trim(), stream: 'stderr' });
       if (activeInstalls.has(id)) activeInstalls.delete(id);
@@ -112,6 +157,7 @@ function registerInstallHandlers(ipcMain, deps) {
     });
     child.on?.('error', (err) => {
       clearTimeout(killTimer);
+      if (silentTimer) { clearTimeout(silentTimer); silentTimer = null; }
       invalidatePackageManagerCache();
       try { activeInstalls.delete(id); } catch (_) {}
       send({ kind: 'error', message: err?.message || tErr('errProcessError', 'Process error') });
@@ -139,9 +185,11 @@ function registerInstallHandlers(ipcMain, deps) {
     const normalizedChoice = (() => {
       if (typeof choice === 'number' && Number.isFinite(choice)) return String(choice);
       if (typeof choice === 'string') return choice.trim();
-      return '';
+      return null;
     })();
-    if (!normalizedChoice) return { ok: false, error: tErr('errInvalidChoice', 'Invalid choice') };
+    // null only when the value is not usable at all; an empty string is a valid
+    // answer for free-form prompts (it means "just press Enter").
+    if (normalizedChoice === null) return { ok: false, error: tErr('errInvalidChoice', 'Invalid choice') };
     try {
       child.write(normalizedChoice + '\n');
       return { ok: true };

@@ -1812,7 +1812,17 @@ window.addEventListener('keydown', (e) => {
       dlg.style.padding = '24px 32px';
       dlg.style.minWidth = '320px';
       let optionsHtml;
-      if (data.options.length > 8) {
+      const isFreeform = !data.options || data.options.length === 0;
+      if (isFreeform) {
+        // Free-form prompt (e.g. AM asking for the local install path). Show a
+        // text field; leaving it empty just presses Enter.
+        optionsHtml = `<div class="choice-dialog-freeform">
+          <input type="text" class="choice-dialog-input" autocomplete="off" spellcheck="false">
+          <div class="choice-dialog-actions">
+            <button type="button" class="multi-choice-item" data-choice="__freeform__">${t('confirm.ok') || 'OK'}</button>
+          </div>
+        </div>`;
+      } else if (data.options.length > 8) {
         // Display as 2-column table
         const colCount = 2;
         const rowCount = Math.ceil(data.options.length / colCount);
@@ -1839,11 +1849,15 @@ window.addEventListener('keydown', (e) => {
       dlg.innerHTML = `
         <div class="choice-dialog-inner">
           <div class="choice-dialog-head">
-            <h3>${cleanPrompt}</h3>
+            <h3 class="choice-dialog-prompt"></h3>
             <button type="button" class="choice-dialog-close" aria-label="${cancelLabel}">✕</button>
           </div>
           <div class="choice-dialog-body">${optionsHtml}</div>
         </div>`;
+      // Set the prompt as text (never HTML) and keep AM's own line breaks:
+      // the block is shown verbatim, in whatever language AM printed it in.
+      const promptEl = dlg.querySelector('.choice-dialog-prompt');
+      if (promptEl) promptEl.textContent = cleanPrompt;
       document.body.appendChild(dlg);
       const closeBtn = dlg.querySelector('.choice-dialog-close');
       if (closeBtn) {
@@ -1853,7 +1867,11 @@ window.addEventListener('keydown', (e) => {
       }
       dlg.querySelectorAll('button[data-choice]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const choice = btn.getAttribute('data-choice');
+          let choice = btn.getAttribute('data-choice');
+          if (choice === '__freeform__') {
+            const input = dlg.querySelector('.choice-dialog-input');
+            choice = input ? input.value : '';
+          }
           // Close the dialog immediately
           dlg.remove();
           // Envoi du choix au backend
@@ -1869,6 +1887,17 @@ window.addEventListener('keydown', (e) => {
           }
         });
       });
+      const freeformInput = dlg.querySelector('.choice-dialog-input');
+      if (freeformInput) {
+        freeformInput.focus();
+        freeformInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const okBtn = dlg.querySelector('button[data-choice="__freeform__"]');
+            if (okBtn) okBtn.click();
+          }
+        });
+      }
     }
     // Close the prompt if the install is finished or cancelled
     if (data.kind === 'done' || data.kind === 'cancelled' || data.kind === 'error') {
