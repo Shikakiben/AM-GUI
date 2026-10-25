@@ -224,6 +224,7 @@ function buildTile(item){
       actionsHTML = `<div class="actions"><button class="inline-action install" data-action="${actionAttr}" data-app="${name}"${disabledAttr}>${btnLabel}</button></div>`;
     } else {
       actionsHTML = `<div class="actions">`;
+      actionsHTML += `<button class="inline-action launch" data-action="launch" data-app="${name}">${t('details.launch')}</button>`;
       actionsHTML += `<button class="inline-action uninstall" data-action="uninstall" data-app="${name}">${t('details.uninstall')}</button>`;
       actionsHTML += `</div>`;
     }
@@ -1754,6 +1755,22 @@ appsDiv?.addEventListener('click', (e) => {
         }).catch(() => {
           actionBtn.classList.remove('loading');
         });
+      });
+    } else if (action === 'launch') {
+      actionBtn.disabled = true;
+      actionBtn.classList.add('loading');
+      window.electronAPI.launchApp(appName).then((result) => {
+        if (result && result.ok) {
+          showToast(t('toast.launched', { name: appName }));
+        } else {
+          const reason = (result && result.error) || t('error.unknown');
+          showToast(t('toast.launchFailed', { name: appName, reason }));
+        }
+      }).catch((error) => {
+        showToast(t('toast.launchFailed', { name: appName, reason: error?.message || t('error.unknown') }));
+      }).finally(() => {
+        actionBtn.classList.remove('loading');
+        actionBtn.disabled = false;
       });
     } else if (action === 'cancel-install') {
       cancelActiveInstall(appName);

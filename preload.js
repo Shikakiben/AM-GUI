@@ -11,6 +11,7 @@ let systemLocale = null;
 contextBridge.exposeInMainWorld('electronAPI', {
   listAppsDetailed: () => ipcRenderer.invoke('list-apps-detailed'),
   uninstallApp: (name) => ipcRenderer.invoke('uninstall-app', name),
+  launchApp: (name) => ipcRenderer.invoke('launch-app', name),
   depInstall: (name) => ipcRenderer.invoke('dep-install', name),
   updatesBulk: () => ipcRenderer.invoke('updates-bulk'),
   windowControl: (action) => ipcRenderer.invoke('window-control', action),

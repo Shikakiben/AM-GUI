@@ -25,6 +25,7 @@ const { registerSandboxHandlers } = require('./src/main/sandbox');
 const { registerInstallHandlers } = require('./src/main/install');
 const { registerAppListHandlers } = require('./src/main/appList');
 const { registerUninstallHandler } = require('./src/main/uninstall');
+const { registerLaunchHandlers } = require('./src/main/launch');
 const { PLA_INSTALL_SCHEME, extractPlaInstallUrl, parsePlaInstallUrl } = require('./src/main/plaInstall');
 const { createProxySupport } = require('./src/main/proxy');
 
@@ -277,6 +278,7 @@ registerSandboxHandlers(ipcMain, deps);
 registerInstallHandlers(ipcMain, deps);
 registerAppListHandlers(ipcMain, deps);
 registerUninstallHandler(ipcMain, deps);
+registerLaunchHandlers(ipcMain, { tErr });
 
 // Apps cache (speeds up cold start)
 ipcMain.handle('invalidate-apps-cache', async () => {

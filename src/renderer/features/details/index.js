@@ -82,6 +82,7 @@
     const detailsName = elements.detailsName || document.getElementById('detailsName');
     const detailsLong = elements.detailsLong || document.getElementById('detailsLong');
     const detailsInstallBtn = elements.detailsInstallBtn || document.getElementById('detailsInstallBtn');
+    const detailsLaunchBtn = elements.detailsLaunchBtn || document.getElementById('detailsLaunchBtn');
     const detailsUninstallBtn = elements.detailsUninstallBtn || document.getElementById('detailsUninstallBtn');
     const installStream = elements.installStream || document.getElementById('installStream');
     const installStreamElapsed = elements.installStreamElapsed || document.getElementById('installStreamElapsed');
@@ -283,6 +284,16 @@
         refreshAllInstallButtons();
       }
 
+      // Launch button: an installed app can be started straight from here.
+      if (detailsLaunchBtn) {
+        detailsLaunchBtn.hidden = !isInstalledInScope;
+        detailsLaunchBtn.disabled = false;
+        detailsLaunchBtn.classList.remove('loading');
+        detailsLaunchBtn.textContent = t('details.launch');
+        detailsLaunchBtn.setAttribute('aria-label', t('details.launchAria', { name: label }));
+        detailsLaunchBtn.dataset.name = app.name;
+      }
+
       updateScopeButtonUI();
 
       if (installStream) {
@@ -416,6 +427,27 @@
         detailsInstallBtn.disabled = false;
         detailsInstallBtn.setAttribute('aria-label', t('install.cancel') || `Annuler installation en cours (${name})`);
         enqueueInstall(name, scope);
+      });
+
+      detailsLaunchBtn?.addEventListener('click', async () => {
+        const name = detailsLaunchBtn.dataset.name;
+        if (!name) return;
+        detailsLaunchBtn.classList.add('loading');
+        detailsLaunchBtn.disabled = true;
+        try {
+          const result = await window.electronAPI.launchApp(name);
+          if (result && result.ok) {
+            showToast(t('toast.launched', { name }));
+          } else {
+            const reason = (result && result.error) || t('error.unknown');
+            showToast(t('toast.launchFailed', { name, reason }));
+          }
+        } catch (error) {
+          showToast(t('toast.launchFailed', { name, reason: error?.message || t('error.unknown') }));
+        } finally {
+          detailsLaunchBtn.classList.remove('loading');
+          detailsLaunchBtn.disabled = false;
+        }
       });
 
       detailsUninstallBtn?.addEventListener('click', async () => {
