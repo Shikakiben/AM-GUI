@@ -12,9 +12,10 @@ const appPreferences = window.preferences || {};
 const AM_INSTALLER_COMMAND = 'wget -q https://raw.githubusercontent.com/ivan-hc/AM/main/AM-INSTALLER && chmod a+x ./AM-INSTALLER && ./AM-INSTALLER && rm ./AM-INSTALLER';
 const PM_DOCS_URL = 'https://github.com/ivan-hc/AM#installation';
 // The launcher returns in ~14 ms; without a floor the spinner would flash and
-// the user could think nothing happened. Exposed on window because
+// the user could think nothing happened. 4.5 s covers apps that take a while to
+// appear, so a second click is never tempting. Exposed on window because
 // features/details/index.js runs in its own scope.
-const LAUNCH_SPINNER_MIN_MS = 700;
+const LAUNCH_SPINNER_MIN_MS = 4500;
 try { window.LAUNCH_SPINNER_MIN_MS = LAUNCH_SPINNER_MIN_MS; } catch (_) {}
 
 const safe = (fn, fallback) => typeof fn === 'function' ? fn : fallback;
