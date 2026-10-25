@@ -25,16 +25,26 @@ function fakeIpc() {
   return { handlers, handle: (channel, fn) => handlers.set(channel, fn) };
 }
 
-// Fake exec that records calls and answers per command name.
-function fakeExec(answers) {
+// Fake spawn that records calls and answers per command name. The launcher uses
+// spawn + 'exit' because a GUI app keeps execFile's pipes open forever.
+function fakeSpawn(answers) {
   const calls = [];
-  const exec = (command, args, _opts, callback) => {
+  const { EventEmitter } = require('events');
+  const spawn = (command, args) => {
     calls.push([command, ...args]);
+    const child = new EventEmitter();
+    child.kill = () => {};
+    child.unref = () => {};
     const answer = answers[command];
-    if (answer === 'ok') return callback(null, '', '');
-    return callback(Object.assign(new Error('failed'), { code: answer || 'ENOENT' }), '', '');
+    // Emit on the next tick, but let the caller attach its listeners first.
+    process.nextTick(() => {
+      if (answer === 'ok') child.emit('exit', 0, null);
+      else if (answer === 'ENOENT') child.emit('error', Object.assign(new Error('spawn failed'), { code: 'ENOENT' }));
+      else child.emit('exit', 1, null);
+    });
+    return child;
   };
-  return { exec, calls };
+  return { spawn, calls };
 }
 
 describe('launcher discovery', () => {
@@ -123,9 +133,9 @@ describe('launch handler', () => {
 
   it('launches through gio when available', async () => {
     const ipc = fakeIpc();
-    const { exec, calls } = fakeExec({ gio: 'ok' });
+    const { spawn, calls } = fakeSpawn({ gio: 'ok' });
     const present = new Set(['/home/u/.local/share/applications/beaver-notes-AM.desktop']);
-    registerLaunchHandlers(ipc, { tErr, exec, env: TEST_ENV, logger: { warn() {} } });
+    registerLaunchHandlers(ipc, { tErr, spawn, env: TEST_ENV, logger: { warn() {} } });
     // point the discovery at our fake filesystem
     const realExists = fs.existsSync;
     fs.existsSync = (p) => present.has(p) || false;
@@ -141,9 +151,9 @@ describe('launch handler', () => {
 
   it('falls back to gtk-launch when gio is missing', async () => {
     const ipc = fakeIpc();
-    const { exec, calls } = fakeExec({ gio: 'ENOENT', 'gtk-launch': 'ok' });
+    const { spawn, calls } = fakeSpawn({ gio: 'ENOENT', 'gtk-launch': 'ok' });
     const present = new Set(['/home/u/.local/share/applications/beaver-notes-AM.desktop']);
-    registerLaunchHandlers(ipc, { tErr, exec, env: TEST_ENV, logger: { warn() {} } });
+    registerLaunchHandlers(ipc, { tErr, spawn, env: TEST_ENV, logger: { warn() {} } });
     const realExists = fs.existsSync;
     fs.existsSync = (p) => present.has(p) || false;
     try {
@@ -157,11 +167,11 @@ describe('launch handler', () => {
 
   it('falls back to the Exec command as a last resort', async () => {
     const ipc = fakeIpc();
-    const { exec, calls } = fakeExec({ gio: 'ENOENT', 'gtk-launch': 'ENOENT', '/usr/bin/myapp': 'ok' });
+    const { spawn, calls } = fakeSpawn({ gio: 'ENOENT', 'gtk-launch': 'ENOENT', '/usr/bin/myapp': 'ok' });
     const present = new Set(['/home/u/.local/share/applications/myapp-AM.desktop']);
     registerLaunchHandlers(ipc, {
       tErr,
-      exec,
+      spawn,
       env: TEST_ENV,
       logger: { warn() {} },
       readFile: () => '[Desktop Entry]\nExec=/usr/bin/myapp --flag\n'
@@ -179,9 +189,9 @@ describe('launch handler', () => {
 
   it('reports a clear failure when every method fails', async () => {
     const ipc = fakeIpc();
-    const { exec } = fakeExec({ gio: 'ENOENT', 'gtk-launch': 'ENOENT' });
+    const { spawn } = fakeSpawn({ gio: 'ENOENT', 'gtk-launch': 'ENOENT' });
     const present = new Set(['/home/u/.local/share/applications/myapp-AM.desktop']);
-    registerLaunchHandlers(ipc, { tErr, exec, env: TEST_ENV, logger: { warn() {} }, readFile: () => '[Desktop Entry]\nExec=/usr/bin/myapp\n' });
+    registerLaunchHandlers(ipc, { tErr, spawn, env: TEST_ENV, logger: { warn() {} }, readFile: () => '[Desktop Entry]\nExec=/usr/bin/myapp\n' });
     const realExists = fs.existsSync;
     fs.existsSync = (p) => present.has(p) || false;
     try {

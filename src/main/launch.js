@@ -15,7 +15,7 @@
 //
 // A GUI app started from a sandboxed/AppImage context can fail silently, so the
 // launcher reports what it actually ran and why it failed.
-const { execFile } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -93,20 +93,38 @@ function launcherCommandName(desktopPath) {
 }
 
 function run(command, args, options = {}) {
-  const exec = options.exec || execFile;
+  // spawn + 'exit' rather than execFile: a GUI app started through gio/gtk-launch
+  // inherits the pipes and keeps them open for its whole lifetime, so execFile's
+  // callback never fires (verified: gio returns in 12 ms, execFile waited forever).
+  // The 'exit' event fires when the launcher itself exits, which is what matters.
+  const spawnFn = options.spawn || spawn;
   return new Promise((resolve) => {
+    let child;
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
     try {
-      exec(command, args, { timeout: 15000 }, (error, stdout, stderr) => {
-        resolve({
-          ok: !error,
-          error: error ? (error.code || error.message || String(error)) : null,
-          stdout: stdout || '',
-          stderr: stderr || ''
-        });
-      });
+      child = spawnFn(command, args, { stdio: 'ignore', detached: true });
     } catch (error) {
-      resolve({ ok: false, error: error?.message || String(error), stdout: '', stderr: '' });
+      return finish({ ok: false, error: error?.message || String(error), stdout: '', stderr: '' });
     }
+    const timer = setTimeout(() => {
+      try { child.kill(); } catch (_) {}
+      finish({ ok: false, error: 'ETIMEDOUT', stdout: '', stderr: '' });
+    }, 15000);
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      finish({ ok: false, error: error?.code || error?.message || String(error), stdout: '', stderr: '' });
+    });
+    child.on('exit', (code, signal) => {
+      clearTimeout(timer);
+      try { child.unref(); } catch (_) {}
+      if (code === 0) return finish({ ok: true, error: null, stdout: '', stderr: '' });
+      finish({ ok: false, error: signal || `exit ${code}`, stdout: '', stderr: '' });
+    });
   });
 }
 
@@ -128,18 +146,18 @@ function registerLaunchHandlers(ipcMain, deps = {}) {
     }
 
     // 1. gio launch: the freedesktop entry point.
-    const gio = await run('gio', ['launch', desktopFile], { exec: deps.exec });
+    const gio = await run('gio', ['launch', desktopFile], { spawn: deps.spawn });
     if (gio.ok) return { ok: true, via: 'gio', desktopFile };
 
     // 2. gtk-launch: same thing, GTK-only helper.
-    const gtk = await run('gtk-launch', [launcherCommandName(desktopFile)], { exec: deps.exec });
+    const gtk = await run('gtk-launch', [launcherCommandName(desktopFile)], { spawn: deps.spawn });
     if (gtk.ok) return { ok: true, via: 'gtk-launch', desktopFile };
 
     // 3. The Exec= command itself, as a last resort.
     const execLine = readExecLine(desktopFile, { readFile: deps.readFile });
     if (execLine) {
       const [command, ...args] = execLine.split(' ').filter(Boolean);
-      const direct = await run(command, args, { exec: deps.exec });
+      const direct = await run(command, args, { spawn: deps.spawn });
       if (direct.ok) return { ok: true, via: 'exec', desktopFile };
     }
 

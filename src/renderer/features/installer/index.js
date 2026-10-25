@@ -138,8 +138,12 @@
     }
 
     function refreshListInstallButtons() {
+      // Only the install/uninstall/cancel buttons are driven by the install
+      // state; the Launch button (issue #97) must never be hidden here.
       const buttons = document.querySelectorAll('.app-tile .actions .inline-action');
       buttons.forEach(btn => {
+        const action = btn.getAttribute('data-action');
+        if (action === 'launch') return;
         const name = btn.getAttribute('data-app');
         if (!name) return;
         var st = getInstallButtonState(name);

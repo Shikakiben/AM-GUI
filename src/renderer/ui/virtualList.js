@@ -150,7 +150,9 @@
             actionsHTML = ''; // hide primary Installer button in list view
           }
         } else {
-          actionsHTML = ''; // hide Uninstall in list view as well
+          // Installed app in list view: offer to launch it (issue #97).
+          // Uninstall stays out of the list to keep the row readable.
+          actionsHTML = `<div class="actions"><button class="inline-action launch" data-action="launch" data-app="${name}">${t('details.launch')}</button></div>`;
         }
       }
 
