@@ -29,6 +29,11 @@ function createPromptDetector({ onPrompt, silenceMs = SILENCE_MS, maxLines = MAX
     if (silentTimer) clearTimeout(silentTimer);
     silentTimer = setTimeout(() => {
       silentTimer = null;
+      // Fallback for a menu AM wrote line by line (a real pty does this): the
+      // per-chunk scan below only sees one line at a time, so the question never
+      // finds its options. When nothing more comes, look at the whole buffer.
+      // This runs ONLY after the silence, so the normal path is untouched.
+      if (fireMenuFromBuffer()) return;
       // AM frames its messages with divider lines; drop those at the edges so
       // the block shown to the user starts and ends on real text.
       const lines = promptBuffer.slice();
@@ -43,6 +48,74 @@ function createPromptDetector({ onPrompt, silenceMs = SILENCE_MS, maxLines = MAX
       promptBuffer = [];
       onPrompt({ options: [], prompt: block, freeform: true });
     }, silenceMs);
+  }
+
+  // Looks for a question followed by numbered options anywhere in the buffer.
+  // Same rules as the per-chunk scan, applied to everything collected so far.
+  //
+  // Deliberately narrow. The old detection fired only when the question and its
+  // options arrived in the SAME chunk, so the fallback must not fire on anything
+  // broader than what AM actually prints when it waits for input:
+  //   - at least TWO numbered options (one entry is not a choice);
+  //   - the last option must be the last meaningful line: if ordinary text
+  //     follows, AM was describing something, not waiting for an answer.
+  // Verified against the old detection on ordinary output ("Download these
+  // files:" + list, "Installed version:", error codes): all stay silent.
+  function fireMenuFromBuffer() {
+    for (let idx = 0; idx < promptBuffer.length; idx++) {
+      const line = promptBuffer[idx];
+      if (!/[:?]\s*$/.test(line) || /\?\d+$/.test(line)) continue;
+      const options = [];
+      let lastOptionIndex = -1;
+      for (let j = idx + 1; j < promptBuffer.length; j++) {
+        let l = promptBuffer[j].trim();
+        if (!l || /^[-=]+$/.test(l)) continue;
+        if (l.includes('|')) {
+          const parts = l.split('|').map(p => p.trim());
+          let found = false;
+          parts.forEach(part => { if (/^\s*\d+[\.|\)]/.test(part)) { options.push(part); found = true; } });
+          if (found) lastOptionIndex = j;
+        } else if (/^\s*\d+[\.|\)]/.test(l)) {
+          let opt = l;
+          let consumed = j;
+          // Merge a continuation line only when it cannot be a trailing sentence:
+          // a continuation is indented or ends with nothing sentence-like. In
+          // "2. b.tar.gz\nDone." the "Done." line is output, not a continuation.
+          if (j + 1 < promptBuffer.length) {
+            const next = promptBuffer[j + 1].trim();
+            const isLast = !promptBuffer.slice(j + 2).some((x) => x.trim() && !/^[-=]+$/.test(x.trim()));
+            const looksLikeContinuation = next && !/^\s*\d+[\.|\)]/.test(next) && !/^[-=]+$/.test(next)
+              && /[.!?]$/.test(next) === false;
+            if (next && isLast && looksLikeContinuation) {
+              opt += ' ' + next;
+              consumed = j + 1;
+            }
+          }
+          options.push(opt);
+          lastOptionIndex = consumed;
+          j = consumed;
+        }
+      }
+      // A real menu offers a choice: one option is not a menu.
+      if (options.length < 2) continue;
+      // Anything meaningful after the last option means this was prose, not a
+      // prompt (e.g. a numbered list followed by "Done.").
+      let trailing = false;
+      for (let k = lastOptionIndex + 1; k < promptBuffer.length; k++) {
+        const t = promptBuffer[k].trim();
+        if (t && !/^[-=]+$/.test(t)) { trailing = true; break; }
+      }
+      if (trailing) continue;
+      // Show the question, not the whole buffer: the dialog prints `prompt` as a
+      // title and the options as buttons, so including them would show them twice.
+      const block = line;
+      if (!block || block === lastFiredPrompt) return false;
+      lastFiredPrompt = block;
+      promptBuffer = [];
+      onPrompt({ options, prompt: block });
+      return true;
+    }
+    return false;
   }
 
   function push(chunk, isErr) {

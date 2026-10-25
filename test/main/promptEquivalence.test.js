@@ -123,12 +123,10 @@ const CASES = {
   'menu in one chunk': ['Choose which version to install:\n1. latest\n2. 1.2.3\n3. nightly\n'],
   'menu with short separators': ['Choose:\n1. a\n---\n2. b\n'],
   'menu with long separators': ['====================\nChoose:\n1. a\n2. b\n--------------------\n'],
-  'pipe table': ['Select:\n| 1. am | 2. appman |\n'],
   'free-form question': ['Where do you want to install the apps?\nWrite the path:\n'],
   'question then menu in the same chunk': ['Install where?\n1. /opt\n2. ~/Applications\n'],
   'ordinary output only': ['Installing app...\nDone.\n'],
   'option with a continuation line': ['Choose:\n1. the first option\n   which is long\n2. second\n'],
-  'menu sent line by line': ['Choose:\n', '1. a\n', '2. b\n'],
   'empty chunk': [''],
   'crlf line endings': ['Choose:\r\n1. a\r\n2. b\r\n'],
   'partial line then rest': ['Choose:\n1. a\n2. b', 'b rest\n']
@@ -145,6 +143,41 @@ describe('shared detector matches the code that ran in install.js', () => {
       );
     });
   }
+
+  // The only case where the shared detector intentionally differs from the code
+  // that ran in install.js: a menu AM wrote line by line (what a real pty does).
+  // The old detection required the question and its options in the same chunk,
+  // so it stayed silent and the process waited forever. This is the case that
+  // blocked a reinstall, so it is fixed here and covered by its own test.
+  it('now detects a menu sent line by line (the case that used to hang)', async () => {
+    const { actual } = await compare(['Choose:\n', '1. a\n', '2. b\n']);
+    assert.strictEqual(actual.length, 1, 'the dialog must appear');
+    assert.deepStrictEqual(actual[0].options, ['1. a', '2. b']);
+  });
+
+  it('detects a bash select menu written line by line', async () => {
+    // The real shape AM prints for an app with several variants.
+    const { actual } = await compare([
+      ' Detected multiple variants, choose one or press ZERO to abort:\n',
+      '\n',
+      '1) GitHub\n',
+      '2) GitLab\n',
+      '3) SourceForge\n',
+      '#? '
+    ]);
+    assert.strictEqual(actual.length, 1, 'the variant menu must open the dialog');
+    assert.deepStrictEqual(actual[0].options, ['1) GitHub', '2) GitLab', '3) SourceForge']);
+  });
+
+  it('now detects a pipe table too (never caught before)', async () => {
+    // The option regex requires the number at the start of the line, so a row
+    // like "| 1. am | 2. appman |" was invisible to the old detection. The
+    // fallback catches it once AM stops printing.
+    const { actual } = await compare(['Select:\n| 1. am | 2. appman |\n']);
+    assert.strictEqual(actual.length, 1);
+    assert.deepStrictEqual(actual[0].options, ['1. am', '2. appman']);
+    assert.strictEqual(actual[0].prompt, 'Select:', 'the prompt must stay the question alone');
+  });
 
   it('never fires twice for the same block', async () => {
     const chunks = ['Choose:\n1. a\n2. b\n', 'Choose:\n1. a\n2. b\n'];
