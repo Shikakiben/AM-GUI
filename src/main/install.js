@@ -1,3 +1,5 @@
+const { createPromptDetector } = require('./promptDetector');
+
 function registerInstallHandlers(ipcMain, deps) {
   const { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto } = deps;
 
@@ -20,8 +22,6 @@ function registerInstallHandlers(ipcMain, deps) {
     const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     let output = '';
     const startedAt = Date.now();
-    let stdoutRemainder = '';
-    let stderrRemainder = '';
     const pty = require('node-pty');
     const env = Object.assign({}, process.env, {
       TERM: 'xterm', COLS: '80', ROWS: '30', FORCE_COLOR: '1'
@@ -41,37 +41,11 @@ function registerInstallHandlers(ipcMain, deps) {
     send({ kind: 'start', name });
     const killTimer = setTimeout(() => { try { child.kill('SIGTERM'); } catch (_) {} }, 10 * 60 * 1000);
 
-    // Free-form prompt detection. AM prints a whole block ("Where do you want to
-    // install the apps? ... Write the path:") and then waits for stdin. We
-    // cannot match translated text, so we use the shape instead: when AM stops
-    // printing for a while and the last line ends with ':' or '?', it is waiting
-    // for an answer. The whole block is forwarded verbatim, so it stays in the
-    // user's language, keeps its context, and AM-GUI never has to understand it.
-    let promptBuffer = [];
-    let lastFiredPrompt = null;
-    let silentTimer = null;
-    const SILENCE_MS = 2500;
-    const MAX_PROMPT_LINES = 40;
-
-    function armSilenceWatch() {
-      if (silentTimer) clearTimeout(silentTimer);
-      silentTimer = setTimeout(() => {
-        silentTimer = null;
-        // AM frames its messages with divider lines; drop those at the edges so
-        // the block shown to the user starts and ends on real text.
-        const lines = promptBuffer.slice();
-        while (lines.length && /^[-=]{10,}$/.test(lines[0])) lines.shift();
-        while (lines.length && /^[-=]{10,}$/.test(lines[lines.length - 1])) lines.pop();
-        if (!lines.length) return;
-        const last = lines[lines.length - 1];
-        if (!/[:?]$/.test(last) || /\?\d+$/.test(last)) return;
-        const block = lines.join('\n').trim();
-        if (!block || block === lastFiredPrompt) return;
-        lastFiredPrompt = block;
-        promptBuffer = [];
-        send({ kind: 'choice-prompt', options: [], prompt: block, freeform: true });
-      }, SILENCE_MS);
-    }
+    // Interactive prompts (numbered menus, free-form questions) are detected by
+    // the shared module, so a reinstall behaves exactly like an install.
+    const prompts = createPromptDetector({
+      onPrompt: (prompt) => send(Object.assign({ kind: 'choice-prompt' }, prompt))
+    });
 
     function flushLines(chunk, isErr) {
       const txt = chunk.toString();
@@ -84,73 +58,17 @@ function registerInstallHandlers(ipcMain, deps) {
         });
       }
       send({ kind: 'line', raw: txt, stream: isErr ? 'stderr' : 'stdout' });
-      let buffer = (isErr ? stderrRemainder : stdoutRemainder) + txt;
-      const lines = buffer.split(/\r?\n/);
-      if (lines.length > 1) {
-        if (isErr) stderrRemainder = lines.pop();
-        else stdoutRemainder = lines.pop();
-        for (let idx = 0; idx < lines.length; idx++) {
-          const line = lines[idx].trim();
-          if (line) {
-            promptBuffer.push(line);
-            if (promptBuffer.length > MAX_PROMPT_LINES) promptBuffer.shift();
-          }
-          if (!line) continue;
-          if ((/[:?]\s*$/.test(line)) && !/\?\d+$/.test(line)) {
-            let hasNumberedOption = false;
-            for (let peek = idx + 1; peek < Math.min(idx + 4, lines.length); peek++) {
-              const pl = lines[peek]?.trim();
-              if (!pl || /^[-=]+$/.test(pl)) continue;
-              if (/^\s*\d+[\.|\)]/.test(pl)) { hasNumberedOption = true; break; }
-              break;
-            }
-            // No numbered options below: not a menu. Leave it to the silence
-            // watchdog so we never pop a dialog while AM is still printing.
-            if (!hasNumberedOption) continue;
-            const options = [];
-            for (let j = idx + 1; j < lines.length; j++) {
-              let l = lines[j].trim();
-              if (!l || /^[-=]+$/.test(l)) continue;
-              if (l.includes('|')) {
-                const parts = l.split('|').map(p => p.trim());
-                parts.forEach(part => { if (/^\s*\d+[\.|\)]/.test(part)) options.push(part); });
-              } else {
-                if (/^\s*\d+[\.|\)]/.test(l)) {
-                  let opt = l;
-                  if (j + 1 < lines.length) {
-                    let next = lines[j + 1].trim();
-                    if (next && !/^\s*\d+[\.|\)]/.test(next) && !/^[-=]+$/.test(next)) { opt += ' ' + next; j++; }
-                  }
-                  options.push(opt);
-                }
-              }
-            }
-            options.sort((a, b) => {
-              const na = parseInt(a.match(/\d+/)?.[0] || '0', 10);
-              const nb = parseInt(b.match(/\d+/)?.[0] || '0', 10);
-              return na - nb;
-            });
-            if (options.length) {
-              const block = promptBuffer.join('\n').trim() || line;
-              lastFiredPrompt = block;
-              promptBuffer = [];
-              send({ kind: 'choice-prompt', options, prompt: block });
-            }
-          }
-        }
-      } else {
-        if (isErr) stderrRemainder = lines[0];
-        else stdoutRemainder = lines[0];
-      }
-      armSilenceWatch();
+      prompts.push(txt, isErr);
     }
 
     child.onData((d) => flushLines(d, false));
     child.onExit((evt) => {
       clearTimeout(killTimer);
-      if (silentTimer) { clearTimeout(silentTimer); silentTimer = null; }
-      if (stdoutRemainder && stdoutRemainder.trim()) send({ kind: 'line', line: stdoutRemainder.trim(), stream: 'stdout' });
-      if (stderrRemainder && stderrRemainder.trim()) send({ kind: 'line', line: stderrRemainder.trim(), stream: 'stderr' });
+      prompts.stop();
+      const outRemainder = prompts.remainder(false);
+      const errRemainder = prompts.remainder(true);
+      if (outRemainder && outRemainder.trim()) send({ kind: 'line', line: outRemainder.trim(), stream: 'stdout' });
+      if (errRemainder && errRemainder.trim()) send({ kind: 'line', line: errRemainder.trim(), stream: 'stderr' });
       if (activeInstalls.has(id)) activeInstalls.delete(id);
       const duration = Date.now() - startedAt;
       const code = evt.exitCode;
@@ -159,7 +77,7 @@ function registerInstallHandlers(ipcMain, deps) {
     });
     child.on?.('error', (err) => {
       clearTimeout(killTimer);
-      if (silentTimer) { clearTimeout(silentTimer); silentTimer = null; }
+      prompts.stop();
       invalidatePackageManagerCache();
       try { activeInstalls.delete(id); } catch (_) {}
       send({ kind: 'error', message: err?.message || tErr('errProcessError', 'Process error') });
