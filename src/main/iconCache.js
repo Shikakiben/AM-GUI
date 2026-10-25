@@ -2,12 +2,14 @@ const path = require('path');
 const fs = require('fs');
 const undici = require('undici');
 
-function createIconCacheManager(app) {
+function createIconCacheManager(app, options = {}) {
   if (!app || typeof app.getPath !== 'function') {
     throw new Error('Electron app instance is required to manage the icon cache.');
   }
 
-  const fetch = undici.fetch;
+  // Proxy-aware fetch: the caller passes one built from src/main/proxy.js so
+  // icons download through the proxy the machine is already configured with.
+  const fetch = typeof options.fetch === 'function' ? options.fetch : undici.fetch;
   let AbortControllerCtor = globalThis.AbortController || undici.AbortController || null;
   try { if (!AbortControllerCtor) AbortControllerCtor = require('abort-controller'); } catch (_) {}
 

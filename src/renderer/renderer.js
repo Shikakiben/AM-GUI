@@ -157,8 +157,23 @@ function renderVirtualList() {
 if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
   window.electronAPI.onPasswordPrompt(async (data) => {
     if (!window.ui || !window.ui.passwordPrompt || typeof window.ui.passwordPrompt.promptPassword !== 'function') return;
-    const password = await window.ui.passwordPrompt.promptPassword();
-    window.electronAPI.sendPassword({ id: data && data.id, password });
+    // Proxy credentials need a username too; the sudo prompt only a password.
+    const wantsUser = !!(data && data.kind === 'proxy');
+    const answer = await window.ui.passwordPrompt.promptPassword(wantsUser ? {
+      withUsername: true,
+      title: t('proxyAuth.title'),
+      desc: t('proxyAuth.desc', { host: (data && data.host) || '' }),
+      username: (data && data.username) || ''
+    } : undefined);
+    if (wantsUser) {
+      window.electronAPI.sendPassword({
+        id: data && data.id,
+        username: answer && answer.username,
+        password: answer && answer.password
+      });
+      return;
+    }
+    window.electronAPI.sendPassword({ id: data && data.id, password: answer });
   });
 }
 // ...existing code...

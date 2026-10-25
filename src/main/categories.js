@@ -55,7 +55,6 @@ async function mapWithConcurrency(limit, items, iteratorFn) {
 // en/ is used (it is also the site's fallback language).
 const SITE_BASE = 'https://portable-linux-apps.github.io';
 const CATEGORY_INDEX_URL = 'https://portable-linux-apps.github.io/en/index.html';
-const fetch = undici.fetch;
 
 function parseCategoryNames(html) {
   const names = [];
@@ -74,8 +73,10 @@ function appsFromCategoryJson(data) {
     .sort((a, b) => a.localeCompare(b));
 }
 
-function registerCategoryHandlers(ipcMain, cacheDir) {
+function registerCategoryHandlers(ipcMain, cacheDir, options = {}) {
   if (!ipcMain) throw new Error('ipcMain instance is required');
+  // Proxy-aware fetch (src/main/proxy.js); plain undici.fetch when absent.
+  const fetch = typeof options.fetch === 'function' ? options.fetch : undici.fetch;
   const categoriesCachePath = path.join(cacheDir, 'categories-cache.json');
   const categoriesMetaPath = path.join(cacheDir, 'categories-cache.meta.json');
 

@@ -5,7 +5,9 @@ function registerInstallHandlers(ipcMain, deps) {
     if (!payload || !payload.id) return;
     const waiter = passwordWaiters.get(payload.id);
     if (waiter) {
-      waiter(payload.password);
+      // Proxy credentials come back as { username, password }; the sudo prompt
+      // only carries a password string. Keep both shapes working.
+      waiter(payload.username !== undefined ? payload : payload.password);
       passwordWaiters.delete(payload.id);
     }
   });

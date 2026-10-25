@@ -6,7 +6,7 @@ if (xdgBinHome && !process.env.PATH.split(':').includes(xdgBinHome)) {
   process.env.PATH = `${process.env.PATH}:${xdgBinHome}`;
 }
 
-const { app, BrowserWindow, ipcMain, Menu, protocol, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, protocol, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -26,6 +26,7 @@ const { registerInstallHandlers } = require('./src/main/install');
 const { registerAppListHandlers } = require('./src/main/appList');
 const { registerUninstallHandler } = require('./src/main/uninstall');
 const { PLA_INSTALL_SCHEME, extractPlaInstallUrl, parsePlaInstallUrl } = require('./src/main/plaInstall');
+const { createProxySupport } = require('./src/main/proxy');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 function logGlobalError(err) {
@@ -41,6 +42,7 @@ if (app.setName) app.setName('AM-GUI');
 
 let mainWindow = null;
 let currentLocale = 'en';
+let currentProxyHost = ''; // shown in the proxy authentication window
 const activeInstalls = new Map();
 const activeUpdates = new Map();
 const passwordWaiters = new Map();
@@ -205,7 +207,46 @@ app.on('open-url', (event, url) => {
 });
 
 // Register IPC handlers
-const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto, isExternalUpdateRunning, fsp, userDataPath: app.getPath('userData') };
+// The window uses the default session, so proxy discovery can start before it
+// exists: the proxy must be in place before the page issues its first fetch.
+// The proxy password is asked for when the proxy demands it, like a browser
+// does, and is kept in memory for the session only.
+let proxyPromptSeq = 0;
+function askProxyCredentials() {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return Promise.resolve(null);
+  const id = `proxy-${++proxyPromptSeq}`;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (answer) => {
+      if (settled) return;
+      settled = true;
+      passwordWaiters.delete(id);
+      resolve(answer);
+    };
+    passwordWaiters.set(id, (payload) => {
+      if (payload && typeof payload === 'object' && payload.username) {
+        finish({ username: payload.username, password: payload.password || '' });
+      } else {
+        finish(null);
+      }
+    });
+    try {
+      win.webContents.send('password-prompt', { id, kind: 'proxy', host: currentProxyHost || '' });
+    } catch (_) {
+      finish(null);
+    }
+  });
+}
+
+const proxySupport = createProxySupport({
+  getSession: () => (typeof session !== 'undefined' ? session.defaultSession : null),
+  askCredentials: askProxyCredentials,
+  onProxyChallenge: (authInfo) => {
+    currentProxyHost = [authInfo?.host, authInfo?.port].filter(Boolean).join(':');
+  }
+});
+const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto: (opts) => installAppManAuto({ ...opts, fetch: proxySupport.fetchWithProxy }), isExternalUpdateRunning, fsp, userDataPath: app.getPath('userData') };
 registerGpuHandlers(ipcMain, app);
 registerUpdatesHandlers(ipcMain, deps);
 
@@ -244,8 +285,8 @@ ipcMain.handle('invalidate-apps-cache', async () => {
   return { ok: true };
 });
 
-const iconCacheManager = createIconCacheManager(app);
-registerCategoryHandlers(ipcMain, app.getPath('userData'));
+const iconCacheManager = createIconCacheManager(app, { fetch: proxySupport.fetchWithProxy });
+registerCategoryHandlers(ipcMain, app.getPath('userData'), { fetch: proxySupport.fetchWithProxy });
 
 ipcMain.handle('purge-icons-cache', async () => iconCacheManager.purgeCache());
 
@@ -259,9 +300,15 @@ ipcMain.handle('set-tray-locale', (_event, locale) => {
 // Sync AM/AppMan locale (opt-in from the renderer settings)
 ipcMain.handle('sync-am-locale', (_event, lang) => translatePackageManagerLocale(lang));
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   try { iconCacheManager.registerProtocol(protocol); } catch (e) { console.warn('appicon protocol failed:', e); }
   registerPlaInstallProtocol();
+  // Proxy: reuse what the machine already has, without asking the user.
+  // Done BEFORE the window loads so the page's first requests already go
+  // through the proxy: answer the proxy's authentication challenge in the
+  // renderer, and push http_proxy/https_proxy to Chromium when it has nothing.
+  try { proxySupport.installLoginHandler(app); } catch (e) { console.warn('proxy login handler failed:', e); }
+  try { await proxySupport.configureFromEnvironment(); } catch (e) { console.warn('proxy setup failed:', e); }
   const win = createWindow();
   // Deliver a pending pla-install:// request once the page has finished loading
   win.webContents.on('did-finish-load', () => {

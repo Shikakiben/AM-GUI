@@ -2,12 +2,13 @@ const { tErr } = require('../i18n/translations');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { fetch } = require('undici');
+const { fetch: undiciFetch } = require('undici');
 
 const APPMAN_URL = 'https://raw.githubusercontent.com/ivan-hc/AM/main/APP-MANAGER';
 const USER_AGENT = 'AM-GUI';
 
-async function installAppManAuto() {
+async function installAppManAuto(options = {}) {
+  const fetch = typeof options.fetch === 'function' ? options.fetch : undiciFetch;
   const home = os.homedir();
   const bindir = process.env.XDG_BIN_HOME || path.join(home, '.local', 'bin');
   fs.mkdirSync(bindir, { recursive: true });
