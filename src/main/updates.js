@@ -1,4 +1,5 @@
 const { exec } = require('child_process');
+const { createPromptDetector } = require('./promptDetector');
 
 async function isExternalUpdateRunning(pm) {
   return new Promise((resolve) => {
@@ -158,6 +159,14 @@ function registerUpdatesHandlers(ipcMain, deps) {
       catch (_) { }
     };
     send({ kind: 'start' });
+    // A reinstall runs the same AM script as an install, so it can stop on a
+    // numbered menu or a free-form question. Without this, the process waited
+    // forever and some apps never reinstalled.
+    const prompts = createPromptDetector({
+      onPrompt: (prompt) => {
+        send(Object.assign({ kind: 'choice-prompt' }, prompt));
+      }
+    });
     passwordWaiters.set('reinstall-' + id, (password) => {
       if (typeof password === 'string') {
         try { child.write(password + '\n'); } catch (_) { }
@@ -168,12 +177,14 @@ function registerUpdatesHandlers(ipcMain, deps) {
     child.onData((txt) => {
       output += txt;
       send({ kind: 'data', chunk: txt });
+      try { prompts.push(txt); } catch (_) { }
       if (/\[sudo\]|mot de passe.*:|password.*:/i.test(txt)) {
         try { wc.send('password-prompt', { id: 'reinstall-' + id }); }
         catch (_) { }
       }
     });
     const cleanup = () => {
+      try { prompts.stop(); } catch (_) { }
       activeUpdates.delete('reinstall-' + id);
       passwordWaiters.delete('reinstall-' + id);
     };

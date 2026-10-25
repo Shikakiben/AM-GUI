@@ -1,5 +1,5 @@
 function registerInstallHandlers(ipcMain, deps) {
-  const { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, installAppManAuto } = deps;
+  const { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto } = deps;
 
   ipcMain.on('password-response', (event, payload) => {
     if (!payload || !payload.id) return;
@@ -182,7 +182,9 @@ function registerInstallHandlers(ipcMain, deps) {
 
   ipcMain.handle('install-send-choice', async (_event, installId, choice) => {
     if (!installId) return { ok: false, error: tErr('errMissingId', 'Missing ID') };
-    const child = activeInstalls.get(installId);
+    // Reinstalls run through the updates handler and live in activeUpdates under
+    // the "reinstall-" prefix, so an answer must find them there too.
+    const child = activeInstalls.get(installId) || (typeof activeUpdates?.get === 'function' ? activeUpdates.get('reinstall-' + installId) : null);
     if (!child) return { ok: false, error: tErr('errProcessNotFound', 'Process not found') };
     const normalizedChoice = (() => {
       if (typeof choice === 'number' && Number.isFinite(choice)) return String(choice);

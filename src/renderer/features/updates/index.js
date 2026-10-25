@@ -573,6 +573,14 @@
         case 'start':
           activeReinstallStreamId = msg.id;
           break;
+        case 'choice-prompt':
+          // A reinstall runs the same AM script as an install, so it can stop on
+          // a numbered menu or a question. Hand it to the same dialog the
+          // install flow uses, otherwise the process waits forever.
+          try {
+            if (typeof _.onChoicePrompt === 'function') _.onChoicePrompt(msg);
+          } catch (_) {}
+          break;
         case 'data':
           if (typeof msg.chunk === 'string') {
             appendUpdatesTerminalChunk(msg.chunk);

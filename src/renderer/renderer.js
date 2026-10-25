@@ -681,7 +681,11 @@ const _updatesApi = (function initUpdates() {
     loadApps,
     applySearch,
     electronAPI: window.electronAPI,
-    categories: window.categories
+    categories: window.categories,
+    // A reinstall runs the same AM script as an install, so it can stop on a
+    // numbered menu. Reuse the install dialog through a late-bound call (the
+    // dialog is defined further down in this file).
+    onChoicePrompt: (data) => { try { showChoicePrompt(data); } catch (_) {} }
   });
 })();
 
@@ -1842,15 +1846,10 @@ window.addEventListener('keydown', (e) => {
 
 
 
-// Handle interactive choice prompt during installation
-(async () => {
-  window.electronAPI?.onInstallProgress?.((data) => {
-    // Initialize install session on receiving 'start'
-    if (data.kind === 'start' && data.id) {
-      const sess = installerApi?.getActiveInstallSession?.();
-      if (sess) sess.id = data.id;
-    }
-    if (data.kind === 'choice-prompt') {
+// Interactive choice prompt: AM can stop on a numbered menu or a free-form
+// question. The dialog is shared by the install flow and the reinstall flow
+// (a reinstall runs the same AM script, so it can stop the same way).
+function showChoicePrompt(data) {
       // Remove any existing choice dialog
       document.querySelectorAll('.choice-dialog').forEach(e => e.remove());
       // Create a simple dialog
@@ -1958,6 +1957,21 @@ window.addEventListener('keydown', (e) => {
           }
         });
       }
+}
+
+window.ui = window.ui || {};
+window.ui.choicePrompt = { show: showChoicePrompt };
+
+// Handle interactive choice prompt during installation
+(async () => {
+  window.electronAPI?.onInstallProgress?.((data) => {
+    // Initialize install session on receiving 'start'
+    if (data.kind === 'start' && data.id) {
+      const sess = installerApi?.getActiveInstallSession?.();
+      if (sess) sess.id = data.id;
+    }
+    if (data.kind === 'choice-prompt') {
+      showChoicePrompt(data);
     }
     // Close the prompt if the install is finished or cancelled
     if (data.kind === 'done' || data.kind === 'cancelled' || data.kind === 'error') {
