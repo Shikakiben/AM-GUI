@@ -445,6 +445,10 @@ if (modeMenuBtn && modeMenu) {
       updateModeMenuUI();
       modeMenu.hidden = true;
       modeMenuBtn.setAttribute('aria-expanded','false');
+      // The tile markup depends on the mode: only the list builds the .actions
+      // block with the Launch button. Without a re-render, switching back to
+      // grid left those buttons behind on the tiles until the view was reopened.
+      try { rerenderActiveCategory(); } catch (err) { console.error('view mode re-render failed', err); }
     });
   });
 }
