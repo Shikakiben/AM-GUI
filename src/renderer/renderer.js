@@ -11,6 +11,11 @@ const appUtils = window.utils || {};
 const appPreferences = window.preferences || {};
 const AM_INSTALLER_COMMAND = 'wget -q https://raw.githubusercontent.com/ivan-hc/AM/main/AM-INSTALLER && chmod a+x ./AM-INSTALLER && ./AM-INSTALLER && rm ./AM-INSTALLER';
 const PM_DOCS_URL = 'https://github.com/ivan-hc/AM#installation';
+// The launcher returns in ~14 ms; without a floor the spinner would flash and
+// the user could think nothing happened. Exposed on window because
+// features/details/index.js runs in its own scope.
+const LAUNCH_SPINNER_MIN_MS = 700;
+try { window.LAUNCH_SPINNER_MIN_MS = LAUNCH_SPINNER_MIN_MS; } catch (_) {}
 
 const safe = (fn, fallback) => typeof fn === 'function' ? fn : fallback;
 
@@ -1759,7 +1764,11 @@ appsDiv?.addEventListener('click', (e) => {
     } else if (action === 'launch') {
       actionBtn.disabled = true;
       actionBtn.classList.add('loading');
-      window.electronAPI.launchApp(appName).then((result) => {
+      // Keep the spinner up for a moment even when the app starts instantly
+      // (it usually does, ~14 ms): otherwise it flashes and the user cannot
+      // tell the click registered, and may click again.
+      const minSpinner = new Promise((resolve) => setTimeout(resolve, LAUNCH_SPINNER_MIN_MS));
+      Promise.all([window.electronAPI.launchApp(appName), minSpinner]).then(([result]) => {
         if (result && result.ok) {
           showToast(t('toast.launched', { name: appName }));
         } else {

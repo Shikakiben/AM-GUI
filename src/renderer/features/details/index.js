@@ -434,8 +434,12 @@
         if (!name) return;
         detailsLaunchBtn.classList.add('loading');
         detailsLaunchBtn.disabled = true;
+        // Same floor as the list view: the launch itself takes ~14 ms, so the
+        // spinner would otherwise be invisible.
+        const spinMs = (typeof window !== 'undefined' && window.LAUNCH_SPINNER_MIN_MS) || 700;
+        const minSpinner = new Promise((resolve) => setTimeout(resolve, spinMs));
         try {
-          const result = await window.electronAPI.launchApp(name);
+          const [result] = await Promise.all([window.electronAPI.launchApp(name), minSpinner]);
           if (result && result.ok) {
             showToast(t('toast.launched', { name }));
           } else {

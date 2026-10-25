@@ -1084,6 +1084,45 @@ body.view-cards .app-tile .tile-short { font-size:13px; max-height:4.1em; overfl
   transform: translate(-50%, -50%);
 }
 
+/* Launch button (issue #97): while an app starts, the label is hidden so the
+   spinner reads as "working" instead of overlapping the text. The minimum
+   duration (see launchSpin in renderer.js) keeps it visible even when the app
+   starts in a few milliseconds, which it usually does. */
+#detailsLaunchBtn.loading {
+  color: transparent;
+  pointer-events: none;
+}
+#detailsLaunchBtn.loading::after {
+  color: #0b4d85;
+}
+@media (prefers-color-scheme: dark) {
+  #detailsLaunchBtn.loading::after { color: #8ec7ff; }
+}
+body.view-list .app-tile .actions .inline-action.launch.loading {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+  /* No fade: the existing colour transition would keep the label readable for
+     ~160 ms while the spinner is already turning (verified by sampling). */
+  transition: none;
+}
+body.view-list .app-tile .actions .inline-action.launch.loading::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid #0b4d85;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+@media (prefers-color-scheme: dark) {
+  body.view-list .app-tile .actions .inline-action.launch.loading::after { border-color: #8ec7ff; border-right-color: transparent; }
+}
+
 @keyframes spin {
   0% { transform: translate(-50%, -50%) rotate(0deg); }
   100% { transform: translate(-50%, -50%) rotate(360deg); }
