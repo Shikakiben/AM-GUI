@@ -479,6 +479,13 @@
         detailsUninstallBtn.classList.remove('loading');
         detailsUninstallBtn.disabled = false;
         detailsUninstallBtn.hidden = true;
+        // The app is no longer installed: the Launch button must go away too,
+        // otherwise it stays until the view is reopened.
+        if (detailsLaunchBtn) {
+          detailsLaunchBtn.hidden = true;
+          detailsLaunchBtn.classList.remove('loading');
+          detailsLaunchBtn.disabled = false;
+        }
         if (detailsInstallBtn) {
           detailsInstallBtn.hidden = false;
           detailsInstallBtn.classList.remove('loading');

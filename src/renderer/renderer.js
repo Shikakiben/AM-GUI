@@ -459,6 +459,7 @@ const detailsIcon = document.getElementById('detailsIcon');
 const detailsName = document.getElementById('detailsName');
 const detailsLong = document.getElementById('detailsLong');
 const detailsInstallBtn = document.getElementById('detailsInstallBtn');
+const detailsLaunchBtn = document.getElementById('detailsLaunchBtn');
 const detailsUninstallBtn = document.getElementById('detailsUninstallBtn');
 // Streaming install elements
 const installStream = document.getElementById('installStream');
@@ -546,6 +547,7 @@ const installerApi = (function initInstaller() {
       installStream, installStreamElapsed, installProgressBar,
       installProgressPercentLabel, installProgressEtaLabel, installStreamStatus,
       detailsInstallBtn, detailsUninstallBtn, detailsName, detailsIcon,
+      detailsLaunchBtn,
       installScopeBtn: document.getElementById('installScopeBtn')
     },
     state,
@@ -555,7 +557,10 @@ const installerApi = (function initInstaller() {
     getIconUrl,
     loadApps,
     applySearch,
-    showDetails,
+    // Late-bound: the details module is wired after this init, so a direct
+    // reference would freeze the legacy version (issue: description stuck on
+    // "Fetching remote description..." after an install).
+    showDetails: (appName) => showDetailsCurrent(appName),
     rerenderActiveCategory,
     electronAPI: window.electronAPI,
     stripAnsiSequences,
@@ -1662,6 +1667,15 @@ function exitDetailsView() {
 
 const legacyShowDetails = showDetails;
 const legacyExitDetailsView = exitDetailsView;
+
+// The installer module received a copy of showDetails at init time (line 558),
+// before the details module existed, so its post-install refresh called the
+// legacy version: that one only sets "Fetching remote description..." and never
+// fetches, leaving the description stuck forever. Expose the real entry point so
+// every module goes through the details module.
+function showDetailsCurrent(appName) {
+  return showDetails(appName);
+}
 
 (function wireDetailsModule() {
   const api = ensureDetailsApi();

@@ -135,6 +135,22 @@
         btn.disabled = false;
         btn.setAttribute('data-action', 'install');
       }
+      // Keep the Launch button in step with the install state, so installing or
+      // uninstalling updates it without leaving and reopening the details view.
+      syncDetailsLaunchButton(name);
+    }
+
+    // The details module owns the Launch button; when this module is used without
+    // it (tests, older wiring) the button simply is not there.
+    function syncDetailsLaunchButton(name) {
+      const launchBtn = dom.detailsLaunchBtn;
+      if (!launchBtn) return;
+      const entry = (_.state.allApps || []).find((a) => a && a.name === name);
+      const isInstalled = !!(entry && entry.installed);
+      launchBtn.hidden = !isInstalled;
+      launchBtn.disabled = false;
+      launchBtn.classList.remove('loading');
+      if (isInstalled) launchBtn.dataset.name = name;
     }
 
     function refreshListInstallButtons() {
