@@ -5,6 +5,7 @@
 //     is reached at all;
 //   - one answered prompt must serve every later request.
 const { describe, it } = require('node:test');
+const { execFileSync } = require('child_process');
 const assert = require('node:assert');
 const path = require('path');
 
@@ -71,6 +72,49 @@ describe('environment proxy', () => {
   it('builds the rule string Chromium expects', () => {
     assert.strictEqual(proxyRulesFromEnv({ http_proxy: 'http://a:1', https_proxy: 'http://b:2' }), 'http=a:1;https=b:2');
     assert.strictEqual(proxyRulesFromEnv({}), null);
+  });
+});
+
+describe('safety timeouts', () => {
+  it('the prompt timeout fires even when nothing else keeps the loop alive', () => {
+    // CI caught this: an unref'd timer never fires when it is the only handle,
+    // so the promise stayed pending for ever and the runner cancelled the whole
+    // suite ("Promise resolution is still pending but the event loop has already
+    // resolved"). A safety timeout that cannot fire is not a safety timeout.
+    // Run in a child process: inside the test runner other handles keep the loop
+    // alive and would hide the fault.
+    const script = `
+      const { createProxySupport } = require(${JSON.stringify(path.join(repoRoot, 'src/main/proxy'))});
+      const handlers = { login: [], response: [], error: [] };
+      const support = createProxySupport({
+        getSession: () => ({ async resolveProxy() { return 'PROXY proxy.corp:3128'; } }),
+        request: () => ({
+          on(e, h) { (handlers[e] = handlers[e] || []).push(h); return this; },
+          abort() {},
+          end() {
+            setImmediate(async () => {
+              // Same shape as Chromium: a login challenge, then either a
+              // response or an error once the answer is given.
+              const answer = await new Promise((resolve) => {
+                handlers.login.forEach((h) => h({ isProxy: true }, (u) => resolve(u ? { u } : null)));
+              });
+              if (!answer) {
+                handlers.error.forEach((h) => h(new Error('net::ERR_TUNNEL_CONNECTION_FAILED')));
+              }
+            });
+          }
+        }),
+        askCredentials: () => new Promise(() => {}), // the dialog is never answered
+        promptTimeoutMs: 50,
+        seedTimeoutMs: 2000,
+        env: {}
+      });
+      let settled = false;
+      support.ensureProxyAuth('https://example.test/x.png').then(() => { settled = true; });
+      process.on('exit', () => console.log(settled ? 'SETTLED' : 'PENDING'));
+    `;
+    const out = execFileSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 15000 });
+    assert.match(out, /SETTLED/, 'the timeout must settle the promise, not leave it pending');
   });
 });
 

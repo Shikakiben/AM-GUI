@@ -214,11 +214,14 @@ function createProxySupport(options = {}) {
       return await Promise.race([
         session.resolveProxy(url),
         new Promise((resolve) => {
-          const timer = setTimeout(() => {
+          // Deliberately NOT unref'd: a safety timeout that cannot fire is not a
+          // safety timeout. Measured in CI, an unref'd timer never fires when
+          // nothing else keeps the event loop alive, and the promise then stays
+          // pending for ever.
+          setTimeout(() => {
             logger.warn?.('[proxy] proxy resolution took too long, assuming DIRECT');
             resolve('DIRECT');
           }, resolveTimeoutMs);
-          if (typeof timer.unref === 'function') timer.unref();
         })
       ]);
     } catch (_) {
@@ -242,8 +245,8 @@ function createProxySupport(options = {}) {
         resolve(answer);
       };
       // A dialog nobody answers must not suspend every download forever.
+      // Not unref'd, for the reason given above: it has to actually fire.
       const timer = setTimeout(() => finish(null), promptTimeoutMs);
-      if (typeof timer.unref === 'function') timer.unref();
       Promise.resolve()
         .then(() => askCredentials())
         .then((answer) => {
@@ -277,12 +280,13 @@ function createProxySupport(options = {}) {
       // This request exists only to reach the proxy's challenge. It must never
       // hold the queue: measured, it can stay silent for ever when Chromium
       // keeps re-challenging, and then every later download waited on it.
+      // Not unref'd: this is the only thing that ends the request when Chromium
+      // keeps re-challenging, so it must be able to fire.
       const timer = setTimeout(() => {
         logger.warn?.('[proxy] authentication request timed out');
         try { request.abort(); } catch (_) {}
         finish(false);
       }, seedTimeoutMs);
-      if (typeof timer.unref === 'function') timer.unref();
       const finish = (ok) => {
         if (done) return;
         done = true;
