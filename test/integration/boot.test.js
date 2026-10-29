@@ -19,6 +19,7 @@ const EXPECTED_UI = ['toast', 'virtualList', 'settingsPanel', 'passwordPrompt', 
 describe('renderer boot (full page load)', () => {
   let window;
   let scripts;
+  let allScripts;
   let _dom;
 
   before(function () {
@@ -49,6 +50,9 @@ describe('renderer boot (full page load)', () => {
     scripts = [...window.document.querySelectorAll('script[src]')]
       .map((s) => s.getAttribute('src'))
       .filter((src) => src && !/^https?:/i.test(src));
+    allScripts = [...window.document.querySelectorAll('script[src]')]
+      .map((s) => s.getAttribute('src'))
+      .filter(Boolean);
   });
 
   after(() => {
@@ -57,6 +61,15 @@ describe('renderer boot (full page load)', () => {
     _dom = null;
     window = null;
     scripts = null;
+    allScripts = null;
+  });
+
+  it('loads every script from disk, never from the network', () => {
+    // A remote <script> blocks the whole page while it is fetched. Behind a
+    // proxy that answers 407 (or simply offline) the window stayed blank: no
+    // translations, no tabs, no app list. Everything the UI needs ships with it.
+    const remote = allScripts.filter((src) => /^https?:/i.test(src));
+    assert.deepStrictEqual(remote, [], `index.html must not load scripts from the network: ${remote.join(', ')}`);
   });
 
   it('references only scripts that exist on disk', () => {

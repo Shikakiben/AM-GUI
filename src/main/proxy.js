@@ -1,27 +1,24 @@
-// Proxy support: make every network path of AM-GUI work behind a proxy.
+// Proxy support for AM-GUI.
 //
-// Design (kept deliberately simple and predictable):
-//   1. Where is the proxy?   -> Chromium already knows (gsettings on GNOME,
-//      kioslaverc on KDE, environment on XFCE). We ask it with resolveProxy()
-//      and reuse the answer for the main process too.
-//   2. Who is allowed in?    -> we ASK THE USER, like every browser does when
-//      the proxy answers 407. One small window, then the answer is reused for
-//      the whole session (Chromium caches it, we cache it for undici).
-//   3. The password is never written to disk. It lives in memory for the
-//      session only, exactly like a browser tab's proxy credentials.
+// Every download (icons, categories, AppMan) goes through Electron's net.fetch,
+// i.e. Chromium's own network stack: it already follows the proxy the machine is
+// configured with, and it tunnels HTTPS correctly. The only thing it will not do
+// by itself is send a password, so we answer the proxy's challenge the way a
+// browser does: one window, credentials kept in memory, never written to disk.
 //
-// Why not read a stored password: none exists that we could read. Chromium
-// itself refuses to use the ones from the desktop settings ("ProxyConfig does
-// not support authentication parameters, but Chrome will prompt for the
-// password later", net/proxy_resolution/proxy_config_service_linux.cc), the
-// GNOME proxy panel has no field to enter them, and on KDE the password lives
-// in KWallet behind kpasswdserver. Asking is therefore the only path that works
-// everywhere, and it is what users already expect from a browser.
-const { execFileSync } = require('child_process');
-const undici = require('undici');
-
-const CREDENTIALS_TTL_MS = 5 * 60 * 1000;
-const ENV_PROXY_KEYS = ['https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY', 'http_proxy', 'HTTP_PROXY'];
+// Two behaviours were measured, and they drive this file:
+//
+//   1. net.fetch never emits a `login` event, so a failing fetch cannot trigger
+//      the prompt. net.request does emit one, with no window needed. That single
+//      request is how the credentials get into Chromium's cache; afterwards
+//      every net.fetch (and the renderer's own fetch) reuses them.
+//   2. On GNOME, Chromium ignores http_proxy/https_proxy and reads gsettings
+//      only, so a proxy set through the environment is invisible to it. It is
+//      pushed to Chromium when Chromium sees nothing (verified: without that,
+//      resolveProxy answers DIRECT even with https_proxy set).
+const DEFAULT_PROMPT_TIMEOUT_MS = 120000;
+const DEFAULT_RESOLVE_TIMEOUT_MS = 5000;
+const AUTH_RETRY_DELAY_MS = 30000;
 
 // Accepts "host:port", "http://host:port" and "http://user:pass@host:port".
 function parseProxyUrl(raw) {
@@ -37,20 +34,20 @@ function parseProxyUrl(raw) {
   }
   if (!parsed.hostname) return null;
   const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
-  const credentials = parsed.username
-    ? {
-        username: decodeURIComponent(parsed.username),
-        password: decodeURIComponent(parsed.password || '')
-      }
-    : null;
   return {
     protocol: parsed.protocol.replace(':', ''),
     host: parsed.hostname,
     port,
     url: `${parsed.protocol}//${parsed.hostname}:${port}`,
-    credentials
+    // Credentials written in the URL are honoured: if the user already told the
+    // system where to log in, there is no reason to ask again.
+    credentials: parsed.username
+      ? { username: decodeURIComponent(parsed.username), password: decodeURIComponent(parsed.password || '') }
+      : null
   };
 }
+
+const ENV_PROXY_KEYS = ['https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY', 'http_proxy', 'HTTP_PROXY'];
 
 function readEnvProxy(env) {
   for (const key of ENV_PROXY_KEYS) {
@@ -62,8 +59,8 @@ function readEnvProxy(env) {
   return null;
 }
 
-// Parses the string returned by session.resolveProxy():
-// "PROXY host:port", "DIRECT", or "PROXY a:1; PROXY b:2; DIRECT".
+// Parses what session.resolveProxy() returns: "PROXY host:port", "DIRECT", or
+// "PROXY a:1; PROXY b:2; DIRECT".
 function parseResolvedProxy(resolved) {
   if (!resolved || typeof resolved !== 'string') return [];
   const entries = [];
@@ -82,12 +79,6 @@ function parseResolvedProxy(resolved) {
   return entries;
 }
 
-function basicToken(credentials) {
-  if (!credentials || !credentials.username) return null;
-  const pair = `${credentials.username}:${credentials.password || ''}`;
-  return `Basic ${Buffer.from(pair, 'utf8').toString('base64')}`;
-}
-
 // Builds the "http=host:port;https=host:port" rule Chromium expects.
 function proxyRulesFromEnv(env) {
   const https = readEnvProxy({ https_proxy: env?.https_proxy, HTTPS_PROXY: env?.HTTPS_PROXY });
@@ -103,86 +94,193 @@ function createProxySupport(options = {}) {
   const getSession = options.getSession || (() => null);
   const env = options.env || process.env;
   // Resolves { username, password } or null when the user cancels.
-  // Supplied by main.js: it shows the same password window the app already uses.
   const askCredentials = options.askCredentials || null;
-  // Called with Chromium's authInfo when a proxy asks for credentials, so the
-  // caller can name the proxy in its window.
+  // Called with Chromium's authInfo so the window can name the proxy.
   const onProxyChallenge = options.onProxyChallenge || null;
+  // net.request, injectable so this file stays testable without Electron.
+  const requestFn = options.request || null;
   const logger = options.logger || console;
+  const promptTimeoutMs = options.promptTimeoutMs || DEFAULT_PROMPT_TIMEOUT_MS;
+  const resolveTimeoutMs = options.resolveTimeoutMs || DEFAULT_RESOLVE_TIMEOUT_MS;
   const now = options.now || (() => Date.now());
 
-  const dispatchers = new Map();
-  let credentials = null;         // session-only, never persisted
-  let credentialsAt = 0;
-  let pendingAsk = null;
+  let credentials = null;      // session only, never persisted
+  let pendingSeed = null;      // one authentication attempt at a time
+  let lastAttemptFailedAt = 0; // avoids a prompt storm when the user cancels
   let envConfigured = false;
-  // Remembers which credentials were already sent to which proxy, so a second
-  // challenge means they were refused and we must ask again instead of looping.
+  // Which credentials were already sent to which proxy, so a second challenge
+  // means they were refused.
   const answered = new Map();
-
-  function cachedCredentials() {
-    if (credentials && now() - credentialsAt < CREDENTIALS_TTL_MS) return credentials;
-    return null;
-  }
-
-  function rememberCredentials(next) {
-    credentials = next;
-    credentialsAt = now();
-    // A new identity invalidates pooled agents built with the previous one.
-    dispatchers.clear();
-    answered.clear();
-  }
-
-  // One window at a time: several requests hitting the 407 together must not
-  // open several dialogs. `rejected` forces a new prompt (wrong password).
-  async function credentialsForProxy(rejected) {
-    if (!rejected) {
-      const cached = cachedCredentials();
-      if (cached) return cached;
-    }
-    if (!askCredentials) return null;
-    if (pendingAsk) return pendingAsk;
-    pendingAsk = (async () => {
-      try {
-        const answer = await askCredentials();
-        if (answer && answer.username) {
-          rememberCredentials({ username: answer.username, password: answer.password || '' });
-          return credentials;
-        }
-        return null;
-      } catch (error) {
-        logger.warn?.('[proxy] could not ask for proxy credentials:', error?.message || error);
-        return null;
-      } finally {
-        pendingAsk = null;
-      }
-    })();
-    return pendingAsk;
-  }
 
   async function resolveProxy(url) {
     const session = getSession();
     if (!session || typeof session.resolveProxy !== 'function') return null;
     try {
-      return await session.resolveProxy(url);
+      // A PAC script can take seconds on a slow network; downloads must not
+      // wait on it indefinitely. Past the bound, Chromium is treated as DIRECT.
+      return await Promise.race([
+        session.resolveProxy(url),
+        new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            logger.warn?.('[proxy] proxy resolution took too long, assuming DIRECT');
+            resolve('DIRECT');
+          }, resolveTimeoutMs);
+          if (typeof timer.unref === 'function') timer.unref();
+        })
+      ]);
     } catch (_) {
       return null;
     }
   }
 
+  // True when Chromium is actually going through a proxy for this URL.
+  async function hasProxy(url) {
+    const entries = parseResolvedProxy(await resolveProxy(url));
+    return entries.some((entry) => entry.type !== 'DIRECT');
+  }
+
+  function askOnce() {
+    if (!askCredentials) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (answer) => {
+        if (settled) return;
+        settled = true;
+        resolve(answer);
+      };
+      // A dialog nobody answers must not suspend every download forever.
+      const timer = setTimeout(() => finish(null), promptTimeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
+      Promise.resolve()
+        .then(() => askCredentials())
+        .then((answer) => {
+          clearTimeout(timer);
+          finish(answer && answer.username ? answer : null);
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          logger.warn?.('[proxy] could not ask for credentials:', error?.message || error);
+          finish(null);
+        });
+    });
+  }
+
+  // One request whose only purpose is to make Chromium ask for the proxy
+  // password. net.fetch cannot do it (measured: it emits no login event, and
+  // either returns a bare 407 or fails with ERR_TUNNEL_CONNECTION_FAILED);
+  // net.request can, and its answer lands in Chromium's credential cache.
+  function seedOnce(url) {
+    if (!requestFn) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      let request;
+      try {
+        request = requestFn(url);
+      } catch (error) {
+        logger.warn?.('[proxy] cannot create the seed request:', error?.message || error);
+        return resolve(false);
+      }
+      let sawChallenge = false;
+      let done = false;
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        resolve(ok);
+      };
+      request.on('login', (authInfo, callback) => {
+        sawChallenge = true;
+        try {
+          if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
+        } catch (_) {}
+        // Credentials already known (given in the proxy URL, or answered for the
+        // renderer) are sent without opening a window.
+        const ready = credentials ? Promise.resolve(credentials) : askOnce();
+        ready.then((answer) => {
+          if (!answer) return callback(); // cancelled: Chromium reports the failure
+          credentials = answer;
+          callback(answer.username, answer.password);
+        });
+      });
+      request.on('response', (res) => {
+        // Drain and drop the body: only the handshake matters here.
+        res.on('data', () => {});
+        res.on('end', () => finish(true));
+        res.on('error', () => finish(sawChallenge));
+      });
+      request.on('error', () => finish(sawChallenge && !!credentials));
+      try {
+        request.end();
+      } catch (_) {
+        finish(false);
+      }
+    });
+  }
+
+  // Makes sure Chromium has the proxy credentials, asking the user once.
+  // Returns true when a proxy was found and is now usable.
+  async function ensureProxyAuth(url) {
+    if (pendingSeed) return pendingSeed;
+    if (credentials) return true;
+    // A cancelled or refused answer must not reopen the window for every icon
+    // that fails next: one prompt, then a pause.
+    if (lastAttemptFailedAt && now() - lastAttemptFailedAt < AUTH_RETRY_DELAY_MS) return false;
+    pendingSeed = (async () => {
+      try {
+        if (!(await hasProxy(url))) return false;
+        const ok = await seedOnce(url);
+        if (!ok) lastAttemptFailedAt = now();
+        return ok;
+      } catch (error) {
+        logger.warn?.('[proxy] authentication attempt failed:', error?.message || error);
+        lastAttemptFailedAt = now();
+        return false;
+      } finally {
+        pendingSeed = null;
+      }
+    })();
+    return pendingSeed;
+  }
+
+  // Chromium's side, for the renderer's own requests (descriptions, images).
+  // It fires only when a page needs the proxy; the answer is shared with the
+  // main process through Chromium's per-session credential cache.
+  function installLoginHandler(app) {
+    if (!app || typeof app.on !== 'function') return false;
+    app.on('login', (event, _webContents, _details, authInfo, callback) => {
+      if (!authInfo || !authInfo.isProxy) return; // leave website logins alone
+      try {
+        if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
+      } catch (_) {}
+      event.preventDefault();
+      const key = `${authInfo.host || ''}:${authInfo.port || ''}`;
+      // A second challenge from the same proxy with the same answer means the
+      // password was refused: ask again instead of looping on a wrong one.
+      const alreadyTried = credentials && answered.get(key) === credentials;
+      const ready = (credentials && !alreadyTried) ? Promise.resolve(credentials) : askOnce();
+      ready.then((answer) => {
+        if (!answer) return callback();
+        credentials = answer;
+        answered.set(key, answer);
+        callback(answer.username, answer.password);
+      });
+    });
+    return true;
+  }
+
   // Chromium reads http_proxy on XFCE/LXQt but not on GNOME (its gsettings
   // getter wins, even when it says "none"). Push the environment proxy when
-  // Chromium sees nothing, so every desktop behaves the same.
-  async function configureFromEnvironment() {
+  // Chromium sees nothing, so every desktop behaves the same. Never awaited on
+  // the startup path: a slow resolver must not delay the window.
+  async function configureFromEnvironment(url = 'https://portable-linux-apps.github.io/') {
     if (envConfigured) return false;
     envConfigured = true;
     const session = getSession();
     if (!session || typeof session.setProxy !== 'function') return false;
+    const fromEnv = readEnvProxy(env);
     const rules = proxyRulesFromEnv(env);
     if (!rules) return false;
-    const probe = await resolveProxy('https://raw.githubusercontent.com/');
-    const alreadyProxied = parseResolvedProxy(probe).some((entry) => entry.type !== 'DIRECT');
-    if (alreadyProxied) return false;
+    // Credentials given in the URL are reused instead of asking for them.
+    if (fromEnv && fromEnv.credentials) credentials = fromEnv.credentials;
+    if (await hasProxy(url)) return false;
     try {
       await session.setProxy({ proxyRules: rules });
       logger.warn?.('[proxy] environment proxy applied:', rules);
@@ -193,97 +291,14 @@ function createProxySupport(options = {}) {
     }
   }
 
-  async function dispatcherFor(url) {
-    const entries = parseResolvedProxy(await resolveProxy(url));
-    const proxy = entries.find((entry) => ['PROXY', 'HTTPS', 'SOCKS', 'SOCKS5'].includes(entry.type));
-    if (!proxy) return null;
-
-    const creds = cachedCredentials();
-    const token = basicToken(creds);
-    const key = `${proxy.type}|${proxy.url}|${token || ''}`;
-    const existing = dispatchers.get(key);
-    if (existing) return existing;
-
-    const agentOptions = { uri: proxy.url };
-    if (token) agentOptions.token = token;
-    let agent;
-    try {
-      agent = new undici.ProxyAgent(agentOptions);
-    } catch (error) {
-      logger.warn?.('[proxy] cannot create proxy agent:', error?.message || error);
-      return null;
-    }
-    dispatchers.set(key, agent);
-    return agent;
-  }
-
-  // Drop-in replacement for undici.fetch that goes through the machine's proxy.
-  async function fetchWithProxy(url, init = {}) {
-    const dispatcher = await dispatcherFor(url).catch(() => null);
-    if (!dispatcher) return undici.fetch(url, init);
-    try {
-      return await undici.fetch(url, { ...init, dispatcher });
-    } catch (error) {
-      // A pooled agent built without credentials cannot answer a 407: ask, then
-      // retry once with the new identity.
-      const isAuthFailure = error?.statusCode === 407 || error?.cause?.statusCode === 407;
-      if (!isAuthFailure || cachedCredentials()) throw error;
-      const asked = await credentialsForProxy();
-      if (!asked) throw error;
-      const retryDispatcher = await dispatcherFor(url).catch(() => null);
-      if (!retryDispatcher) throw error;
-      return undici.fetch(url, { ...init, dispatcher: retryDispatcher });
-    }
-  }
-
-  // Chromium's side: answer the proxy's 407 with the user's answer. The callback
-  // may be deferred (verified: Chromium waits), so a real dialog fits here.
-  function installLoginHandler(app) {
-    if (!app || typeof app.on !== 'function') return false;
-    app.on('login', (event, _webContents, details, authInfo, callback) => {
-      if (!authInfo || !authInfo.isProxy) return;
-      // Remember which proxy asks, so the window can name it.
-      try {
-        if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
-      } catch (_) {}
-      const proxyKey = `${authInfo.host || ''}:${authInfo.port || ''}`;
-      const cached = cachedCredentials();
-      // Second challenge from the same proxy = the password was refused.
-      const alreadyTried = cached && answered.get(proxyKey) === basicToken(cached);
-      event.preventDefault();
-      const credentialsReady = (cached && !alreadyTried) ? Promise.resolve(cached) : credentialsForProxy(alreadyTried);
-      credentialsReady.then((answer) => {
-        if (!answer) {
-          callback(); // cancelled: Chromium reports the failure to the caller
-          return;
-        }
-        answered.set(proxyKey, basicToken(answer));
-        callback(answer.username, answer.password);
-      });
-    });
-    return true;
-  }
-
-  async function close() {
-    for (const agent of dispatchers.values()) {
-      try {
-        await agent.close();
-      } catch (_) {}
-    }
-    dispatchers.clear();
-  }
-
   return {
     configureFromEnvironment,
-    dispatcherFor,
-    fetchWithProxy,
+    ensureProxyAuth,
     installLoginHandler,
     resolveProxy,
-    credentialsForProxy,
-    close,
+    hasProxy,
     // exposed for tests
-    _parseResolvedProxy: parseResolvedProxy,
-    _cachedCredentials: cachedCredentials
+    _credentials: () => credentials
   };
 }
 
@@ -292,6 +307,5 @@ module.exports = {
   parseProxyUrl,
   parseResolvedProxy,
   readEnvProxy,
-  proxyRulesFromEnv,
-  basicToken
+  proxyRulesFromEnv
 };

@@ -1,5 +1,9 @@
-// Proxy support: AM-GUI finds the proxy, then asks the user for credentials the
-// way a browser does. Nothing is ever written to disk.
+// Proxy support: AM-GUI lets Chromium do the networking (net.fetch follows the
+// machine's proxy), and only supplies the password, the way a browser does.
+// Two measured behaviours are pinned here:
+//   - net.fetch never emits `login`, net.request does: that is how the prompt
+//     is reached at all;
+//   - one answered prompt must serve every later request.
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
@@ -10,7 +14,6 @@ const {
   parseResolvedProxy,
   readEnvProxy,
   proxyRulesFromEnv,
-  basicToken,
   createProxySupport
 } = require(path.join(repoRoot, 'src/main/proxy'));
 
@@ -84,6 +87,59 @@ describe('proxy support', () => {
     };
   }
 
+  // Stands in for net.request: emits `login` when the proxy asks, then a
+  // response once the caller answered. Records every request it was given.
+  function fakeRequestFactory(state) {
+    return (url) => {
+      state.requests.push(url);
+      const handlers = { login: [], response: [], error: [] };
+      const req = {
+        on(event, handler) {
+          (handlers[event] = handlers[event] || []).push(handler);
+          return req;
+        },
+        end() {
+          setImmediate(async () => {
+            if (state.needsAuth) {
+              const authInfo = { isProxy: true, host: 'proxy.corp', port: 3128, scheme: 'basic' };
+              const answer = await new Promise((resolve) => {
+                handlers.login.forEach((h) => h(authInfo, (u, p) => resolve(u ? { username: u, password: p } : null)));
+              });
+              state.answers.push(answer);
+              if (!answer) {
+                handlers.error.forEach((h) => h(new Error('net::ERR_TUNNEL_CONNECTION_FAILED')));
+                return;
+              }
+            }
+            const res = {
+              on(event, handler) {
+                if (event === 'end') setImmediate(handler);
+                return res;
+              }
+            };
+            handlers.response.forEach((h) => h(res));
+          });
+        }
+      };
+      return req;
+    };
+  }
+
+  function makeState(overrides = {}) {
+    return { requests: [], answers: [], needsAuth: true, ...overrides };
+  }
+
+  function makeSupport(state, options = {}) {
+    return createProxySupport({
+      getSession: () => fakeSession(options.resolved || 'PROXY proxy.corp:3128'),
+      request: fakeRequestFactory(state),
+      askCredentials: options.askCredentials || (async () => ({ username: 'alice', password: 's3cret' })),
+      env: options.env || {},
+      now: options.now,
+      promptTimeoutMs: options.promptTimeoutMs
+    });
+  }
+
   it('does not touch Chromium when the proxy is already known', async () => {
     const calls = {};
     const support = createProxySupport({
@@ -111,76 +167,79 @@ describe('proxy support', () => {
     assert.strictEqual(await noEnv.configureFromEnvironment(), false);
   });
 
-  it('builds no dispatcher for a direct connection', async () => {
-    const support = createProxySupport({ getSession: () => fakeSession('DIRECT'), env: {} });
-    assert.strictEqual(await support.dispatcherFor('https://example.test/x.png'), null);
-  });
-
-  it('asks the user once, then reuses the answer', async () => {
-    let asked = 0;
+  it('reuses credentials given in the environment instead of asking', async () => {
+    const calls = {};
     const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; }
+      getSession: () => fakeSession('DIRECT', calls),
+      env: { https_proxy: 'http://u:p@envproxy:8443' },
+      askCredentials: async () => { throw new Error('must not be asked'); }
     });
-    const first = await support.credentialsForProxy();
-    const second = await support.credentialsForProxy();
-    assert.deepStrictEqual(first, { username: 'alice', password: 's3cret' });
-    assert.strictEqual(second, first);
-    assert.strictEqual(asked, 1, 'the window must not open twice');
+    await support.configureFromEnvironment();
+    assert.deepStrictEqual(support._credentials(), { username: 'u', password: 'p' });
   });
 
-  it('opens a single window when several requests fail together', async () => {
+  it('does nothing at all when Chromium goes direct', async () => {
+    const state = makeState();
+    const support = makeSupport(state, { resolved: 'DIRECT' });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/x.png'), false);
+    assert.strictEqual(state.requests.length, 0, 'no request without a proxy');
+  });
+
+  it('makes the one request that can raise the prompt, then caches the answer', async () => {
+    const state = makeState();
+    const support = makeSupport(state);
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/x.png'), true);
+    assert.strictEqual(state.requests.length, 1, 'net.request is the only way to get a login event');
+    assert.deepStrictEqual(state.answers[0], { username: 'alice', password: 's3cret' });
+    assert.deepStrictEqual(support._credentials(), { username: 'alice', password: 's3cret' });
+
+    // Every later download reuses it: no second window, no second request.
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/y.png'), true);
+    assert.strictEqual(state.requests.length, 1, 'the prompt is asked once per session');
+  });
+
+  it('opens a single window when many downloads fail together', async () => {
     let asked = 0;
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+    const state = makeState();
+    const support = makeSupport(state, {
       askCredentials: async () => {
         asked += 1;
         await new Promise((r) => setTimeout(r, 20));
         return { username: 'alice', password: 's3cret' };
       }
     });
-    const answers = await Promise.all([
-      support.credentialsForProxy(),
-      support.credentialsForProxy(),
-      support.credentialsForProxy()
+    const results = await Promise.all([
+      support.ensureProxyAuth('https://example.test/1.png'),
+      support.ensureProxyAuth('https://example.test/2.png'),
+      support.ensureProxyAuth('https://example.test/3.png')
     ]);
-    assert.strictEqual(asked, 1, 'concurrent requests share one prompt');
-    assert.ok(answers.every((a) => a && a.username === 'alice'));
+    assert.strictEqual(asked, 1, 'concurrent failures share one prompt');
+    assert.ok(results.every((r) => r === true));
   });
 
-  it('remembers a cancellation instead of asking forever', async () => {
+  it('does not reopen the window for every icon when the user cancels', async () => {
     let asked = 0;
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+    let clock = 1000;
+    const state = makeState();
+    const support = makeSupport(state, {
+      now: () => clock,
       askCredentials: async () => { asked += 1; return null; }
     });
-    assert.strictEqual(await support.credentialsForProxy(), null);
-    assert.strictEqual(await support.credentialsForProxy(), null);
-    assert.strictEqual(asked, 2, 'a cancel is not cached, but must not loop');
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), false);
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/2.png'), false);
+    assert.strictEqual(asked, 1, 'a cancelled prompt is remembered for a while');
+    clock += 31000;
+    await support.ensureProxyAuth('https://example.test/3.png');
+    assert.strictEqual(asked, 2, 'the user gets another chance later');
   });
 
-  it('keeps the password in memory only', async () => {
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      askCredentials: async () => ({ username: 'alice', password: 's3cret' })
+  it('never hangs when the window is never answered', async () => {
+    const state = makeState();
+    const support = makeSupport(state, {
+      askCredentials: () => new Promise(() => {}), // the user walks away
+      promptTimeoutMs: 30
     });
-    await support.credentialsForProxy();
-    // The credentials are exposed for the session, and expire.
-    assert.deepStrictEqual(support._cachedCredentials(), { username: 'alice', password: 's3cret' });
-  });
-
-  it('expires the cached credentials after the TTL', async () => {
-    let clock = 1000;
-    let asked = 0;
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      now: () => clock,
-      askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; }
-    });
-    await support.credentialsForProxy();
-    clock += 6 * 60 * 1000;
-    await support.credentialsForProxy();
-    assert.strictEqual(asked, 2);
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), false);
   });
 
   it('answers Chromium proxy challenges with the user answer', async () => {
@@ -205,139 +264,36 @@ describe('proxy support', () => {
     assert.deepStrictEqual(answer, { username: 'alice', password: 's3cret' });
   });
 
-  it('answers a second challenge without asking again when it worked', async () => {
+  it('shares one answer between the main process and the renderer', async () => {
     const handlers = {};
     let asked = 0;
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+    const state = makeState();
+    const support = makeSupport(state, {
       askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; }
     });
     support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
-    // Two different proxies: the first answer is reused without a new window.
-    const fire = (host) => new Promise((resolve) => {
-      handlers.login({ preventDefault() {} }, null, {}, { isProxy: true, host, port: 3128 }, (u, p) => resolve({ u, p }));
-    });
-    const first = await fire('proxy-a');
-    const second = await fire('proxy-b');
-    assert.deepStrictEqual(first, { u: 'alice', p: 's3cret' });
-    assert.deepStrictEqual(second, { u: 'alice', p: 's3cret' });
-    assert.strictEqual(asked, 1);
-  });
 
-  it('asks again when the password was refused', async () => {
-    const handlers = {};
-    let asked = 0;
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      askCredentials: async () => {
-        asked += 1;
-        return asked === 1
-          ? { username: 'alice', password: 'wrong' }
-          : { username: 'alice', password: 'right' };
-      }
-    });
-    support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
-    const fire = () => new Promise((resolve) => {
+    await support.ensureProxyAuth('https://example.test/1.png');
+    const answer = await new Promise((resolve) => {
       handlers.login({ preventDefault() {} }, null, {}, { isProxy: true, host: 'proxy.corp', port: 3128 }, (u, p) => resolve({ u, p }));
     });
-    const first = await fire();
-    const second = await fire(); // same proxy challenges again => refused
-    assert.deepStrictEqual(first, { u: 'alice', p: 'wrong' });
-    assert.deepStrictEqual(second, { u: 'alice', p: 'right' });
-    assert.strictEqual(asked, 2);
+    assert.deepStrictEqual(answer, { u: 'alice', p: 's3cret' });
+    assert.strictEqual(asked, 1, 'the renderer reuses the main process answer');
   });
 
-  it('reports the proxy to the caller so the window can name it', async () => {
+  it('leaves website logins alone', () => {
     const handlers = {};
-    let seen = null;
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      onProxyChallenge: (info) => { seen = info; },
-      askCredentials: async () => null
-    });
-    support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
-    await new Promise((resolve) => {
-      handlers.login({ preventDefault() {} }, null, {}, { isProxy: true, host: 'proxy.corp', port: 3128 }, () => resolve());
-    });
-    assert.deepStrictEqual(seen, { isProxy: true, host: 'proxy.corp', port: 3128 });
-  });
-
-  it('leaves server (non-proxy) authentication alone', async () => {
-    const handlers = {};
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      askCredentials: async () => ({ username: 'alice', password: 's3cret' })
-    });
+    const support = createProxySupport({ getSession: () => fakeSession('DIRECT') });
     support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
     let prevented = false;
     handlers.login({ preventDefault() { prevented = true; } }, null, {}, { isProxy: false }, () => {});
     assert.strictEqual(prevented, false, 'must not hijack a website login');
   });
 
-  it('cancels cleanly when the user closes the window', async () => {
-    const handlers = {};
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      askCredentials: async () => null
-    });
-    support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
-    const answer = await new Promise((resolve) => {
-      handlers.login({ preventDefault() {} }, null, {}, { isProxy: true }, (...args) => resolve(args));
-    });
-    assert.deepStrictEqual(answer, [], 'callback() with no argument = cancelled');
-  });
-
-  it('builds a dispatcher carrying the credentials, and reuses it', async () => {
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      askCredentials: async () => ({ username: 'alice', password: 's3cret' })
-    });
-    await support.credentialsForProxy();
-    const dispatcher = await support.dispatcherFor('https://example.test/x.png');
-    assert.ok(dispatcher, 'dispatcher created');
-    assert.strictEqual(await support.dispatcherFor('https://example.test/other.png'), dispatcher);
-    await support.close();
-  });
-
-  it('drops pooled agents when the identity changes', async () => {
-    let answer = { username: 'alice', password: 's3cret' };
-    const support = createProxySupport({
-      getSession: () => fakeSession('PROXY proxy.corp:3128'),
-      askCredentials: async () => answer
-    });
-    await support.credentialsForProxy();
-    const first = await support.dispatcherFor('https://example.test/x.png');
-    answer = { username: 'bob', password: 'other' };
-    // A refused password triggers a new prompt, which changes the identity.
-    await support.credentialsForProxy(true);
-    const second = await support.dispatcherFor('https://example.test/x.png');
-    assert.notStrictEqual(first, second, 'a new identity must not reuse the old agent');
-    await support.close();
-  });
-
-  it('falls back to a plain fetch when no proxy is configured', async () => {
-    const support = createProxySupport({ getSession: () => fakeSession('DIRECT'), env: {} });
-    let usedDispatcher = 'unset';
-    const undici = require('undici');
-    const original = undici.fetch;
-    undici.fetch = async (_url, init = {}) => {
-      usedDispatcher = init.dispatcher || null;
-      return { ok: true, status: 200 };
-    };
-    try {
-      await support.fetchWithProxy('https://example.test/x');
-    } finally {
-      undici.fetch = original;
-    }
-    assert.strictEqual(usedDispatcher, null);
-  });
-
-  it('encodes the Basic token from the credentials', () => {
-    assert.strictEqual(
-      basicToken({ username: 'alice', password: 's3cret' }),
-      `Basic ${Buffer.from('alice:s3cret').toString('base64')}`
-    );
-    assert.strictEqual(basicToken(null), null);
-    assert.strictEqual(basicToken({ username: '' }), null);
+  it('keeps the password in memory only', async () => {
+    const state = makeState();
+    const support = makeSupport(state);
+    await support.ensureProxyAuth('https://example.test/1.png');
+    assert.deepStrictEqual(support._credentials(), { username: 'alice', password: 's3cret' });
   });
 });

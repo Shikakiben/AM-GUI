@@ -6,7 +6,7 @@ if (xdgBinHome && !process.env.PATH.split(':').includes(xdgBinHome)) {
   process.env.PATH = `${process.env.PATH}:${xdgBinHome}`;
 }
 
-const { app, BrowserWindow, ipcMain, Menu, protocol, shell, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, protocol, shell, session, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -208,8 +208,6 @@ app.on('open-url', (event, url) => {
 });
 
 // Register IPC handlers
-// The window uses the default session, so proxy discovery can start before it
-// exists: the proxy must be in place before the page issues its first fetch.
 // The proxy password is asked for when the proxy demands it, like a browser
 // does, and is kept in memory for the session only.
 let proxyPromptSeq = 0;
@@ -243,11 +241,50 @@ function askProxyCredentials() {
 const proxySupport = createProxySupport({
   getSession: () => (typeof session !== 'undefined' ? session.defaultSession : null),
   askCredentials: askProxyCredentials,
+  request: (url) => net.request(url),
   onProxyChallenge: (authInfo) => {
     currentProxyHost = [authInfo?.host, authInfo?.port].filter(Boolean).join(':');
   }
 });
-const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto: (opts) => installAppManAuto({ ...opts, fetch: proxySupport.fetchWithProxy }), isExternalUpdateRunning, fsp, userDataPath: app.getPath('userData') };
+
+// Every main-process download (icons, categories, AppMan) goes through
+// Chromium's network stack, which follows the proxy the machine is configured
+// with. net.fetch cannot raise the password prompt by itself (measured), so the
+// first failure asks for it once and then retries with Chromium's cached answer.
+//
+// The environment proxy is applied here, not on the startup path: a slow
+// resolver must never delay the window. Downloads wait for it, the user does not.
+let envProxyReady = null;
+function ensureEnvProxy() {
+  if (!envProxyReady) envProxyReady = proxySupport.configureFromEnvironment().catch(() => false);
+  return envProxyReady;
+}
+
+async function netFetch(input, init) {
+  await ensureEnvProxy();
+  const url = typeof input === 'string' ? input : input?.url;
+  // A proxy that wants a password shows up in one of two ways, both observed:
+  // a 407 response, or a thrown ERR_TUNNEL_CONNECTION_FAILED. Either way the
+  // answer is the same: ask once, then replay the request.
+  const retryWithAuth = async () => {
+    if (!url) return false;
+    try { return await proxySupport.ensureProxyAuth(url); } catch (_) { return false; }
+  };
+
+  let first;
+  try {
+    first = await net.fetch(input, init);
+  } catch (error) {
+    if (!(await retryWithAuth())) throw error;
+    return net.fetch(input, init);
+  }
+  if (!first || first.status !== 407) return first;
+  try { await first.body?.cancel?.(); } catch (_) {}
+  if (!(await retryWithAuth())) return first;
+  return net.fetch(input, init);
+}
+
+const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto: (opts) => installAppManAuto({ ...opts, fetch: netFetch }), isExternalUpdateRunning, fsp, userDataPath: app.getPath('userData') };
 registerGpuHandlers(ipcMain, app);
 registerUpdatesHandlers(ipcMain, deps);
 
@@ -287,8 +324,8 @@ ipcMain.handle('invalidate-apps-cache', async () => {
   return { ok: true };
 });
 
-const iconCacheManager = createIconCacheManager(app, { fetch: proxySupport.fetchWithProxy });
-registerCategoryHandlers(ipcMain, app.getPath('userData'), { fetch: proxySupport.fetchWithProxy });
+const iconCacheManager = createIconCacheManager(app, { fetch: netFetch });
+registerCategoryHandlers(ipcMain, app.getPath('userData'), { fetch: netFetch });
 
 ipcMain.handle('purge-icons-cache', async () => iconCacheManager.purgeCache());
 
@@ -305,12 +342,9 @@ ipcMain.handle('sync-am-locale', (_event, lang) => translatePackageManagerLocale
 app.whenReady().then(async () => {
   try { iconCacheManager.registerProtocol(protocol); } catch (e) { console.warn('appicon protocol failed:', e); }
   registerPlaInstallProtocol();
-  // Proxy: reuse what the machine already has, without asking the user.
-  // Done BEFORE the window loads so the page's first requests already go
-  // through the proxy: answer the proxy's authentication challenge in the
-  // renderer, and push http_proxy/https_proxy to Chromium when it has nothing.
+  // Proxy: answer the proxy's password challenge like a browser does. The
+  // window is created first, always: nothing network-related may delay it.
   try { proxySupport.installLoginHandler(app); } catch (e) { console.warn('proxy login handler failed:', e); }
-  try { await proxySupport.configureFromEnvironment(); } catch (e) { console.warn('proxy setup failed:', e); }
   const win = createWindow();
   // Deliver a pending pla-install:// request once the page has finished loading
   win.webContents.on('did-finish-load', () => {

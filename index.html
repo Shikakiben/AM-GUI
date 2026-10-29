@@ -8,7 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%233584e4'/%3E%3C/svg%3E">
   <meta name="color-scheme" content="light dark" />
   <!-- Mise à jour CSP: autoriser les requêtes (fetch) vers portable-linux-apps.github.io pour récupérer les descriptions -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' appicon: https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://portable-linux-apps.github.io https://raw.githubusercontent.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' appicon: https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://portable-linux-apps.github.io https://raw.githubusercontent.com;">
 </head>
 <body>
   <!-- Lightbox ultra-légère pour images Markdown -->
@@ -358,7 +358,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="src/renderer/vendor/marked.min.js"></script>
   <script src="src/renderer/config/constants.js"></script>
   <script src="src/renderer/utils.js"></script>
   <script src="src/renderer/services/preferences.js"></script>
