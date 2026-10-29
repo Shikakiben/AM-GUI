@@ -73,4 +73,27 @@ describe('icon download retries', () => {
     await request();
     assert.strictEqual(attempts, 3, 'bounded retries, then stop');
   });
+
+  // 159 of the 9090 apps have no icon upstream, and each 404 was tried three
+  // times: the log showed 479 requests spent on icons that can never load.
+  it('does not retry a 404, because the icon does not exist', async () => {
+    const request = makeManager(async () => {
+      attempts += 1;
+      return { status: 404, headers: { get: () => null } };
+    });
+    await request();
+    assert.strictEqual(attempts, 1, `404 must be tried once, got ${attempts} attempts`);
+  });
+
+  it('still retries a 408 and a 429, which are temporary', async () => {
+    for (const status of [408, 429]) {
+      attempts = 0;
+      const request = makeManager(async () => {
+        attempts += 1;
+        return { status, headers: { get: () => null } };
+      });
+      await request();
+      assert.strictEqual(attempts, 3, `${status} is temporary and must be retried`);
+    }
+  });
 });

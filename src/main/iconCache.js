@@ -259,9 +259,14 @@ function createIconCacheManager(app, options = {}) {
             }
             if (res.status !== 200) {
               appendLog(`${fileName} HTTP ${res.status}`);
-              // 407: the proxy is asking for a password. Retrying would only
-              // pile up identical requests.
-              return onFail(`http ${res.status}`, { noRetry: res.status === 407 });
+              // A 4xx means the request itself was wrong: the icon does not
+              // exist upstream (404), or the proxy wants a password (407).
+              // Repeating it cannot succeed, and it showed in the log: 479
+              // requests spent on 159 icons that will never load. 408 and 429
+              // are the two 4xx that really are temporary.
+              const permanent = res.status >= 400 && res.status < 500
+                && res.status !== 408 && res.status !== 429;
+              return onFail(`http ${res.status}`, { noRetry: permanent });
             }
 
             const tmpPath = dest + '.tmp';
