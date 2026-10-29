@@ -182,11 +182,14 @@ describe('desktop proxy credentials', () => {
   // Verified on a real GNOME session: with use-authentication true and a
   // username/password in gsettings, Chromium still sends an unauthenticated
   // CONNECT (ERR_TUNNEL_CONNECTION_FAILED). So these values are worth reading.
+  //
+  // One gsettings call only: execFileSync blocks the main process.
   function fakeGsettings(values) {
     return (args) => {
-      const key = args[args.length - 1];
-      if (!(key in values)) throw new Error('no such key: ' + key);
-      return values[key];
+      assert.deepStrictEqual(args, ['list-recursively', 'org.gnome.system.proxy.http'], 'a single call is made');
+      return Object.entries(values)
+        .map(([k, v]) => `org.gnome.system.proxy.http ${k} ${v}`)
+        .join('\n') + '\n';
     };
   }
 
@@ -194,11 +197,36 @@ describe('desktop proxy credentials', () => {
     const found = readSystemCredentials({
       run: fakeGsettings({
         'use-authentication': 'true',
-        'authentication-user': "'corp\\\\user'",
+        'authentication-user': "'corp'",
         'authentication-password': "'s3cret'"
       })
     });
-    assert.deepStrictEqual(found, { username: 'corp\\\\user', password: 's3cret' });
+    assert.deepStrictEqual(found, { username: 'corp', password: 's3cret' });
+  });
+
+  it('decodes the escaped backslash of a DOMAIN\\user login', () => {
+    // gsettings prints GVariant text: a username with one backslash comes out
+    // with two. Measured on a real session. Getting this wrong would send a
+    // doubled separator and the proxy would refuse the login.
+    const found = readSystemCredentials({
+      run: fakeGsettings({
+        'use-authentication': 'true',
+        'authentication-user': "'DOMAIN\\\\user'",
+        'authentication-password': "'p\\\\ss'"
+      })
+    });
+    assert.deepStrictEqual(found, { username: 'DOMAIN\\user', password: 'p\\ss' });
+  });
+
+  it('decodes escaped quotes and control characters', () => {
+    const found = readSystemCredentials({
+      run: fakeGsettings({
+        'use-authentication': 'true',
+        'authentication-user': "'o\\'brien'",
+        'authentication-password': "'a\\tb'"
+      })
+    });
+    assert.deepStrictEqual(found, { username: "o'brien", password: 'a\tb' });
   });
 
   it('reads nothing when the desktop does not use authentication', () => {
@@ -229,6 +257,20 @@ describe('desktop proxy credentials', () => {
     assert.strictEqual(readSystemCredentials({ run: () => { throw new Error('not found'); } }), null);
   });
 
+  it('handles the double quotes gsettings uses for a value with an apostrophe', () => {
+    // Measured: `pa'ss` is printed as "pa'ss", with double quotes. Stripping only
+    // single quotes sent the password with its quotes attached, and the proxy
+    // refused a correct password.
+    const found = readSystemCredentials({
+      run: fakeGsettings({
+        'use-authentication': 'true',
+        'authentication-user': '"o\'brien"',
+        'authentication-password': '"pa\'ss"'
+      })
+    });
+    assert.deepStrictEqual(found, { username: "o'brien", password: "pa'ss" });
+  });
+
   it('never returns an empty password as a valid answer', () => {
     const found = readSystemCredentials({
       run: fakeGsettings({
@@ -238,5 +280,9 @@ describe('desktop proxy credentials', () => {
       })
     });
     assert.deepStrictEqual(found, { username: 'corp', password: '' });
+  });
+
+  it('handles an empty output', () => {
+    assert.strictEqual(readSystemCredentials({ run: () => '' }), null);
   });
 });

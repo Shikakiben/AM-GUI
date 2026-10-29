@@ -7,8 +7,9 @@ function createIconCacheManager(app, options = {}) {
     throw new Error('Electron app instance is required to manage the icon cache.');
   }
 
-  // Proxy-aware fetch: the caller passes one built from src/main/proxy.js so
-  // icons download through the proxy the machine is already configured with.
+  // The caller passes main.js's netFetch, so icons go through Chromium's own
+  // network stack: the machine's proxy, and its authentication, just work.
+  // undici.fetch remains the fallback for callers that pass nothing (tests).
   const fetch = typeof options.fetch === 'function' ? options.fetch : undici.fetch;
   let AbortControllerCtor = globalThis.AbortController || undici.AbortController || null;
   try { if (!AbortControllerCtor) AbortControllerCtor = require('abort-controller'); } catch (_) {}

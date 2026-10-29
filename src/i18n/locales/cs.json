@@ -59,6 +59,7 @@
     "error.dialogClose": "Zavřít",
     "error.dialogTitle": "Chyba",
     "error.fetchFailed": "Načítání selhalo: {msg}",
+    "error.timeout": "Server včas neodpověděl. Zkontrolujte síť nebo proxy a zkuste to znovu.",
     "error.global": "Chyba: {msg}",
     "error.ipc": "Selhání IPC: {msg}",
     "error.markedNotLoaded": "marked nenačteno",

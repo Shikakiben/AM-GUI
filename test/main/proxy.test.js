@@ -15,7 +15,8 @@ const {
   parseResolvedProxy,
   readEnvProxy,
   proxyRulesFromEnv,
-  createProxySupport
+  createProxySupport,
+  looksLikeProxyAuthFailure
 } = require(path.join(repoRoot, 'src/main/proxy'));
 
 describe('proxy URL parsing', () => {
@@ -115,6 +116,39 @@ describe('safety timeouts', () => {
     `;
     const out = execFileSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 15000 });
     assert.match(out, /SETTLED/, 'the timeout must settle the promise, not leave it pending');
+  });
+});
+
+describe('telling an auth failure from a network failure', () => {
+  it('recognises the proxy asking for a password', () => {
+    // Measured: a 407 on a CONNECT tunnel surfaces as this.
+    assert.strictEqual(looksLikeProxyAuthFailure(new Error('net::ERR_TUNNEL_CONNECTION_FAILED')), true);
+    assert.strictEqual(looksLikeProxyAuthFailure(new Error('Proxy Authentication Required (407)')), true);
+    assert.strictEqual(looksLikeProxyAuthFailure(new Error('net::ERR_PROXY_AUTH_UNSUPPORTED')), true);
+  });
+
+  it('does not mistake a plain network failure for one', () => {
+    // Asking for a proxy password because the Wi-Fi is off would be absurd:
+    // the user could not possibly fix it.
+    assert.strictEqual(looksLikeProxyAuthFailure(new Error('net::ERR_NAME_NOT_RESOLVED')), false);
+    assert.strictEqual(looksLikeProxyAuthFailure(new Error('net::ERR_INTERNET_DISCONNECTED')), false);
+    assert.strictEqual(looksLikeProxyAuthFailure(new Error('net::ERR_CONNECTION_REFUSED')), false);
+    assert.strictEqual(looksLikeProxyAuthFailure(new Error('net::ERR_PROXY_CONNECTION_FAILED')), false);
+  });
+
+  it('never treats our own timeout as an auth failure', () => {
+    const aborted = new Error('This operation was aborted');
+    aborted.name = 'AbortError';
+    assert.strictEqual(looksLikeProxyAuthFailure(aborted), false);
+    const timeout = new Error('timeout');
+    timeout.name = 'TimeoutError';
+    assert.strictEqual(looksLikeProxyAuthFailure(timeout), false);
+  });
+
+  it('survives a missing error', () => {
+    assert.strictEqual(looksLikeProxyAuthFailure(null), false);
+    assert.strictEqual(looksLikeProxyAuthFailure(undefined), false);
+    assert.strictEqual(looksLikeProxyAuthFailure('ERR_TUNNEL_CONNECTION_FAILED'), true, 'a bare string is accepted');
   });
 });
 
@@ -391,6 +425,78 @@ describe('proxy support', () => {
     // Second refusal in a row: stop, the user needs a break.
     assert.strictEqual(await challenge(), null, 'no more prompting, the request just fails');
     assert.strictEqual(asked, 2, 'no prompt storm');
+  });
+
+  it('gives a fresh correction chance once the proxy has been quiet a while', async () => {
+    // Answering is not succeeding: Chromium says nothing when it stops
+    // challenging. Without this, a typo corrected an hour earlier would still
+    // count, and the next single mistake would pause immediately.
+    const handlers = {};
+    let asked = 0;
+    let clock = 1000;
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      askCredentials: async () => { asked += 1; return { username: 'alice', password: 'wrong' }; },
+      now: () => clock,
+      env: {}
+    });
+    support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
+    const challenge = () => new Promise((resolve) => {
+      handlers.login({ preventDefault() {} }, null, {}, { isProxy: true, host: 'p', port: 1 }, (u) => resolve(u || null));
+    });
+
+    await challenge();               // asked 1
+    clock += 1000;
+    await challenge();               // refused: asked 2
+    clock += 1000;
+    await challenge();               // second refusal: pause, no prompt
+    assert.strictEqual(asked, 2);
+
+    // Two minutes later, the user is presumably starting over.
+    clock += 120000;
+    assert.strictEqual(await challenge(), 'alice', 'a new prompt is allowed');
+    assert.strictEqual(asked, 3);
+  });
+
+  it('opens one dialog when several renderer challenges arrive at once', async () => {
+    // The login handler is called once per request. Without a single-flight
+    // guard, three descriptions loading together opened three dialogs, each
+    // replacing the previous one, and left two waiters pending for two minutes.
+    const handlers = {};
+    let asked = 0;
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      askCredentials: async () => {
+        asked += 1;
+        await new Promise((r) => setTimeout(r, 20));
+        return { username: 'alice', password: 's3cret' };
+      },
+      env: {}
+    });
+    support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
+    const challenge = () => new Promise((resolve) => {
+      handlers.login({ preventDefault() {} }, null, {}, { isProxy: true, host: 'p', port: 1 }, (u) => resolve(u || null));
+    });
+    const answers = await Promise.all([challenge(), challenge(), challenge()]);
+    assert.strictEqual(asked, 1, 'one dialog, not three');
+    assert.ok(answers.every((a) => a === 'alice'), 'every request gets the answer');
+  });
+
+  it('reports when it gives up waiting for the dialog', async () => {
+    // The window must be told to close: otherwise it stays on screen after the
+    // app stopped waiting, and the user's answer goes nowhere.
+    let timedOut = 0;
+    const state = makeState();
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      request: fakeRequestFactory(state),
+      askCredentials: () => new Promise(() => {}),
+      promptTimeoutMs: 30,
+      onPromptTimeout: () => { timedOut += 1; },
+      env: {}
+    });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), false);
+    assert.strictEqual(timedOut, 1, 'the caller is told to dismiss the dialog');
   });
 
   it('does not prompt again right after a cancellation', async () => {

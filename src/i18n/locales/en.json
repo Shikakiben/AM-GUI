@@ -59,6 +59,7 @@
     "error.dialogClose": "Close",
     "error.dialogTitle": "Error",
     "error.fetchFailed": "Fetch failed: {msg}",
+    "error.timeout": "The server did not answer in time. Check your network or proxy, then try again.",
     "error.global": "Error: {msg}",
     "error.ipc": "IPC failure: {msg}",
     "error.markedNotLoaded": "marked not loaded",

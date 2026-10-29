@@ -75,7 +75,8 @@ function appsFromCategoryJson(data) {
 
 function registerCategoryHandlers(ipcMain, cacheDir, options = {}) {
   if (!ipcMain) throw new Error('ipcMain instance is required');
-  // Proxy-aware fetch (src/main/proxy.js); plain undici.fetch when absent.
+  // main.js passes netFetch (Chromium's stack, proxy-aware); undici.fetch is the
+  // fallback for callers that pass nothing, e.g. tests.
   const fetch = typeof options.fetch === 'function' ? options.fetch : undici.fetch;
   const categoriesCachePath = path.join(cacheDir, 'categories-cache.json');
   const categoriesMetaPath = path.join(cacheDir, 'categories-cache.meta.json');

@@ -59,6 +59,7 @@
     "error.dialogClose": "Zatvori",
     "error.dialogTitle": "Greška",
     "error.fetchFailed": "Greška pri dohvatanju: {msg}",
+    "error.timeout": "Server nije odgovorio na vreme. Proverite mrežu ili proksi i pokušajte ponovo.",
     "error.global": "Greška: {msg}",
     "error.ipc": "IPC greška: {msg}",
     "error.markedNotLoaded": "marked nije učitan",

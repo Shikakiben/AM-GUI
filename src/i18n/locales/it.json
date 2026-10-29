@@ -59,6 +59,7 @@
     "error.dialogClose": "Zavřít",
     "error.dialogTitle": "Chyba",
     "error.fetchFailed": "Recupero fallito: {msg}",
+    "error.timeout": "Il server non ha risposto in tempo. Controlla la rete o il proxy e riprova.",
     "error.global": "Errore: {msg}",
     "error.ipc": "Fallimento IPC: {msg}",
     "error.markedNotLoaded": "marked non caricato",

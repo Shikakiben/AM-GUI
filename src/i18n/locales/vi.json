@@ -59,6 +59,7 @@
     "error.dialogClose": "Đóng",
     "error.dialogTitle": "Lỗi",
     "error.fetchFailed": "Lấy dữ liệu thất bại: {msg}",
+    "error.timeout": "Máy chủ không phản hồi kịp. Hãy kiểm tra mạng hoặc proxy rồi thử lại.",
     "error.global": "Lỗi: {msg}",
     "error.ipc": "Lỗi IPC: {msg}",
     "error.markedNotLoaded": "marked chưa được tải",

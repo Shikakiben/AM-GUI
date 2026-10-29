@@ -20,6 +20,7 @@ describe('renderer boot (full page load)', () => {
   let window;
   let scripts;
   let allScripts;
+  let electronCalls;
   let _dom;
 
   before(function () {
@@ -35,12 +36,13 @@ describe('renderer boot (full page load)', () => {
     });
     window = _dom.window;
 
+    electronCalls = [];
     window.electronAPI = new Proxy({}, {
       get(_t, prop) {
         if (prop === 'listAppsDetailed') {
           return () => Promise.resolve({ pmFound: true, all: [], installed: [], pmName: 'am', bundleChildOf: {} });
         }
-        return () => Promise.resolve(undefined);
+        return (...args) => { electronCalls.push({ prop, args }); return Promise.resolve(undefined); };
       }
     });
     window.Terminal = function () { return { open() {}, write() {}, reset() {}, clear() {}, loadAddon() {} }; };
@@ -86,6 +88,14 @@ describe('renderer boot (full page load)', () => {
         `Script threw during load: ${src}`
       );
     }
+  });
+
+  it('tells the main process the page can receive messages', () => {
+    // Messages sent before this point are dropped by Electron without a word:
+    // the proxy password prompt was requested 2 s in and the renderer never saw
+    // it, so no dialog appeared and authentication failed silently.
+    const called = electronCalls.filter((c) => c.prop === 'notifyRendererReady');
+    assert.strictEqual(called.length, 1, 'the ready signal is sent exactly once');
   });
 
   it('registers all expected feature modules on window.features', () => {

@@ -59,6 +59,7 @@
     "error.dialogClose": "Fechar",
     "error.dialogTitle": "Erro",
     "error.fetchFailed": "Falha na recuperação: {msg}",
+    "error.timeout": "O servidor não respondeu a tempo. Verifique a rede ou o proxy e tente novamente.",
     "error.global": "Erro: {msg}",
     "error.ipc": "Falha IPC: {msg}",
     "error.markedNotLoaded": "marked não carregado",

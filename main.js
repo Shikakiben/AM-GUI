@@ -27,7 +27,7 @@ const { registerAppListHandlers } = require('./src/main/appList');
 const { registerUninstallHandler } = require('./src/main/uninstall');
 const { registerLaunchHandlers } = require('./src/main/launch');
 const { PLA_INSTALL_SCHEME, extractPlaInstallUrl, parsePlaInstallUrl } = require('./src/main/plaInstall');
-const { createProxySupport } = require('./src/main/proxy');
+const { createProxySupport, looksLikeProxyAuthFailure } = require('./src/main/proxy');
 const { createProxyCredentialStore, readSystemCredentials } = require('./src/main/proxyCredentials');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
@@ -217,6 +217,13 @@ const proxyCredentialStore = createProxyCredentialStore({
   filePath: path.join(app.getPath('userData'), 'proxy-auth.json')
 });
 let proxyPromptSeq = 0;
+let currentProxyPromptId = null;
+// Resolved when the renderer says it can receive messages. Anything sent before
+// that is dropped by Electron without a word, so the prompt must wait for it.
+let rendererReadyResolve = null;
+const rendererReady = new Promise((resolve) => { rendererReadyResolve = resolve; });
+ipcMain.on('renderer-ready', () => { try { rendererReadyResolve?.(); } catch (_) {} });
+const RENDERER_READY_TIMEOUT_MS = 15000;
 async function askProxyCredentials() {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return null;
@@ -225,12 +232,26 @@ async function askProxyCredentials() {
   // is asynchronous. It is read before the dialog opens, so the label is right.
   let encrypted = false;
   try { encrypted = await proxyCredentialStore.canStore(); } catch (_) { encrypted = false; }
+  // Wait for the page to be able to listen, with a bound so a broken renderer
+  // cannot block authentication for ever. The bound is cleared as soon as the
+  // renderer answers, so it never keeps the process alive for nothing.
+  let readyTimer = null;
+  try {
+    await Promise.race([
+      rendererReady,
+      new Promise((resolve) => { readyTimer = setTimeout(resolve, RENDERER_READY_TIMEOUT_MS); })
+    ]);
+  } finally {
+    if (readyTimer) clearTimeout(readyTimer);
+  }
   if (win.isDestroyed()) return null;
   return new Promise((resolve) => {
     let settled = false;
+    currentProxyPromptId = id;
     const finish = (answer) => {
       if (settled) return;
       settled = true;
+      if (currentProxyPromptId === id) currentProxyPromptId = null;
       passwordWaiters.delete(id);
       resolve(answer);
     };
@@ -277,6 +298,15 @@ const proxySupport = createProxySupport({
     return Promise.resolve();
   },
   onCredentialsRefused: () => proxyCredentialStore.clear(),
+  onPromptTimeout: () => {
+    // Give up on the dialog: close it and forget the waiter, or the window would
+    // stay on screen with nothing left to receive the answer.
+    const id = currentProxyPromptId;
+    if (!id) return;
+    currentProxyPromptId = null;
+    passwordWaiters.delete(id);
+    try { mainWindow?.webContents?.send('password-prompt-dismiss', { id }); } catch (_) {}
+  },
   onAuthenticated: () => {
     // Retry what failed while the password was missing.
     try { mainWindow?.webContents?.send('proxy-authenticated'); } catch (_) {}
@@ -299,28 +329,45 @@ function ensureEnvProxy() {
   return envProxyReady;
 }
 
+// A download must not hang for ever: a proxy can accept the connection and then
+// stay silent. The icon cache sets its own 15 s bound; everything else gets this
+// one, unless the caller asked for something else.
+const DEFAULT_NET_TIMEOUT_MS = 20000;
+
 async function netFetch(input, init) {
   await ensureEnvProxy();
   const url = typeof input === 'string' ? input : input?.url;
-  // A proxy that wants a password shows up in one of two ways, both observed:
-  // a 407 response, or a thrown ERR_TUNNEL_CONNECTION_FAILED. Either way the
-  // answer is the same: ask once, then replay the request.
   const retryWithAuth = async () => {
     if (!url) return false;
     try { return await proxySupport.ensureProxyAuth(url); } catch (_) { return false; }
   };
 
+  // One attempt, with a bound. The timer is cleared as soon as the request
+  // settles, so it never keeps the process alive for nothing.
+  const attempt = async () => {
+    if (init && init.signal) return net.fetch(input, init); // caller owns the timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DEFAULT_NET_TIMEOUT_MS);
+    try {
+      return await net.fetch(input, { ...(init || {}), signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   let first;
   try {
-    first = await net.fetch(input, init);
+    first = await attempt();
   } catch (error) {
+    // A plain network failure must not look like a proxy password problem.
+    if (!looksLikeProxyAuthFailure(error)) throw error;
     if (!(await retryWithAuth())) throw error;
-    return net.fetch(input, init);
+    return attempt();
   }
   if (!first || first.status !== 407) return first;
   try { await first.body?.cancel?.(); } catch (_) {}
   if (!(await retryWithAuth())) return first;
-  return net.fetch(input, init);
+  return attempt();
 }
 
 const deps = { tErr, detectPackageManager, invalidatePackageManagerCache, passwordWaiters, activeInstalls, activeUpdates, installAppManAuto: (opts) => installAppManAuto({ ...opts, fetch: netFetch }), isExternalUpdateRunning, fsp, userDataPath: app.getPath('userData') };

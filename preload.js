@@ -44,6 +44,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // The proxy accepted our credentials: whatever failed for lack of a password
   // (icons, categories) can be retried now.
   onProxyAuthenticated: (cb) => ipcRenderer.on('proxy-authenticated', () => cb && cb()),
+  // The main process gave up waiting for the proxy password: close the window,
+  // otherwise it stays on screen and the answer goes nowhere.
+  onPasswordPromptDismiss: (cb) => ipcRenderer.on('password-prompt-dismiss', () => cb && cb()),
+  // Tells the main process the page can receive messages. Anything sent before
+  // this point is silently dropped by Electron (measured: the proxy password
+  // prompt was requested 2 s in and the renderer never saw it).
+  notifyRendererReady: () => ipcRenderer.send('renderer-ready'),
   sendPassword: (payload) => ipcRenderer.send('password-response', payload),
   getSandboxInfo: (appName) => ipcRenderer.invoke('sandbox-info', appName),
   configureSandbox: (options) => ipcRenderer.invoke('sandbox-configure', options),

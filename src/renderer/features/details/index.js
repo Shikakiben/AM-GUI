@@ -148,7 +148,16 @@
       let archived = false;
       let obsolete = null;
       try {
-        const response = await fetch(url, { method: 'GET' });
+        // Without a bound, a proxy that accepts the connection and stays silent
+        // leaves "Fetching remote description..." on screen for ever.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20000);
+        let response;
+        try {
+          response = await fetch(url, { method: 'GET', signal: controller.signal });
+        } finally {
+          clearTimeout(timer);
+        }
         if (!response.ok) throw new Error('HTTP ' + response.status);
         const data = await response.json();
         markdown = typeof data.description === 'string' ? data.description : '';
@@ -165,8 +174,12 @@
         archived = data.archived === true;
         obsolete = typeof data.obsolete === 'number' ? data.obsolete : null;
       } catch (error) {
-        const tMsg = typeof window.t === 'function' ? window.t('error.fetchFailed', { msg: error.message || error }) : null;
-        throw new Error(tMsg || ('Fetch failed: ' + (error.message || error)));
+        const tFn = typeof window.t === 'function' ? window.t : null;
+        // An aborted request is our own timeout, not a network refusal: say so,
+        // or the user reads a cryptic "aborted" with no way to act on it.
+        const isTimeout = error && (error.name === 'AbortError' || /abort/i.test(String(error.message || '')));
+        const tMsg = tFn ? tFn(isTimeout ? 'error.timeout' : 'error.fetchFailed', { msg: error.message || error }) : null;
+        throw new Error(tMsg || ((isTimeout ? 'Timed out: ' : 'Fetch failed: ') + (error.message || error)));
       }
       let shortDesc = '';
       let longDesc = '';

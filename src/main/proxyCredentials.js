@@ -26,17 +26,48 @@ const { execFileSync } = require('child_process');
 // to read them itself — otherwise the user is asked for something the system
 // already has.
 function readSystemCredentials(options = {}) {
+  // One call, not three: execFileSync blocks the main process, so asking for
+  // three keys separately could freeze the UI for three timeouts in a row.
   const run = options.run || ((args) => execFileSync('gsettings', args, { encoding: 'utf8', timeout: 2000 }));
-  const schema = 'org.gnome.system.proxy.http';
+  // gsettings prints GVariant text, not the raw value. Measured on a real
+  // session, and both details matter for corporate proxies:
+  //   - a backslash is doubled: DOMAIN\\user is really DOMAIN\user;
+  //   - the quoting style depends on the content: a value containing an
+  //     apostrophe is printed with DOUBLE quotes ("pa'ss"), not single ones.
+  // Stripping only single quotes left the password as "pa'ss", quotes included,
+  // and the proxy refused a correct password.
   const unquote = (raw) => {
-    const value = String(raw == null ? '' : raw).trim();
-    if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1);
-    return value;
+    let value = String(raw == null ? '' : raw).trim();
+    if (value.length >= 2) {
+      const first = value[0];
+      const last = value[value.length - 1];
+      if ((first === "'" && last === "'") || (first === '"' && last === '"')) {
+        value = value.slice(1, -1);
+      }
+    }
+    let out = '';
+    for (let i = 0; i < value.length; i += 1) {
+      if (value[i] === '\\' && i + 1 < value.length) {
+        const next = value[i + 1];
+        out += next === 'n' ? '\n' : next === 't' ? '\t' : next;
+        i += 1;
+      } else {
+        out += value[i];
+      }
+    }
+    return out;
   };
   try {
-    if (unquote(run(['get', schema, 'use-authentication'])) !== 'true') return null;
-    const username = unquote(run(['get', schema, 'authentication-user']));
-    const password = unquote(run(['get', schema, 'authentication-password']));
+    const output = run(['list-recursively', 'org.gnome.system.proxy.http']);
+    const values = new Map();
+    for (const line of String(output).split('\n')) {
+      // Lines look like: org.gnome.system.proxy.http port 3128
+      const match = line.match(/^org\.gnome\.system\.proxy\.http\s+(\S+)\s+(.*)$/);
+      if (match) values.set(match[1], match[2]);
+    }
+    if (unquote(values.get('use-authentication')) !== 'true') return null;
+    const username = unquote(values.get('authentication-user'));
+    const password = unquote(values.get('authentication-password'));
     if (!username) return null;
     return { username, password };
   } catch (_) {

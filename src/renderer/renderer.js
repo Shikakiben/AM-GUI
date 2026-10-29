@@ -166,6 +166,7 @@ if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
     // Proxy credentials need a username too; the sudo prompt only a password.
     const wantsUser = !!(data && data.kind === 'proxy');
     const answer = await window.ui.passwordPrompt.promptPassword(wantsUser ? {
+      kind: 'proxy',
       withUsername: true,
       withRemember: !!(data && data.canRemember),
       encrypted: !(data && data.encrypted === false),
@@ -184,7 +185,17 @@ if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
     }
     window.electronAPI.sendPassword({ id: data && data.id, password: answer });
   });
+  // Only closes a proxy prompt: a sudo prompt must not be dismissed by a proxy
+  // timeout happening elsewhere.
+  if (window.electronAPI.onPasswordPromptDismiss) {
+    window.electronAPI.onPasswordPromptDismiss(() => {
+      try { window.ui?.passwordPrompt?.dismiss?.('proxy'); } catch (_) {}
+    });
+  }
 }
+// From here on, messages from the main process are actually received. Before
+// this point Electron drops them, so anything early would be lost silently.
+try { window.electronAPI?.notifyRendererReady?.(); } catch (_) {}
 // ...existing code...
 
 

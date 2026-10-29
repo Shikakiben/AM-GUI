@@ -42,9 +42,63 @@
     return modal;
   }
 
+  // The prompt currently on screen, so the main process can close it when it
+  // stops waiting. `kind` keeps that from closing the wrong dialog: a sudo
+  // prompt and a proxy prompt must not dismiss each other.
+  let activePrompt = null;
+  // The modal is a single element in the DOM, so two prompts cannot share it.
+  // Measured: when a proxy challenge arrived while a sudo prompt was waiting,
+  // the second dialog replaced the first and the sudo promise never settled —
+  // the install then hung until its ten-minute kill timer. Prompts are therefore
+  // serialised: the next one is shown once the current one is answered.
+  let promptQueue = Promise.resolve();
+  // Prompts waiting their turn, so a timeout can cancel the right one: a proxy
+  // prompt queued behind an unanswered sudo prompt must not appear later, long
+  // after the app stopped waiting for it.
+  const waiting = [];
+
+  function dismissPasswordPrompt(kind) {
+    if (activePrompt && (!kind || activePrompt.kind === kind)) {
+      const dismiss = activePrompt.dismiss;
+      activePrompt = null;
+      dismiss();
+      return true;
+    }
+    if (!kind) return false;
+    // Not on screen yet: cancel the queued one instead of letting it pop up
+    // after the app gave up.
+    const index = waiting.findIndex((entry) => entry.kind === kind);
+    if (index < 0) return false;
+    const [entry] = waiting.splice(index, 1);
+    entry.cancelled = true;
+    entry.cancel();
+    return true;
+  }
+
   // Show the modal and return a promise resolved with the password or null if
   // cancelled. With options.withUsername, resolves { username, password }.
   function promptPassword(options) {
+    const labels = options || {};
+    let cancelWaiting = null;
+    const gate = new Promise((resolve) => { cancelWaiting = resolve; });
+    const entry = { kind: labels.kind || null, cancelled: false, cancel: cancelWaiting };
+    waiting.push(entry);
+    const start = () => {
+      const index = waiting.indexOf(entry);
+      if (index >= 0) waiting.splice(index, 1);
+      // Cancelled while waiting: never show it, or the dialog would pop up long
+      // after the app stopped waiting for the answer.
+      if (entry.cancelled) return null;
+      return showPrompt(options);
+    };
+    const shown = promptQueue.then(start, start);
+    // The queue must keep moving even if one prompt fails.
+    promptQueue = shown.then(() => {}, () => {});
+    // A cancellation while waiting resolves the caller without ever showing it.
+    return Promise.race([shown, gate.then(() => null)]);
+  }
+
+  function showPrompt(options) {
     return new Promise((resolve) => {
       const labels = options || {};
       const modal = ensurePasswordModal(labels);
@@ -69,7 +123,13 @@
         cancelBtn.removeEventListener('click', onCancel);
         input.removeEventListener('keydown', onKey);
         if (userInput) userInput.removeEventListener('keydown', onKey);
+        if (activePrompt && activePrompt.dismiss === dismiss) activePrompt = null;
       }
+      function dismiss() {
+        cleanup();
+        resolve(null);
+      }
+      activePrompt = { kind: labels.kind || null, dismiss };
       function onOk() {
         const username = userInput ? userInput.value.trim() : '';
         if (userInput && !username) {
@@ -107,5 +167,5 @@
   }
 
   window.ui = window.ui || {};
-  window.ui.passwordPrompt = { promptPassword };
+  window.ui.passwordPrompt = { promptPassword, dismiss: dismissPasswordPrompt };
 })();
