@@ -181,9 +181,27 @@ function registerAppListHandlers(ipcMain, deps) {
         }
 
         const { exec } = require('child_process');
+        // Node's default maxBuffer is 1 MiB, and `am -l` lists every available
+        // application with its description: measured at 1,109,062 bytes on a
+        // normal machine, i.e. above the limit. The command then fails with
+        // ERR_CHILD_PROCESS_STDIO_MAXBUFFER and the output is cut mid-line, so
+        // 505 applications were silently missing from the list (8538 shown out
+        // of 9043). A larger buffer only allows more output: it changes nothing
+        // for a working setup and removes the truncation.
+        const EXEC_OPTIONS = { maxBuffer: 64 * 1024 * 1024 };
+        const runPm = (flag, cacheDir) => new Promise((res) => {
+          exec(`${pm} ${flag}`, { ...EXEC_OPTIONS, env: { ...process.env, XDG_CACHE_HOME: cacheDir } }, (err, stdout) => {
+            // Surface the truncation if it ever happens again: a shorter list
+            // with no warning is the worst possible failure.
+            if (err && err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+              console.warn(`[appList] ${pm} ${flag} output exceeded maxBuffer, list may be incomplete`);
+            }
+            res({ err, stdout: stdout || '' });
+          });
+        });
         const [listRes, instRes] = await Promise.all([
-          new Promise(res => exec(`${pm} -l`, { env: { ...process.env, XDG_CACHE_HOME: tmpDir1 } }, (err, stdout) => res({ err, stdout: stdout || '' }))),
-          new Promise(res => exec(`${pm} -f`, { env: { ...process.env, XDG_CACHE_HOME: tmpDir2 } }, (err, stdout) => res({ err, stdout: stdout || '' })))
+          runPm('-l', tmpDir1),
+          runPm('-f', tmpDir2)
         ]);
 
         for (const srcDir of [tmpDir1, tmpDir2]) {
