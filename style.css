@@ -7,7 +7,11 @@
   display: flex;
   gap: 12px;
   box-shadow: var(--shadow);
-  min-height: 0;
+  /* Height of a real tile in grid view, measured with the icons loaded. A
+     skeleton shorter than the tile it becomes makes the page grow on every
+     hydration, which shifts whatever is on screen. Keep these in sync with the
+     per-mode values below if a tile's padding or icon size changes. */
+  min-height: 88px;
   height: auto;
   max-height: none;
   align-items: flex-start;
@@ -26,7 +30,7 @@ body.view-list .app-tile-skeleton {
   margin: 0;
   align-items: center;
   gap: 14px;
-  min-height: 0;
+  min-height: 66px;
 }
 
 body.view-icons .app-tile-skeleton {
@@ -34,7 +38,7 @@ body.view-icons .app-tile-skeleton {
   align-items: center;
   text-align: center;
   padding: 18px 10px;
-  min-height: 0;
+  min-height: 142px;
 }
 
 body.view-cards .app-tile-skeleton {
@@ -43,7 +47,7 @@ body.view-cards .app-tile-skeleton {
   padding: 18px;
   border-radius: 18px;
   position: relative;
-  min-height: 0;
+  min-height: 138px;
 }
 
 /* Optionnel : squelette visuel (barre grise) */

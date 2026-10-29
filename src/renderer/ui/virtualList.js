@@ -28,6 +28,12 @@
     let hydrationQueue = [];
     let hydrationScheduled = false;
     const HYDRATE_BATCH_SIZE = 6;
+    // Build a tile before it is visible. Without this the observer only fired at
+    // threshold 0.1 inside the viewport, so the title and description appeared
+    // on screen in one jump, out of an empty skeleton. 800px is more than one
+    // screen on a typical window, and it also gives the icon observer (1600px,
+    // but it can only observe <img> that exist after hydration) a head start.
+    const HYDRATE_ROOT_MARGIN = '800px 0px';
 
     function setAppList(list) {
       disconnectListObservers();
@@ -64,7 +70,7 @@
             entry.target.dataset.hydrateQueued = '1';
             enqueueHydration(idx, entry.target);
           });
-        }, { root: scrollShell, threshold: 0.1 });
+        }, { root: scrollShell, threshold: 0.1, rootMargin: HYDRATE_ROOT_MARGIN });
         const tiles = appsDiv.querySelectorAll('.app-tile-skeleton');
         tiles.forEach(tile => skeletonObserver && skeletonObserver.observe(tile));
         return;
