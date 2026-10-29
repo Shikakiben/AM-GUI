@@ -1261,6 +1261,11 @@ const settingsPanelApi = window.ui?.settingsPanel?.init?.({
 if (window.ui?.confirmModal?.init) window.ui.confirmModal.init({ t });
 
 window.addEventListener('DOMContentLoaded', async () => {
+  // Shell first: labels, tabs and icons must be in place even if loading the
+  // app list fails or hangs. Everything below used to share one try/catch, so a
+  // single failure (categories unreachable behind a proxy, for instance) left the
+  // whole window untranslated and empty.
+  try { initLanguagePreferences(); } catch (err) { console.error('initLanguagePreferences failed', err); }
   try {
     initIconObserver();
     // Ensure spinner and results are hidden at startup
@@ -1311,7 +1316,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       });
       replaceSyncButton(syncBtn);
     }
-    initLanguagePreferences();
     await loadAppsPromise;
     // Restore any previous detail (session) if still present
     const last = sessionStorage.getItem('lastDetailsApp');

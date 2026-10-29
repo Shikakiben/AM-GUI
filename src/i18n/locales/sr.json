@@ -296,6 +296,7 @@
     "errFailedSendChoice": "Slanje izbora nije uspelo",
     "errAppmanInstall": "Instalacija AppMan-a nije uspela.",
     "errListExecFailed": "Izvršavanje komande liste nije uspelo.",
+    "errListTimeout": "Nije odgovorio u roku od {seconds} s. Možda čeka proksi ili sporu mrežu. Pokušajte ponovo ili proverite da {pm} radi u terminalu.",
     "errInternalParsing": "Interni greška pri parsiranju.",
     "errMissingDependency": "missing-dependency",
     "errSandboxConfigureFailed": "sandbox-configure-failed",
