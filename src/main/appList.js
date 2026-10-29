@@ -151,39 +151,7 @@ function registerAppListHandlers(ipcMain, deps) {
   }
 
   // Separate fetch function reusable by background refresh
-  //
-  // AM can be slow: with a proxy configured, `am -l` performs network checks that
-  // go through it, and it can hang for minutes. Without a timeout the GUI waited
-  // forever with an empty window, and every refresh stacked another pair of
-  // processes (six `appman -l` were seen running at once). Both are fixed here:
-  // a hard timeout per command, and a single in-flight fetch shared by callers.
-  const PM_COMMAND_TIMEOUT_MS = 45000;
-  let inFlightFetch = null;
-
-  function runPmCommand(pm, flag, cacheDir) {
-    const { exec } = require('child_process');
-    return new Promise((resolve) => {
-      exec(`${pm} ${flag}`, {
-        env: { ...process.env, XDG_CACHE_HOME: cacheDir },
-        timeout: PM_COMMAND_TIMEOUT_MS,
-        killSignal: 'SIGKILL',
-        maxBuffer: 32 * 1024 * 1024
-      }, (err, stdout) => {
-        const timedOut = !!(err && (err.killed || err.signal === 'SIGKILL'));
-        resolve({ err, stdout: stdout || '', timedOut });
-      });
-    });
-  }
-
   async function fetchAppsFresh() {
-    // One fetch at a time: a second caller waits for the running one instead of
-    // starting another pair of AM processes.
-    if (inFlightFetch) return inFlightFetch;
-    inFlightFetch = fetchAppsFreshOnce().finally(() => { inFlightFetch = null; });
-    return inFlightFetch;
-  }
-
-  async function fetchAppsFreshOnce() {
     const { pm, bothFound } = await detectPackageManager();
     if (!pm) return { installed: [], all: [], pmFound: false, error: tErr('errNoPmPath', "No 'am' or 'appman' package manager detected in PATH.") };
     if (bothFound) return { installed: [], all: [], pmFound: true, pmName: pm, bothPms: true, bundleChildOf: {} };
@@ -212,9 +180,10 @@ function registerAppListHandlers(ipcMain, deps) {
           }
         }
 
+        const { exec } = require('child_process');
         const [listRes, instRes] = await Promise.all([
-          runPmCommand(pm, '-l', tmpDir1),
-          runPmCommand(pm, '-f', tmpDir2)
+          new Promise(res => exec(`${pm} -l`, { env: { ...process.env, XDG_CACHE_HOME: tmpDir1 } }, (err, stdout) => res({ err, stdout: stdout || '' }))),
+          new Promise(res => exec(`${pm} -f`, { env: { ...process.env, XDG_CACHE_HOME: tmpDir2 } }, (err, stdout) => res({ err, stdout: stdout || '' })))
         ]);
 
         for (const srcDir of [tmpDir1, tmpDir2]) {
@@ -232,19 +201,6 @@ function registerAppListHandlers(ipcMain, deps) {
 
         if ((listRes.err && listRes.err.code === 127) || (instRes.err && instRes.err.code === 127)) {
           try { invalidatePackageManagerCache(); } catch (_) {}
-        }
-        // A timeout is not an execution failure: AM answered too slowly (a proxy
-        // it cannot reach, a slow network). Say so, so the user knows the app is
-        // not broken and can try again instead of seeing an empty window.
-        if (listRes.timedOut || instRes.timedOut) {
-          return resolve({
-            installed: [],
-            all: [],
-            pmFound: true,
-            pmName: pm,
-            timedOut: true,
-            error: tErr('errListTimeout', '{pm} did not answer within {seconds} s. It may be waiting on a proxy or a slow network.', { pm, seconds: Math.round(PM_COMMAND_TIMEOUT_MS / 1000) })
-          });
         }
         if ((listRes.err || !listRes.stdout) && (instRes.err || !instRes.stdout)) {
           return resolve({ installed: [], all: [], pmFound: true, error: tErr('errListExecFailed', 'List command execution failed.') });

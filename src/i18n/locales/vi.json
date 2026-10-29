@@ -296,7 +296,6 @@
     "errFailedSendChoice": "Gửi lựa chọn thất bại",
     "errAppmanInstall": "Cài đặt AppMan thất bại.",
     "errListExecFailed": "Thực thi lệnh liệt kê thất bại.",
-    "errListTimeout": "Không phản hồi trong {seconds} giây. Có thể đang chờ proxy hoặc mạng chậm. Hãy thử lại hoặc kiểm tra {pm} trong terminal.",
     "errInternalParsing": "Lỗi phân tích cú pháp nội bộ.",
     "errMissingDependency": "missing-dependency",
     "errSandboxConfigureFailed": "sandbox-configure-failed",

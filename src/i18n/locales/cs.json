@@ -296,7 +296,6 @@
     "errFailedSendChoice": "Odeslání volby selhalo",
     "errAppmanInstall": "Instalace AppManu selhala.",
     "errListExecFailed": "Provádění příkazu seznamu selhalo.",
-    "errListTimeout": "Neodpověděl do {seconds} s. Možná čeká na proxy nebo pomalou síť. Zkuste to znovu nebo ověřte, že {pm} funguje v terminálu.",
     "errInternalParsing": "Interní chyba analýzy.",
     "errMissingDependency": "missing-dependency",
     "errSandboxConfigureFailed": "sandbox-configure-failed",

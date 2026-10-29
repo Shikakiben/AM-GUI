@@ -296,7 +296,6 @@
     "errFailedSendChoice": "Échec de l'envoi du choix",
     "errAppmanInstall": "Échec de l'installation d'AppMan.",
     "errListExecFailed": "Échec de l'exécution de la commande de liste.",
-    "errListTimeout": "{pm} n'a pas répondu en {seconds} s. Il attend peut-être un proxy ou un réseau lent. Réessayez, ou vérifiez que {pm} fonctionne dans un terminal.",
     "errInternalParsing": "Erreur d'analyse interne.",
     "errMissingDependency": "missing-dependency",
     "errSandboxConfigureFailed": "sandbox-configure-failed",
