@@ -2,7 +2,6 @@
 // gallery arrows, wheel and arrow keys): see features/details/index.js.
 // Keeping a second set of listeners here made the gallery arrows close the
 // lightbox as well, so this duplicate was removed.
-const loadedIcons = new Set();
 const scrollShell = document.querySelector('.scroll-shell');
 const appConstants = window.constants || {};
 const VISIBLE_COUNT = typeof appConstants.VISIBLE_COUNT === 'number' ? appConstants.VISIBLE_COUNT : 50;
@@ -67,96 +66,16 @@ function applyViewModeClass() {
   try { refreshAllSandboxBadges(); } catch (_) {}
 }
 
-let appListVirtual = [];
-let currentEndVirtual = VISIBLE_COUNT;
-let lastTileObserver = null;
-
-let setAppListImpl = function(list) {
-  appListVirtual = list;
-  currentEndVirtual = VISIBLE_COUNT;
-  if (scrollShell) scrollShell.scrollTop = 0;
-  renderVirtualList();
-};
+// The list itself is rendered by ui/virtualList.js, which replaces every
+// function below in the wiring block at the bottom of this file — before
+// DOMContentLoaded fires. The entry point stays here because several features
+// call it by name.
+let setAppListImpl = () => {};
 
 function setAppList(list) {
   return setAppListImpl(list);
 }
 
-function renderVirtualList() {
-  if (!appsDiv) return;
-  appsDiv.innerHTML = '';
-  const useSkeleton = appListVirtual.length > 50;
-  if (useSkeleton) {
-    const viewClass = 'view-' + (state.viewMode || 'grid');
-    const fragment = document.createDocumentFragment();
-    for (let i = 0; i < appListVirtual.length; i++) {
-      const skel = document.createElement('div');
-      skel.className = 'app-tile-skeleton ' + viewClass;
-      skel.dataset.index = i;
-      fragment.appendChild(skel);
-    }
-    appsDiv.appendChild(fragment);
-    if (window.skeletonObserver) window.skeletonObserver.disconnect();
-    window.skeletonObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        if (entry.target.classList.contains('hydrated')) return;
-        const idx = parseInt(entry.target.dataset.index, 10);
-        if (Number.isNaN(idx)) return;
-        const realTile = buildTile(appListVirtual[idx]);
-        realTile.classList.add('hydrated');
-        entry.target.replaceWith(realTile);
-        try { window.skeletonObserver.observe(realTile); } catch (_) {}
-      });
-    }, { root: scrollShell, threshold: 0.1 });
-    const tiles = appsDiv.querySelectorAll('.app-tile-skeleton');
-    tiles.forEach(tile => window.skeletonObserver && window.skeletonObserver.observe(tile));
-    return;
-  }
-
-  const end = Math.min(currentEndVirtual, appListVirtual.length);
-  const fragment = document.createDocumentFragment();
-  for (let i = 0; i < end; i++) {
-    fragment.appendChild(buildTile(appListVirtual[i]));
-  }
-  appsDiv.appendChild(fragment);
-  if (lastTileObserver) lastTileObserver.disconnect();
-  if (end < appListVirtual.length) {
-    const tiles = appsDiv.querySelectorAll('.app-tile');
-    const toObserve = Array.from(tiles).slice(-3);
-    if (toObserve.length) {
-      try {
-        lastTileObserver = new IntersectionObserver((entries) => {
-          if (entries.some(e => e.isIntersecting)) {
-            lastTileObserver.disconnect();
-            currentEndVirtual = Math.min(currentEndVirtual + VISIBLE_COUNT, appListVirtual.length);
-            renderVirtualList();
-          }
-        }, { root: scrollShell, threshold: 0.1 });
-        toObserve.forEach(tile => lastTileObserver.observe(tile));
-      } catch(_) {}
-    }
-  }
-  // --- Spacer for consistent scroll ---
-  let spacer = appsDiv.querySelector('.app-list-spacer');
-  if (!spacer) {
-    spacer = document.createElement('div');
-    spacer.className = 'app-list-spacer';
-    spacer.style.width = '100%';
-    spacer.style.gridColumn = '1 / -1';
-    spacer.style.pointerEvents = 'none';
-    appsDiv.appendChild(spacer);
-  }
-  // Calculate average tile height (over the displayed batch)
-  let tileHeight = 120; // default fallback
-  const firstTile = appsDiv.querySelector('.app-tile');
-  if (firstTile) {
-    tileHeight = firstTile.offsetHeight || tileHeight;
-  }
-  const missing = appListVirtual.length - end;
-  spacer.style.height = (missing > 0 ? (missing * tileHeight) : 0) + 'px';
-  // --- Fin spacer ---
-}
 
 
 // --- Sudo password prompt integration ---
@@ -199,125 +118,7 @@ try { window.electronAPI?.notifyRendererReady?.(); } catch (_) {}
 // ...existing code...
 
 
-function createInstalledSection(sectionKey) {
-  const section = document.createElement('div');
-  section.className = 'installed-section';
-  const title = document.createElement('h4');
-  const keyMap = {
-    sandboxed: 'installed.section.sandboxed',
-    others: 'installed.section.others',
-    system: 'installed.section.system',
-    user: 'installed.section.user'
-  };
-  title.textContent = t(keyMap[sectionKey] || 'installed.section.others');
-  section.appendChild(title);
-  return section;
-}
 
-let tileRenderCount = 0;
-
-function buildTile(item){
-  if (item && item.__section) {
-    return createInstalledSection(item.__section);
-  }
-  const { name, installed, desc } = typeof item === 'string' ? { name: item, installed: false, desc: null } : item;
-  const scope = item?.scope || null;
-  const appId = scope ? name + '|' + scope : name;
-  const label = prettifyAppName(name);
-  const version = item?.version ? String(item.version) : null;
-  let shortDesc = desc || (installed ? t('installed.localDesc') : t('installed.availableDesc'));
-  if (shortDesc.length > 110) shortDesc = shortDesc.slice(0,107).trim() + '…';
-  let actionsHTML = '';
-  if (state.viewMode === 'list') {
-    if (!installed) {
-      let btnLabel = t('details.install');
-      let actionAttr = 'install';
-      let disabledAttr = '';
-      const activeSess = installerApi?.getActiveInstallSession?.() || activeInstallSession;
-      if (activeSess.id && !activeSess.done && activeSess.name === name){
-        btnLabel = t('install.listViewCancel');
-        actionAttr = 'cancel-install';
-      } else {
-        const pos = getQueuePosition(name);
-        if (pos !== -1) { btnLabel = t('install.queued', { pos }); actionAttr='remove-queue'; }
-      }
-      actionsHTML = `<div class="actions"><button class="inline-action install" data-action="${actionAttr}" data-app="${name}"${disabledAttr}>${btnLabel}</button></div>`;
-    } else {
-      actionsHTML = `<div class="actions">`;
-      actionsHTML += `<button class="inline-action launch" data-action="launch" data-app="${name}">${t('details.launch')}</button>`;
-      actionsHTML += `<button class="inline-action uninstall" data-action="uninstall" data-app="${name}">${t('details.uninstall')}</button>`;
-      actionsHTML += `</div>`;
-    }
-  }
-
-  let stateBadge = '';
-  if (state.viewMode !== 'list' && !installed) {
-    const activeSess2 = installerApi?.getActiveInstallSession?.() || activeInstallSession;
-    if (activeSess2.id && !activeSess2.done && activeSess2.name === name) {
-      stateBadge = ' <span class="install-state-badge installing" data-state="installing">'+t('install.status')+'<button class="queue-remove-badge inline-action" data-action="cancel-install" data-app="'+name+'" title="'+t('install.cancelShort')+'" aria-label="'+t('install.cancelShort')+'">✕</button></span>';
-    } else {
-      const pos = getQueuePosition(name);
-      if (pos !== -1) stateBadge = ' <span class="install-state-badge queued" data-state="queued">'+t('install.queued', { pos }).replace(/ ✕$/, '')+'<button class="queue-remove-badge inline-action" data-action="remove-queue" data-app="'+name+'" title="'+t('queue.removeBadge')+'" aria-label="'+t('queue.removeBadgeAria')+'">✕</button></span>';
-    }
-  }
-  const tile = document.createElement('div');
-  tile.className = 'app-tile';
-  tile.setAttribute('data-app', appId);
-  const isSandboxedTile = installed && isAppSandboxed(name);
-  const badgeSymbol = isSandboxedTile
-    ? (window.ui?.icons?.choose?.('lock', '🔒', 'badge-icon') || '🔒')
-    : '✓';
-  const badgeText = t('installed.badge');
-  const badgeHTML = installed
-    ? `<span class="installed-badge" aria-label="${badgeText}" title="${badgeText}" style="position:absolute;top:2px;right:2px;">${badgeSymbol}</span>`
-    : '';
-  tile.innerHTML = `
-    <div class="tile-icon" style="position:relative;display:inline-block;">
-      <img data-src="${getIconUrl(name)}" alt="${label}" loading="lazy" decoding="async"${state.viewMode==='icons' ? ' class="icon-mode"' : ''} onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/${name}.png'; setTimeout(()=>{ if(this.naturalWidth<=1) this.src='https://raw.githubusercontent.com/Portable-Linux-Apps/Portable-Linux-Apps.github.io/main/icons/blank.png'; },1200);">
-      ${badgeHTML}
-    </div>
-    <div class="tile-text">
-      <div class="tile-name">${label}${version? ` <span class\"tile-version\">${version}</span>`: ''}${stateBadge}</div>
-      <div class="tile-short">${shortDesc}</div>
-    </div>
-    ${actionsHTML ? actionsHTML : ''}`;
-
-  applySandboxBadgeToIcon(tile.querySelector('.tile-icon'), isAppSandboxed(name));
-
-  const img = tile.querySelector('img');
-  if (img) {
-    const iconUrl = img.getAttribute('data-src');
-    if (iconUrl && loadedIcons.has(iconUrl)) {
-      img.src = iconUrl;
-      img.removeAttribute('data-src');
-    } else if (iconUrl) {
-      img.classList.add('img-loading');
-      img.addEventListener('load', () => {
-        img.classList.remove('img-loading');
-        loadedIcons.add(iconUrl);
-      }, { once:true });
-      img.addEventListener('error', () => { img.classList.remove('img-loading'); }, { once:true });
-      if (iconObserver) iconObserver.observe(img); else { img.src = iconUrl; img.removeAttribute('data-src'); }
-      if (tileRenderCount < 48) {
-        try { img.setAttribute('fetchpriority','high'); } catch(_){ }
-      }
-      tileRenderCount++;
-    }
-  }
-  tile.tabIndex = 0; // keyboard navigation
-  tile.addEventListener('click', (ev) => {
-    if (ev.target.closest('.inline-action')) return; // don't open if clicking an action button
-    showDetails(appId);
-  });
-  tile.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' || ev.key === ' ') {
-      if (ev.target.closest('.inline-action')) return;
-      ev.preventDefault();
-      showDetails(appId);
-    }
-  });
-  return tile;
-}
 // ...existing code...
 
 // Toggle global animations based on state
@@ -1521,20 +1322,10 @@ const appLoaderApi = (function initAppLoader() {
 async function loadApps() { return appLoaderApi?.loadApps?.(); }
 
 let iconObserver = null;
-function initIconObserver(){
-  if ('IntersectionObserver' in window && !iconObserver){
-    // Load earlier off-screen to reduce latency on scroll appearance
-    iconObserver = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting){
-          const img = entry.target; const data = img.getAttribute('data-src');
-          if (data){ img.src = data; img.removeAttribute('data-src'); }
-          iconObserver.unobserve(img);
-        }
-      });
-    }, { rootMargin: '1600px' }); // increased margin to load even earlier off-screen
-  }
-}
+// Replaced by ui/virtualList.js in the wiring block at the bottom of this file,
+// which runs before DOMContentLoaded. Kept as a no-op so the file still loads if
+// that module were ever missing.
+let initIconObserver = () => null;
 
 
 // Async throttled preloading of yet-unstarted images — starts after render
@@ -1750,7 +1541,6 @@ if (window.ui?.virtualList?.init) {
   if (api) {
     virtualListApi = api;
     if (typeof api.setAppList === 'function') setAppListImpl = api.setAppList;
-    if (typeof api.renderVirtualList === 'function') renderVirtualList = api.renderVirtualList;
     if (typeof api.initIconObserver === 'function') initIconObserver = () => api.initIconObserver();
     if (typeof api.prefetchPreloadImages === 'function') prefetchPreloadImages = (...args) => api.prefetchPreloadImages(...args);
   }
