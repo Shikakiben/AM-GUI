@@ -99,18 +99,55 @@ function createProxySupport(options = {}) {
   const onProxyChallenge = options.onProxyChallenge || null;
   // net.request, injectable so this file stays testable without Electron.
   const requestFn = options.request || null;
+  // Supplies credentials remembered from a previous run, if any.
+  const getInitialCredentials = options.getInitialCredentials || null;
+  // Called when remembered credentials turn out to be refused, so the caller
+  // can forget them instead of failing on every request.
+  const onCredentialsRefused = options.onCredentialsRefused || null;
   const logger = options.logger || console;
   const promptTimeoutMs = options.promptTimeoutMs || DEFAULT_PROMPT_TIMEOUT_MS;
   const resolveTimeoutMs = options.resolveTimeoutMs || DEFAULT_RESOLVE_TIMEOUT_MS;
   const now = options.now || (() => Date.now());
 
   let credentials = null;      // session only, never persisted
+  let credentialsRemembered = false; // came from the stored file, not from the user
+  // Chromium keeps its own cache: knowing a password here is not enough, it has
+  // to be handed over once before net.fetch will use it.
+  let chromiumKnows = false;
+  let storedLoaded = false;
   let pendingSeed = null;      // one authentication attempt at a time
   let lastAttemptFailedAt = 0; // avoids a prompt storm when the user cancels
   let envConfigured = false;
   // Which credentials were already sent to which proxy, so a second challenge
   // means they were refused.
   const answered = new Map();
+
+  // Loaded lazily: safeStorage can only be read once the app is ready.
+  function loadRemembered() {
+    if (storedLoaded) return;
+    storedLoaded = true;
+    if (!getInitialCredentials) return;
+    try {
+      const stored = getInitialCredentials();
+      if (stored && stored.username) {
+        credentials = stored;
+        credentialsRemembered = true;
+      }
+    } catch (error) {
+      logger.warn?.('[proxy] could not read remembered credentials:', error?.message || error);
+    }
+  }
+
+  // Remembered credentials that the proxy refuses must be dropped, or every
+  // request would keep failing on a password the user can no longer fix.
+  function forgetRemembered() {
+    if (!credentialsRemembered) return;
+    credentials = null;
+    credentialsRemembered = false;
+    chromiumKnows = false;
+    answered.clear();
+    try { if (typeof onCredentialsRefused === 'function') onCredentialsRefused(); } catch (_) {}
+  }
 
   async function resolveProxy(url) {
     const session = getSession();
@@ -179,7 +216,6 @@ function createProxySupport(options = {}) {
         logger.warn?.('[proxy] cannot create the seed request:', error?.message || error);
         return resolve(false);
       }
-      let sawChallenge = false;
       let done = false;
       const finish = (ok) => {
         if (done) return;
@@ -187,16 +223,19 @@ function createProxySupport(options = {}) {
         resolve(ok);
       };
       request.on('login', (authInfo, callback) => {
-        sawChallenge = true;
         try {
           if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
         } catch (_) {}
-        // Credentials already known (given in the proxy URL, or answered for the
-        // renderer) are sent without opening a window.
-        const ready = credentials ? Promise.resolve(credentials) : askOnce();
+        // Credentials already known (remembered, given in the proxy URL, or
+        // answered for the renderer) are sent without opening a window.
+        const reuse = !!credentials;
+        const ready = reuse ? Promise.resolve(credentials) : askOnce();
         ready.then((answer) => {
           if (!answer) return callback(); // cancelled: Chromium reports the failure
-          credentials = answer;
+          if (!reuse) {
+            credentials = answer;
+            credentialsRemembered = false; // typed now, not read from disk
+          }
           callback(answer.username, answer.password);
         });
       });
@@ -204,9 +243,11 @@ function createProxySupport(options = {}) {
         // Drain and drop the body: only the handshake matters here.
         res.on('data', () => {});
         res.on('end', () => finish(true));
-        res.on('error', () => finish(sawChallenge));
+        res.on('error', () => finish(false));
       });
-      request.on('error', () => finish(sawChallenge && !!credentials));
+      // An error means the request did not get through, even if a challenge was
+      // answered: a password the proxy rejects lands here too.
+      request.on('error', () => finish(false));
       try {
         request.end();
       } catch (_) {
@@ -219,15 +260,27 @@ function createProxySupport(options = {}) {
   // Returns true when a proxy was found and is now usable.
   async function ensureProxyAuth(url) {
     if (pendingSeed) return pendingSeed;
-    if (credentials) return true;
+    loadRemembered();
+    if (credentials && chromiumKnows) return true;
     // A cancelled or refused answer must not reopen the window for every icon
     // that fails next: one prompt, then a pause.
     if (lastAttemptFailedAt && now() - lastAttemptFailedAt < AUTH_RETRY_DELAY_MS) return false;
     pendingSeed = (async () => {
       try {
-        if (!(await hasProxy(url))) return false;
-        const ok = await seedOnce(url);
-        if (!ok) lastAttemptFailedAt = now();
+        // No "is there a proxy?" check here: the caller only gets here after a
+        // request failed with a 407, so a proxy is evidently involved. Asking
+        // Chromium would add a resolution that can be slow or wrong.
+        let ok = await seedOnce(url);
+        if (!ok) {
+          // A remembered password the proxy rejects is useless: forget it and
+          // ask once, instead of failing silently on every download.
+          if (credentialsRemembered) {
+            forgetRemembered();
+            ok = await seedOnce(url);
+          }
+        }
+        if (ok) chromiumKnows = true;
+        else lastAttemptFailedAt = now();
         return ok;
       } catch (error) {
         logger.warn?.('[proxy] authentication attempt failed:', error?.message || error);
@@ -251,14 +304,21 @@ function createProxySupport(options = {}) {
         if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
       } catch (_) {}
       event.preventDefault();
+      loadRemembered();
       const key = `${authInfo.host || ''}:${authInfo.port || ''}`;
       // A second challenge from the same proxy with the same answer means the
       // password was refused: ask again instead of looping on a wrong one.
       const alreadyTried = credentials && answered.get(key) === credentials;
-      const ready = (credentials && !alreadyTried) ? Promise.resolve(credentials) : askOnce();
+      if (alreadyTried) forgetRemembered();
+      const reuse = !!(credentials && !alreadyTried);
+      const ready = reuse ? Promise.resolve(credentials) : askOnce();
       ready.then((answer) => {
         if (!answer) return callback();
-        credentials = answer;
+        if (!reuse) {
+          credentials = answer;
+          credentialsRemembered = false;
+        }
+        chromiumKnows = true;
         answered.set(key, answer);
         callback(answer.username, answer.password);
       });
@@ -279,7 +339,10 @@ function createProxySupport(options = {}) {
     const rules = proxyRulesFromEnv(env);
     if (!rules) return false;
     // Credentials given in the URL are reused instead of asking for them.
-    if (fromEnv && fromEnv.credentials) credentials = fromEnv.credentials;
+    if (fromEnv && fromEnv.credentials) {
+      credentials = fromEnv.credentials;
+      credentialsRemembered = false;
+    }
     if (await hasProxy(url)) return false;
     try {
       await session.setProxy({ proxyRules: rules });

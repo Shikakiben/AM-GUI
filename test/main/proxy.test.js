@@ -178,11 +178,17 @@ describe('proxy support', () => {
     assert.deepStrictEqual(support._credentials(), { username: 'u', password: 'p' });
   });
 
-  it('does nothing at all when Chromium goes direct', async () => {
-    const state = makeState();
-    const support = makeSupport(state, { resolved: 'DIRECT' });
-    assert.strictEqual(await support.ensureProxyAuth('https://example.test/x.png'), false);
-    assert.strictEqual(state.requests.length, 0, 'no request without a proxy');
+  it('opens no window when nothing challenges the request', async () => {
+    // Going direct means no 407 and therefore no login event: the seed request
+    // must not turn into a password prompt.
+    const state = makeState({ needsAuth: false });
+    let asked = 0;
+    const support = makeSupport(state, {
+      resolved: 'DIRECT',
+      askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; }
+    });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/x.png'), true);
+    assert.strictEqual(asked, 0, 'no challenge, no prompt');
   });
 
   it('makes the one request that can raise the prompt, then caches the answer', async () => {
@@ -295,5 +301,72 @@ describe('proxy support', () => {
     const support = makeSupport(state);
     await support.ensureProxyAuth('https://example.test/1.png');
     assert.deepStrictEqual(support._credentials(), { username: 'alice', password: 's3cret' });
+  });
+
+  it('uses a remembered password without asking', async () => {
+    const state = makeState();
+    let asked = 0;
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      request: fakeRequestFactory(state),
+      getInitialCredentials: () => ({ username: 'stored', password: 'old' }),
+      askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; },
+      env: {}
+    });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), true);
+    assert.strictEqual(asked, 0, 'a remembered password must not be asked for again');
+    assert.deepStrictEqual(state.answers[0], { username: 'stored', password: 'old' });
+  });
+
+  it('forgets a remembered password the proxy refuses, then asks once', async () => {
+    // Otherwise a password changed at the proxy would break every download for
+    // good, with no way for the user to enter the new one.
+    let refused = 0;
+    let asked = 0;
+    const state = makeState();
+    let attempt = 0;
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      request: (url) => {
+        // The stored password is rejected; the freshly typed one works.
+        state.requests.push(url);
+        attempt += 1;
+        const handlers = { login: [], response: [], error: [] };
+        const req = {
+          on(event, handler) { (handlers[event] = handlers[event] || []).push(handler); return req; },
+          end() {
+            setImmediate(async () => {
+              const answer = await new Promise((resolve) => {
+                handlers.login.forEach((h) => h({ isProxy: true }, (u, p) => resolve(u ? { username: u, password: p } : null)));
+              });
+              state.answers.push(answer);
+              if (attempt === 1) {
+                handlers.error.forEach((h) => h(new Error('net::ERR_TUNNEL_CONNECTION_FAILED')));
+                return;
+              }
+              const res = { on(event, handler) { if (event === 'end') setImmediate(handler); return res; } };
+              handlers.response.forEach((h) => h(res));
+            });
+          }
+        };
+        return req;
+      },
+      getInitialCredentials: () => ({ username: 'stored', password: 'old' }),
+      onCredentialsRefused: () => { refused += 1; },
+      askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; },
+      env: {}
+    });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), true);
+    assert.strictEqual(refused, 1, 'the stored credentials must be forgotten');
+    assert.strictEqual(asked, 1, 'the user is asked once for the new password');
+    assert.deepStrictEqual(support._credentials(), { username: 'alice', password: 's3cret' });
+  });
+
+  it('does not keep the failed-attempt pause after a successful prompt', async () => {
+    const state = makeState();
+    const support = makeSupport(state);
+    await support.ensureProxyAuth('https://example.test/1.png');
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/2.png'), true);
+    assert.strictEqual(state.requests.length, 1);
   });
 });

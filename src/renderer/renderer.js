@@ -167,6 +167,7 @@ if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
     const wantsUser = !!(data && data.kind === 'proxy');
     const answer = await window.ui.passwordPrompt.promptPassword(wantsUser ? {
       withUsername: true,
+      withRemember: !!(data && data.canRemember),
       title: t('proxyAuth.title'),
       desc: t('proxyAuth.desc', { host: (data && data.host) || '' }),
       username: (data && data.username) || ''
@@ -175,7 +176,8 @@ if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
       window.electronAPI.sendPassword({
         id: data && data.id,
         username: answer && answer.username,
-        password: answer && answer.password
+        password: answer && answer.password,
+        remember: !!(answer && answer.remember)
       });
       return;
     }

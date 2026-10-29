@@ -6,7 +6,7 @@ if (xdgBinHome && !process.env.PATH.split(':').includes(xdgBinHome)) {
   process.env.PATH = `${process.env.PATH}:${xdgBinHome}`;
 }
 
-const { app, BrowserWindow, ipcMain, Menu, protocol, shell, session, net } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, protocol, shell, session, net, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -28,6 +28,7 @@ const { registerUninstallHandler } = require('./src/main/uninstall');
 const { registerLaunchHandlers } = require('./src/main/launch');
 const { PLA_INSTALL_SCHEME, extractPlaInstallUrl, parsePlaInstallUrl } = require('./src/main/plaInstall');
 const { createProxySupport } = require('./src/main/proxy');
+const { createProxyCredentialStore } = require('./src/main/proxyCredentials');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 function logGlobalError(err) {
@@ -209,7 +210,12 @@ app.on('open-url', (event, url) => {
 
 // Register IPC handlers
 // The proxy password is asked for when the proxy demands it, like a browser
-// does, and is kept in memory for the session only.
+// does. It is kept in memory for the session, and only written to disk when the
+// user ticks the box — encrypted by the system keyring, never in clear.
+const proxyCredentialStore = createProxyCredentialStore({
+  safeStorage,
+  filePath: path.join(app.getPath('userData'), 'proxy-auth.json')
+});
 let proxyPromptSeq = 0;
 function askProxyCredentials() {
   const win = mainWindow;
@@ -225,13 +231,23 @@ function askProxyCredentials() {
     };
     passwordWaiters.set(id, (payload) => {
       if (payload && typeof payload === 'object' && payload.username) {
-        finish({ username: payload.username, password: payload.password || '' });
+        const credentials = { username: payload.username, password: payload.password || '' };
+        // Ticking the box stores it; unticking it forgets a previous one.
+        if (payload.remember) proxyCredentialStore.save(credentials);
+        else proxyCredentialStore.clear();
+        finish(credentials);
       } else {
         finish(null);
       }
     });
     try {
-      win.webContents.send('password-prompt', { id, kind: 'proxy', host: currentProxyHost || '' });
+      win.webContents.send('password-prompt', {
+        id,
+        kind: 'proxy',
+        host: currentProxyHost || '',
+        // The box only appears when the system can really encrypt it.
+        canRemember: proxyCredentialStore.canStore()
+      });
     } catch (_) {
       finish(null);
     }
@@ -242,6 +258,9 @@ const proxySupport = createProxySupport({
   getSession: () => (typeof session !== 'undefined' ? session.defaultSession : null),
   askCredentials: askProxyCredentials,
   request: (url) => net.request(url),
+  // Read on first use: safeStorage is only readable once the app is ready.
+  getInitialCredentials: () => proxyCredentialStore.load(),
+  onCredentialsRefused: () => proxyCredentialStore.clear(),
   onProxyChallenge: (authInfo) => {
     currentProxyHost = [authInfo?.host, authInfo?.port].filter(Boolean).join(':');
   }

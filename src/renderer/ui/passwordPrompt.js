@@ -16,6 +16,7 @@
     const title = labels.title || t('password.title');
     const desc = labels.desc || t('password.desc');
     const withUser = labels.withUsername === true;
+    const withRemember = labels.withRemember === true;
     let modal = document.createElement('div');
     modal.id = 'passwordPromptModal';
     modal.className = 'password-modal';
@@ -27,6 +28,7 @@
           <div class="modal-desc">${desc}</div>
           ${withUser ? `<input type="text" id="passwordPromptUser" class="password-input" placeholder="${t('password.username')}" autocomplete="username" />` : ''}
           <input type="password" id="passwordPromptInput" class="password-input" placeholder="${t('password.placeholder')}" autocomplete="current-password" />
+          ${withRemember ? `<label class="password-remember"><input type="checkbox" id="passwordPromptRemember"> <span>${t('proxyAuth.remember')}</span></label>` : ''}
           <div id="passwordPromptError" class="password-error"></div>
           <div class="modal-actions">
             <button id="passwordPromptCancel" class="btn btn-soft-neutral" style="min-width:90px;">${t('password.cancel')}</button>
@@ -48,6 +50,7 @@
       const modal = ensurePasswordModal(labels);
       const input = modal.querySelector('#passwordPromptInput');
       const userInput = modal.querySelector('#passwordPromptUser');
+      const rememberInput = modal.querySelector('#passwordPromptRemember');
       const okBtn = modal.querySelector('#passwordPromptOk');
       const cancelBtn = modal.querySelector('#passwordPromptCancel');
       const errorDiv = modal.querySelector('#passwordPromptError');
@@ -82,7 +85,11 @@
           return;
         }
         cleanup();
-        resolve(userInput ? { username, password: input.value } : input.value);
+        if (userInput) {
+          resolve({ username, password: input.value, remember: !!(rememberInput && rememberInput.checked) });
+        } else {
+          resolve(input.value);
+        }
       }
       function onCancel() {
         cleanup();
