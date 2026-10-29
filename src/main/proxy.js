@@ -141,7 +141,7 @@ function createProxySupport(options = {}) {
   //   3. what the proxy URL itself carries (http://user:pass@host:port).
   // Only if all three are empty does the window open. Loaded lazily, on the
   // first request that needs it, so startup stays untouched.
-  function loadKnownCredentials() {
+  async function loadKnownCredentials() {
     if (storedLoaded) return;
     storedLoaded = true;
     const sources = [
@@ -152,7 +152,8 @@ function createProxySupport(options = {}) {
     for (const source of sources) {
       if (!source) continue;
       try {
-        const found = source();
+        // Sources may be asynchronous: reading the keyring is.
+        const found = await source();
         if (found && found.username) {
           credentials = found;
           credentialsRemembered = true; // not typed now: if refused, forget it
@@ -338,15 +339,17 @@ function createProxySupport(options = {}) {
   // Makes sure Chromium has the proxy credentials, asking the user once.
   // Returns true when a proxy was found and is now usable.
   async function ensureProxyAuth(url) {
+    // The guard is taken synchronously, before any await: otherwise three
+    // simultaneous downloads all pass it and open three dialogs (measured as a
+    // regression when reading the keyring became asynchronous).
     if (pendingSeed) return pendingSeed;
-    loadKnownCredentials();
     if (credentials && chromiumKnows) return true;
-    // A cancelled or refused answer must not reopen the window for every icon
-    // that fails next: one prompt, then a pause.
     if (dialogPaused()) return false;
     if (lastAttemptFailedAt && now() - lastAttemptFailedAt < AUTH_RETRY_DELAY_MS) return false;
     pendingSeed = (async () => {
       try {
+        await loadKnownCredentials();
+        if (credentials && chromiumKnows) return true;
         // No "is there a proxy?" check here: the caller only gets here after a
         // request failed with a 407, so a proxy is evidently involved. Asking
         // Chromium would add a resolution that can be slow or wrong.
@@ -406,41 +409,43 @@ function createProxySupport(options = {}) {
         if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
       } catch (_) {}
       event.preventDefault();
-      loadKnownCredentials();
-      const key = `${authInfo.host || ''}:${authInfo.port || ''}`;
-      // A second challenge from the same proxy with the same answer means the
-      // password was refused.
-      const alreadyTried = credentials && answered.get(key) === credentials;
-      if (alreadyTried) {
-        refusedTyped += 1;
-        forgetRemembered();
-        // One wrong entry is normal: ask again straight away so the user can
-        // correct it. A second one in a row means prompting again will not
-        // help, so pause instead of reopening the window in a loop.
-        if (refusedTyped >= 2) {
-          credentials = null;
-          answered.clear();
-          pauseDialog();
-          forgetChromiumCache();
+      // Reading the keyring is asynchronous, so the whole decision is.
+      (async () => {
+        await loadKnownCredentials();
+        const key = `${authInfo.host || ''}:${authInfo.port || ''}`;
+        // A second challenge from the same proxy with the same answer means the
+        // password was refused.
+        const alreadyTried = credentials && answered.get(key) === credentials;
+        if (alreadyTried) {
+          refusedTyped += 1;
+          forgetRemembered();
+          // One wrong entry is normal: ask again straight away so the user can
+          // correct it. A second one in a row means prompting again will not
+          // help, so pause instead of reopening the window in a loop.
+          if (refusedTyped >= 2) {
+            credentials = null;
+            answered.clear();
+            pauseDialog();
+            forgetChromiumCache();
+            callback();
+            return;
+          }
+        }
+        const reuse = !!(credentials && !alreadyTried);
+        // Paused after a cancel or two wrong entries: fail quietly. The download
+        // backoff is deliberately not consulted here, or the user would be left
+        // with no way to correct a single typo.
+        if (!reuse && dialogPaused()) {
           callback();
           return;
         }
-      }
-      const reuse = !!(credentials && !alreadyTried);
-      // Paused after a cancel or two wrong entries: fail quietly. The download
-      // backoff is deliberately not consulted here, or the user would be left
-      // with no way to correct a single typo.
-      if (!reuse && dialogPaused()) {
-        callback();
-        return;
-      }
-      const ready = reuse
-        ? Promise.resolve(credentials)
-        : forgetChromiumCache().then(() => askOnce());
-      ready.then((answer) => {
+        const answer = reuse
+          ? credentials
+          : await forgetChromiumCache().then(() => askOnce());
         if (!answer) {
           pauseDialog(); // cancelled: do not insist
-          return callback();
+          callback();
+          return;
         }
         if (!reuse) {
           credentials = answer;
@@ -450,6 +455,9 @@ function createProxySupport(options = {}) {
         answered.set(key, answer);
         notifyAuthenticated();
         callback(answer.username, answer.password);
+      })().catch((error) => {
+        logger.warn?.('[proxy] login handling failed:', error?.message || error);
+        callback();
       });
     });
     return true;

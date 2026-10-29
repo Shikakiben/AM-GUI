@@ -397,6 +397,44 @@ describe('proxy support', () => {
     assert.deepStrictEqual(state.answers[0], { username: 'stored', password: 'old' });
   });
 
+  it('shares one prompt even when reading the keyring is slow', async () => {
+    // Reading the keyring is asynchronous. The in-flight guard must be taken
+    // before any await, or every simultaneous download opens its own dialog.
+    let asked = 0;
+    const state = makeState();
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      request: fakeRequestFactory(state),
+      getInitialCredentials: () => new Promise((r) => setTimeout(() => r(null), 30)),
+      askCredentials: async () => {
+        asked += 1;
+        await new Promise((r) => setTimeout(r, 20));
+        return { username: 'alice', password: 's3cret' };
+      },
+      env: {}
+    });
+    const results = await Promise.all([
+      support.ensureProxyAuth('https://example.test/1.png'),
+      support.ensureProxyAuth('https://example.test/2.png'),
+      support.ensureProxyAuth('https://example.test/3.png')
+    ]);
+    assert.strictEqual(asked, 1, 'one dialog, not three');
+    assert.ok(results.every((r) => r === true));
+  });
+
+  it('accepts an asynchronous source of remembered credentials', async () => {
+    const state = makeState();
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      request: fakeRequestFactory(state),
+      getInitialCredentials: async () => ({ username: 'stored', password: 'old' }),
+      askCredentials: async () => null,
+      env: {}
+    });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), true);
+    assert.deepStrictEqual(state.answers[0], { username: 'stored', password: 'old' });
+  });
+
   it('forgets a remembered password the proxy refuses, then asks once', async () => {
     // Otherwise a password changed at the proxy would break every download for
     // good, with no way for the user to enter the new one.

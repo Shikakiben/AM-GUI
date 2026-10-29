@@ -5,6 +5,14 @@
 // not, the dialog still offers to remember it, but says so plainly and in red:
 // the password is then written in clear, in a 0600 file. That is the user's
 // decision to make, informed; the app must not decide silently for them.
+//
+// The asynchronous API is used throughout (the synchronous one is deprecated and
+// goes away in Electron 46). One trap, measured on Electron 43: with
+// `--password-store=basic`, isEncryptionAvailable() correctly says false, but
+// isAsyncEncryptionAvailable() says **true** and encryptStringAsync succeeds —
+// producing the `v10` format, encrypted with a key hardcoded in Chromium. Trusting
+// it would label an unprotected file as "encrypted". The backend is therefore
+// checked explicitly, and that check is what keeps the warning honest.
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 
@@ -44,12 +52,13 @@ function createProxyCredentialStore(options = {}) {
 
   // True when the system can really encrypt. Used to choose the warning shown
   // next to the "remember" box, not to forbid saving.
-  function canStore() {
+  async function canStore() {
     try {
-      if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function') return false;
-      if (!safeStorage.isEncryptionAvailable()) return false;
-      // `basic_text` encrypts with a key baked into Chromium: it only looks
-      // encrypted, so it must never be presented as safe.
+      if (!safeStorage || typeof safeStorage.isAsyncEncryptionAvailable !== 'function') return false;
+      if (!(await safeStorage.isAsyncEncryptionAvailable())) return false;
+      // Measured on Electron 43: with no keyring, the async API still reports
+      // "available" and encrypts in the `v10` format, whose key is hardcoded in
+      // Chromium. That is not encryption, so it must never be presented as such.
       if (typeof safeStorage.getSelectedStorageBackend === 'function') {
         try {
           if (safeStorage.getSelectedStorageBackend() === 'basic_text') return false;
@@ -61,7 +70,7 @@ function createProxyCredentialStore(options = {}) {
     }
   }
 
-  function load() {
+  async function load() {
     if (!filePath) return null;
     let raw;
     try {
@@ -82,10 +91,16 @@ function createProxyCredentialStore(options = {}) {
     if (data.encrypted === false) {
       return { username: data.username, password: data.secret };
     }
-    if (!canStore()) return null;
+    if (!(await canStore())) return null;
     try {
-      const password = safeStorage.decryptString(Buffer.from(data.secret, 'base64'));
-      return { username: data.username, password };
+      const decrypted = await safeStorage.decryptStringAsync(Buffer.from(data.secret, 'base64'));
+      const credentials = { username: data.username, password: decrypted.result };
+      // The key was rotated, or a better one is now available: rewrite the file
+      // with the current key so it does not keep an outdated one.
+      if (decrypted.shouldReEncrypt) {
+        await save(credentials);
+      }
+      return credentials;
     } catch (error) {
       // The keyring changed, or the file came from another machine/user.
       logger.warn?.('[proxy] stored credentials cannot be read:', error?.message || error);
@@ -97,13 +112,13 @@ function createProxyCredentialStore(options = {}) {
   // clear, at the user's explicit request (the dialog warns about it). The file
   // is always 0600 and records which of the two was used, so reading back never
   // depends on guessing.
-  function save(credentials) {
+  async function save(credentials) {
     if (!credentials || !credentials.username || !filePath) return false;
-    const encrypt = canStore();
+    const encrypt = await canStore();
     try {
       let body;
       if (encrypt) {
-        const secret = safeStorage.encryptString(credentials.password || '').toString('base64');
+        const secret = (await safeStorage.encryptStringAsync(credentials.password || '')).toString('base64');
         body = JSON.stringify({ username: credentials.username, encrypted: true, secret }, null, 2);
       } else {
         body = JSON.stringify({ username: credentials.username, encrypted: false, secret: credentials.password || '' }, null, 2);

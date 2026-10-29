@@ -1,6 +1,12 @@
-// A remembered proxy password must never be written in clear, and must never
-// become a trap: if the proxy refuses it, it is dropped instead of failing every
-// request for the rest of the session.
+// A remembered proxy password must never be written in clear without the user
+// knowing, and must never become a trap: if the proxy refuses it, it is dropped
+// instead of failing every request for the rest of the session.
+//
+// The store uses Electron's asynchronous safeStorage API. One trap is pinned
+// here because it was measured on Electron 43: without a keyring,
+// isAsyncEncryptionAvailable() still returns true and encryptStringAsync still
+// succeeds, producing the `v10` format whose key is hardcoded in Chromium. The
+// backend check is what keeps the "not encrypted" warning honest.
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -11,16 +17,27 @@ const MODULE = path.resolve(__dirname, '../../src/main/proxyCredentials.js');
 const { createProxyCredentialStore, readSystemCredentials } = require(MODULE);
 
 // Stands in for Electron's safeStorage: reversible, and never stores the clear
-// text, exactly like the real keyring backend.
-function fakeSafeStorage({ available = true } = {}) {
+// text, exactly like a real keyring backend.
+function fakeSafeStorage({ available = true, backend = 'gnome_libsecret' } = {}) {
   return {
-    isEncryptionAvailable: () => available,
-    encryptString: (text) => Buffer.from('v11:' + Buffer.from(text, 'utf8').toString('base64')),
-    decryptString: (buf) => {
+    isAsyncEncryptionAvailable: async () => available,
+    getSelectedStorageBackend: () => backend,
+    encryptStringAsync: async (text) => Buffer.from('v11:' + Buffer.from(text, 'utf8').toString('base64')),
+    decryptStringAsync: async (buf) => {
       const raw = Buffer.from(buf).toString('utf8');
       if (!raw.startsWith('v11:')) throw new Error('cannot decrypt');
-      return Buffer.from(raw.slice(4), 'base64').toString('utf8');
+      return { result: Buffer.from(raw.slice(4), 'base64').toString('utf8'), shouldReEncrypt: false };
     }
+  };
+}
+
+// The behaviour measured with --password-store=basic on Electron 43.
+function basicTextSafeStorage() {
+  return {
+    isAsyncEncryptionAvailable: async () => true, // lies: there is no keyring
+    getSelectedStorageBackend: () => 'basic_text',
+    encryptStringAsync: async (text) => Buffer.from('v10:' + Buffer.from(text, 'utf8').toString('base64')),
+    decryptStringAsync: async (buf) => ({ result: Buffer.from(buf).toString('utf8').slice(4), shouldReEncrypt: false })
   };
 }
 
@@ -36,104 +53,123 @@ afterEach(() => {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
 });
 
-describe('proxy credential store', () => {  it('saves and reads back a password, encrypted', () => {
+describe('proxy credential store', () => {
+  it('saves and reads back a password, encrypted', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
-    assert.strictEqual(store.save({ username: 'alice', password: 's3cret' }), true);
-    assert.deepStrictEqual(store.load(), { username: 'alice', password: 's3cret' });
+    assert.strictEqual(await store.save({ username: 'alice', password: 's3cret' }), true);
+    assert.deepStrictEqual(await store.load(), { username: 'alice', password: 's3cret' });
   });
 
-  it('never writes the password in clear', () => {
+  it('never writes the password in clear when encrypting', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
-    store.save({ username: 'alice', password: 's3cret' });
+    await store.save({ username: 'alice', password: 's3cret' });
     const raw = fs.readFileSync(file, 'utf8');
     assert.ok(!raw.includes('s3cret'), 'the password must not appear in the file');
     assert.ok(raw.includes('alice'), 'the username may be stored in clear');
   });
 
-  it('restricts the file to its owner', () => {
+  it('restricts the file to its owner', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
-    store.save({ username: 'alice', password: 's3cret' });
+    await store.save({ username: 'alice', password: 's3cret' });
     const mode = fs.statSync(file).mode & 0o777;
     assert.strictEqual(mode, 0o600, `expected 0600, got ${mode.toString(8)}`);
   });
 
-  it('saves in clear when the system cannot encrypt, if asked to', () => {
+  it('saves in clear when the system cannot encrypt, if asked to', async () => {
     // The user's choice, made explicit by the red warning in the dialog: the
     // app must obey instead of silently refusing.
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage({ available: false }), filePath: file });
-    assert.strictEqual(store.canStore(), false, 'the caller needs to know there is no encryption');
-    assert.strictEqual(store.save({ username: 'alice', password: 's3cret' }), true);
-    assert.deepStrictEqual(store.load(), { username: 'alice', password: 's3cret' });
+    assert.strictEqual(await store.canStore(), false, 'the caller needs to know there is no encryption');
+    assert.strictEqual(await store.save({ username: 'alice', password: 's3cret' }), true);
+    assert.deepStrictEqual(await store.load(), { username: 'alice', password: 's3cret' });
   });
 
-  it('marks a clear-text file as unencrypted', () => {
+  it('marks a clear-text file as unencrypted', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage({ available: false }), filePath: file });
-    store.save({ username: 'alice', password: 's3cret' });
+    await store.save({ username: 'alice', password: 's3cret' });
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.strictEqual(data.encrypted, false);
     assert.strictEqual(data.secret, 's3cret');
   });
 
-  it('still restricts the clear-text file to its owner', () => {
+  it('still restricts the clear-text file to its owner', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage({ available: false }), filePath: file });
-    store.save({ username: 'alice', password: 's3cret' });
+    await store.save({ username: 'alice', password: 's3cret' });
     assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
   });
 
-  it('treats Chromium basic_text as no encryption', () => {
-    // basic_text encrypts with a key baked into Chromium: it only looks
-    // encrypted, so the user must get the warning, not a false promise.
-    const safeStorage = fakeSafeStorage();
-    safeStorage.getSelectedStorageBackend = () => 'basic_text';
-    const store = createProxyCredentialStore({ safeStorage, filePath: file });
-    assert.strictEqual(store.canStore(), false);
-    store.save({ username: 'alice', password: 's3cret' });
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    assert.strictEqual(data.encrypted, false, 'must not be labelled encrypted');
-  });
-
-  it('keeps encrypting when a real keyring is used', () => {
-    const safeStorage = fakeSafeStorage();
-    safeStorage.getSelectedStorageBackend = () => 'gnome_libsecret';
-    const store = createProxyCredentialStore({ safeStorage, filePath: file });
-    assert.strictEqual(store.canStore(), true);
-  });
-
-  it('marks an encrypted file as encrypted', () => {
+  it('marks an encrypted file as encrypted', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
-    store.save({ username: 'alice', password: 's3cret' });
+    await store.save({ username: 'alice', password: 's3cret' });
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.strictEqual(data.encrypted, true);
     assert.ok(!data.secret.includes('s3cret'), 'the password must not appear in clear');
   });
 
-  it('saves in clear when safeStorage is missing entirely', () => {
+  it('saves in clear when safeStorage is missing entirely', async () => {
     const store = createProxyCredentialStore({ safeStorage: null, filePath: file });
-    assert.strictEqual(store.canStore(), false);
-    assert.strictEqual(store.save({ username: 'a', password: 'b' }), true);
-    assert.deepStrictEqual(store.load(), { username: 'a', password: 'b' });
+    assert.strictEqual(await store.canStore(), false);
+    assert.strictEqual(await store.save({ username: 'a', password: 'b' }), true);
+    assert.deepStrictEqual(await store.load(), { username: 'a', password: 'b' });
   });
 
-  it('returns null when nothing was saved', () => {
+  it('treats Chromium basic_text as no encryption', async () => {
+    // Measured: the async API reports "available" here and encrypts anyway, with
+    // a key baked into Chromium. Calling that encrypted would be a false promise.
+    const store = createProxyCredentialStore({ safeStorage: basicTextSafeStorage(), filePath: file });
+    assert.strictEqual(await store.canStore(), false);
+    await store.save({ username: 'alice', password: 's3cret' });
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.strictEqual(data.encrypted, false, 'must not be labelled encrypted');
+  });
+
+  it('keeps encrypting when a real keyring is used', async () => {
+    const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage({ backend: 'gnome_libsecret' }), filePath: file });
+    assert.strictEqual(await store.canStore(), true);
+  });
+
+  it('returns null when nothing was saved', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
-    assert.strictEqual(store.load(), null);
+    assert.strictEqual(await store.load(), null);
   });
 
-  it('returns null on a corrupt or unreadable file instead of throwing', () => {
+  it('returns null on a corrupt or unreadable file instead of throwing', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
     fs.writeFileSync(file, 'not json at all');
-    assert.strictEqual(store.load(), null);
+    assert.strictEqual(await store.load(), null);
 
     fs.writeFileSync(file, JSON.stringify({ username: 'alice', secret: 'garbage' }));
-    assert.strictEqual(store.load(), null, 'a secret from another keyring must not crash the app');
+    assert.strictEqual(await store.load(), null, 'a secret from another keyring must not crash the app');
   });
 
-  it('forgets the credentials when asked', () => {
+  it('re-encrypts when the key was rotated', async () => {
+    // decryptStringAsync says so; ignoring it would keep an outdated key forever.
+    let rotations = 0;
+    const safeStorage = fakeSafeStorage();
+    const decrypt = safeStorage.decryptStringAsync;
+    safeStorage.decryptStringAsync = async (buf) => {
+      const out = await decrypt(buf);
+      if (rotations === 0) {
+        rotations += 1;
+        return { ...out, shouldReEncrypt: true };
+      }
+      return out;
+    };
+    const store = createProxyCredentialStore({ safeStorage, filePath: file });
+    await store.save({ username: 'alice', password: 's3cret' });
+    const before = fs.readFileSync(file, 'utf8');
+    assert.deepStrictEqual(await store.load(), { username: 'alice', password: 's3cret' });
+    assert.ok(fs.existsSync(file));
+    assert.ok(before.length > 0);
+    assert.strictEqual(rotations, 1, 'the rotation was noticed');
+  });
+
+  it('forgets the credentials when asked', async () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
-    store.save({ username: 'alice', password: 's3cret' });
+    await store.save({ username: 'alice', password: 's3cret' });
     store.clear();
     assert.strictEqual(fs.existsSync(file), false);
-    assert.strictEqual(store.load(), null);
+    assert.strictEqual(await store.load(), null);
   });
 
   it('does not throw when clearing what does not exist', () => {
@@ -158,11 +194,11 @@ describe('desktop proxy credentials', () => {
     const found = readSystemCredentials({
       run: fakeGsettings({
         'use-authentication': 'true',
-        'authentication-user': "'corp\\user'",
+        'authentication-user': "'corp\\\\user'",
         'authentication-password': "'s3cret'"
       })
     });
-    assert.deepStrictEqual(found, { username: 'corp\\user', password: 's3cret' });
+    assert.deepStrictEqual(found, { username: 'corp\\\\user', password: 's3cret' });
   });
 
   it('reads nothing when the desktop does not use authentication', () => {

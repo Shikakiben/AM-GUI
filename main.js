@@ -217,10 +217,15 @@ const proxyCredentialStore = createProxyCredentialStore({
   filePath: path.join(app.getPath('userData'), 'proxy-auth.json')
 });
 let proxyPromptSeq = 0;
-function askProxyCredentials() {
+async function askProxyCredentials() {
   const win = mainWindow;
-  if (!win || win.isDestroyed()) return Promise.resolve(null);
+  if (!win || win.isDestroyed()) return null;
   const id = `proxy-${++proxyPromptSeq}`;
+  // Knowing whether the password can be encrypted may need the keyring, which
+  // is asynchronous. It is read before the dialog opens, so the label is right.
+  let encrypted = false;
+  try { encrypted = await proxyCredentialStore.canStore(); } catch (_) { encrypted = false; }
+  if (win.isDestroyed()) return null;
   return new Promise((resolve) => {
     let settled = false;
     const finish = (answer) => {
@@ -233,8 +238,11 @@ function askProxyCredentials() {
       if (payload && typeof payload === 'object' && payload.username) {
         const credentials = { username: payload.username, password: payload.password || '' };
         // Ticking the box stores it; unticking it forgets a previous one.
-        if (payload.remember) proxyCredentialStore.save(credentials);
-        else proxyCredentialStore.clear();
+        if (payload.remember) {
+          proxyCredentialStore.save(credentials).catch(() => {});
+        } else {
+          proxyCredentialStore.clear();
+        }
         finish(credentials);
       } else {
         finish(null);
@@ -248,7 +256,7 @@ function askProxyCredentials() {
         // The box is always offered; `encrypted` decides whether the label
         // carries the "no encryption available" warning.
         canRemember: true,
-        encrypted: proxyCredentialStore.canStore()
+        encrypted
       });
     } catch (_) {
       finish(null);
