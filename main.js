@@ -28,7 +28,7 @@ const { registerUninstallHandler } = require('./src/main/uninstall');
 const { registerLaunchHandlers } = require('./src/main/launch');
 const { PLA_INSTALL_SCHEME, extractPlaInstallUrl, parsePlaInstallUrl } = require('./src/main/plaInstall');
 const { createProxySupport } = require('./src/main/proxy');
-const { createProxyCredentialStore } = require('./src/main/proxyCredentials');
+const { createProxyCredentialStore, readSystemCredentials } = require('./src/main/proxyCredentials');
 
 const errorLogPath = path.join(app.getPath('userData'), 'error.log');
 function logGlobalError(err) {
@@ -260,6 +260,7 @@ const proxySupport = createProxySupport({
   request: (url) => net.request(url),
   // Read on first use: safeStorage is only readable once the app is ready.
   getInitialCredentials: () => proxyCredentialStore.load(),
+  getSystemCredentials: () => readSystemCredentials(),
   onCredentialsRefused: () => proxyCredentialStore.clear(),
   onProxyChallenge: (authInfo) => {
     currentProxyHost = [authInfo?.host, authInfo?.port].filter(Boolean).join(':');

@@ -5,6 +5,35 @@
 // keyring is available, saving is refused rather than downgraded to plain text,
 // and the user is simply asked again next time.
 const fs = require('fs');
+const { execFileSync } = require('child_process');
+
+// Reads the proxy credentials the desktop itself was configured with (GNOME's
+// proxy panel stores them in gsettings).
+//
+// Verified: Chromium does NOT use them. With use-authentication true and a
+// username/password in gsettings, net.fetch still fails with
+// ERR_TUNNEL_CONNECTION_FAILED and the proxy receives a CONNECT without any
+// Authorization header. So when the desktop knows the credentials, the app has
+// to read them itself — otherwise the user is asked for something the system
+// already has.
+function readSystemCredentials(options = {}) {
+  const run = options.run || ((args) => execFileSync('gsettings', args, { encoding: 'utf8', timeout: 2000 }));
+  const schema = 'org.gnome.system.proxy.http';
+  const unquote = (raw) => {
+    const value = String(raw == null ? '' : raw).trim();
+    if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1);
+    return value;
+  };
+  try {
+    if (unquote(run(['get', schema, 'use-authentication'])) !== 'true') return null;
+    const username = unquote(run(['get', schema, 'authentication-user']));
+    const password = unquote(run(['get', schema, 'authentication-password']));
+    if (!username) return null;
+    return { username, password };
+  } catch (_) {
+    return null; // not GNOME, no gsettings, or a timeout: just ask the user
+  }
+}
 
 function createProxyCredentialStore(options = {}) {
   const safeStorage = options.safeStorage || null;
@@ -73,4 +102,4 @@ function createProxyCredentialStore(options = {}) {
   return { canStore, load, save, clear };
 }
 
-module.exports = { createProxyCredentialStore };
+module.exports = { createProxyCredentialStore, readSystemCredentials };

@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 
 const MODULE = path.resolve(__dirname, '../../src/main/proxyCredentials.js');
-const { createProxyCredentialStore } = require(MODULE);
+const { createProxyCredentialStore, readSystemCredentials } = require(MODULE);
 
 // Stands in for Electron's safeStorage: reversible, and never stores the clear
 // text, exactly like the real keyring backend.
@@ -36,8 +36,7 @@ afterEach(() => {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
 });
 
-describe('proxy credential store', () => {
-  it('saves and reads back a password, encrypted', () => {
+describe('proxy credential store', () => {  it('saves and reads back a password, encrypted', () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
     assert.strictEqual(store.save({ username: 'alice', password: 's3cret' }), true);
     assert.deepStrictEqual(store.load(), { username: 'alice', password: 's3cret' });
@@ -98,5 +97,68 @@ describe('proxy credential store', () => {
   it('does not throw when clearing what does not exist', () => {
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
     assert.doesNotThrow(() => store.clear());
+  });
+});
+
+describe('desktop proxy credentials', () => {
+  // Verified on a real GNOME session: with use-authentication true and a
+  // username/password in gsettings, Chromium still sends an unauthenticated
+  // CONNECT (ERR_TUNNEL_CONNECTION_FAILED). So these values are worth reading.
+  function fakeGsettings(values) {
+    return (args) => {
+      const key = args[args.length - 1];
+      if (!(key in values)) throw new Error('no such key: ' + key);
+      return values[key];
+    };
+  }
+
+  it('reads the username and password the desktop was configured with', () => {
+    const found = readSystemCredentials({
+      run: fakeGsettings({
+        'use-authentication': 'true',
+        'authentication-user': "'corp\\user'",
+        'authentication-password': "'s3cret'"
+      })
+    });
+    assert.deepStrictEqual(found, { username: 'corp\\user', password: 's3cret' });
+  });
+
+  it('reads nothing when the desktop does not use authentication', () => {
+    const found = readSystemCredentials({
+      run: fakeGsettings({
+        'use-authentication': 'false',
+        'authentication-user': "'someone'",
+        'authentication-password': "'somepass'"
+      })
+    });
+    assert.strictEqual(found, null, 'an unused setting must not be used');
+  });
+
+  it('reads nothing when the username is empty', () => {
+    const found = readSystemCredentials({
+      run: fakeGsettings({
+        'use-authentication': 'true',
+        'authentication-user': "''",
+        'authentication-password': "''"
+      })
+    });
+    assert.strictEqual(found, null);
+  });
+
+  it('stays silent when gsettings is missing or fails', () => {
+    // KDE, a minimal system, or a hung dconf: the app must still start and just
+    // fall back to asking.
+    assert.strictEqual(readSystemCredentials({ run: () => { throw new Error('not found'); } }), null);
+  });
+
+  it('never returns an empty password as a valid answer', () => {
+    const found = readSystemCredentials({
+      run: fakeGsettings({
+        'use-authentication': 'true',
+        'authentication-user': "'corp'",
+        'authentication-password': "''"
+      })
+    });
+    assert.deepStrictEqual(found, { username: 'corp', password: '' });
   });
 });

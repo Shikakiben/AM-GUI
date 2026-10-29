@@ -101,6 +101,8 @@ function createProxySupport(options = {}) {
   const requestFn = options.request || null;
   // Supplies credentials remembered from a previous run, if any.
   const getInitialCredentials = options.getInitialCredentials || null;
+  // Supplies the credentials the desktop itself was configured with.
+  const getSystemCredentials = options.getSystemCredentials || null;
   // Called when remembered credentials turn out to be refused, so the caller
   // can forget them instead of failing on every request.
   const onCredentialsRefused = options.onCredentialsRefused || null;
@@ -122,19 +124,32 @@ function createProxySupport(options = {}) {
   // means they were refused.
   const answered = new Map();
 
-  // Loaded lazily: safeStorage can only be read once the app is ready.
-  function loadRemembered() {
+  // Every place a password may already be known, in order of authority:
+  //   1. what the user asked to remember last time;
+  //   2. what the desktop was configured with;
+  //   3. what the proxy URL itself carries (http://user:pass@host:port).
+  // Only if all three are empty does the window open. Loaded lazily, on the
+  // first request that needs it, so startup stays untouched.
+  function loadKnownCredentials() {
     if (storedLoaded) return;
     storedLoaded = true;
-    if (!getInitialCredentials) return;
-    try {
-      const stored = getInitialCredentials();
-      if (stored && stored.username) {
-        credentials = stored;
-        credentialsRemembered = true;
+    const sources = [
+      getInitialCredentials,
+      getSystemCredentials,
+      () => readEnvProxy(env)?.credentials || null
+    ];
+    for (const source of sources) {
+      if (!source) continue;
+      try {
+        const found = source();
+        if (found && found.username) {
+          credentials = found;
+          credentialsRemembered = true; // not typed now: if refused, forget it
+          return;
+        }
+      } catch (error) {
+        logger.warn?.('[proxy] could not read stored credentials:', error?.message || error);
       }
-    } catch (error) {
-      logger.warn?.('[proxy] could not read remembered credentials:', error?.message || error);
     }
   }
 
@@ -260,7 +275,7 @@ function createProxySupport(options = {}) {
   // Returns true when a proxy was found and is now usable.
   async function ensureProxyAuth(url) {
     if (pendingSeed) return pendingSeed;
-    loadRemembered();
+    loadKnownCredentials();
     if (credentials && chromiumKnows) return true;
     // A cancelled or refused answer must not reopen the window for every icon
     // that fails next: one prompt, then a pause.
@@ -304,7 +319,7 @@ function createProxySupport(options = {}) {
         if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
       } catch (_) {}
       event.preventDefault();
-      loadRemembered();
+      loadKnownCredentials();
       const key = `${authInfo.host || ''}:${authInfo.port || ''}`;
       // A second challenge from the same proxy with the same answer means the
       // password was refused: ask again instead of looping on a wrong one.
@@ -335,14 +350,8 @@ function createProxySupport(options = {}) {
     envConfigured = true;
     const session = getSession();
     if (!session || typeof session.setProxy !== 'function') return false;
-    const fromEnv = readEnvProxy(env);
     const rules = proxyRulesFromEnv(env);
     if (!rules) return false;
-    // Credentials given in the URL are reused instead of asking for them.
-    if (fromEnv && fromEnv.credentials) {
-      credentials = fromEnv.credentials;
-      credentialsRemembered = false;
-    }
     if (await hasProxy(url)) return false;
     try {
       await session.setProxy({ proxyRules: rules });

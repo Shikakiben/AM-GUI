@@ -168,14 +168,47 @@ describe('proxy support', () => {
   });
 
   it('reuses credentials given in the environment instead of asking', async () => {
-    const calls = {};
+    const state = makeState();
+    let asked = 0;
     const support = createProxySupport({
-      getSession: () => fakeSession('DIRECT', calls),
+      getSession: () => fakeSession('PROXY envproxy:8443'),
+      request: fakeRequestFactory(state),
       env: { https_proxy: 'http://u:p@envproxy:8443' },
-      askCredentials: async () => { throw new Error('must not be asked'); }
+      askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; }
     });
-    await support.configureFromEnvironment();
-    assert.deepStrictEqual(support._credentials(), { username: 'u', password: 'p' });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), true);
+    assert.strictEqual(asked, 0, 'a password already in the proxy URL must not be asked for');
+    assert.deepStrictEqual(state.answers[0], { username: 'u', password: 'p' });
+  });
+
+  it('uses the desktop credentials before asking the user', async () => {
+    // Chromium ignores what GNOME stores (verified), so the app must read it.
+    const state = makeState();
+    let asked = 0;
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      request: fakeRequestFactory(state),
+      getSystemCredentials: () => ({ username: 'desktop', password: 'fromkeyring' }),
+      askCredentials: async () => { asked += 1; return { username: 'alice', password: 's3cret' }; },
+      env: {}
+    });
+    assert.strictEqual(await support.ensureProxyAuth('https://example.test/1.png'), true);
+    assert.strictEqual(asked, 0, 'the desktop already knows the password');
+    assert.deepStrictEqual(state.answers[0], { username: 'desktop', password: 'fromkeyring' });
+  });
+
+  it('prefers what the user asked to remember over the desktop setting', async () => {
+    const state = makeState();
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      request: fakeRequestFactory(state),
+      getInitialCredentials: () => ({ username: 'mine', password: 'chosen' }),
+      getSystemCredentials: () => ({ username: 'desktop', password: 'other' }),
+      askCredentials: async () => null,
+      env: {}
+    });
+    await support.ensureProxyAuth('https://example.test/1.png');
+    assert.deepStrictEqual(state.answers[0], { username: 'mine', password: 'chosen' });
   });
 
   it('opens no window when nothing challenges the request', async () => {
