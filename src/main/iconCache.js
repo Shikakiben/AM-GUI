@@ -14,9 +14,25 @@ function createIconCacheManager(app, options = {}) {
   let AbortControllerCtor = globalThis.AbortController || undici.AbortController || null;
   try { if (!AbortControllerCtor) AbortControllerCtor = require('abort-controller'); } catch (_) {}
 
-  const ICON_TTL_MS = 24 * 3600 * 1000;
-  const MAX_CACHE_SIZE_BYTES = 50 * 1024 * 1024;
+  // Icons for applications barely ever change. With stale-while-revalidate in
+  // registerProtocol, this only controls how often a background refresh is
+  // attempted, not whether a cached icon can be served: 24h made every icon
+  // older than a day pay a full network round trip (measured 271-402 ms) for a
+  // file that was already on disk.
+  const ICON_TTL_MS = 30 * 24 * 3600 * 1000;
+  // 8930 icons at a measured 11.4 KB each need ~102 MB. At 50 MB the cache held
+  // about 4400 of them and evicted icons it had just downloaded, so scrolling
+  // back up re-downloaded them. 120 MB holds ~10750 icons: the whole set plus
+  // room for ~1800 more applications.
+  const MAX_CACHE_SIZE_BYTES = 120 * 1024 * 1024;
+  // Refreshing must not recreate the request storm that the 407 handling fixed:
+  // a handful at a time, and never the same icon twice in a short window.
+  const REFRESH_CONCURRENCY = 4;
+  const REFRESH_RETRY_MS = 10 * 60 * 1000;
   const inFlightDownloads = new Map();
+  const recentRefreshes = new Map();
+  let refreshActive = 0;
+  const refreshQueue = [];
 
   let iconsCacheDir = null;
   let blankIconPath = null;
@@ -153,23 +169,26 @@ function createIconCacheManager(app, options = {}) {
     }
   }
 
-  function downloadIconToCache(fileName) {
+  function downloadIconToCache(fileName, options = {}) {
     ensureIconCacheSetup();
     const dest = path.join(iconsCacheDir, fileName);
     if (inFlightDownloads.has(fileName)) return inFlightDownloads.get(fileName);
+    const force = options.force === true;
 
     const p = new Promise((resolve) => {
-      try {
-        const st = fs.statSync(dest);
-        if (st.size > 200 && !isExpired(dest)) {
-          iconsMeta = iconsMeta || {};
-          iconsMeta[fileName] = iconsMeta[fileName] || {};
-          iconsMeta[fileName].size = st.size;
-          iconsMeta[fileName].mtime = Date.now();
-          saveIconsMeta();
-          return resolve(dest);
-        }
-      } catch (_) {}
+      if (!force) {
+        try {
+          const st = fs.statSync(dest);
+          if (st.size > 200 && !isExpired(dest)) {
+            iconsMeta = iconsMeta || {};
+            iconsMeta[fileName] = iconsMeta[fileName] || {};
+            iconsMeta[fileName].size = st.size;
+            iconsMeta[fileName].mtime = Date.now();
+            saveIconsMeta();
+            return resolve(dest);
+          }
+        } catch (_) {}
+      }
 
       const logPath = path.join(iconsCacheDir, 'download.log');
       const MAX_LOG_SIZE = 5 * 1024 * 1024;
@@ -312,6 +331,32 @@ function createIconCacheManager(app, options = {}) {
     return p;
   }
 
+  // Stale-while-revalidate. The file on disk is served immediately whatever its
+  // age, and a refresh is queued behind it. This is what makes a second visit to
+  // an application instant instead of a 300 ms network round trip.
+  function refreshIconInBackground(fileName) {
+    if (inFlightDownloads.has(fileName)) return;
+    const last = recentRefreshes.get(fileName);
+    if (last && Date.now() - last < REFRESH_RETRY_MS) return;
+    if (refreshQueue.indexOf(fileName) !== -1) return;
+    recentRefreshes.set(fileName, Date.now());
+    refreshQueue.push(fileName);
+    pumpRefreshQueue();
+  }
+
+  function pumpRefreshQueue() {
+    while (refreshActive < REFRESH_CONCURRENCY && refreshQueue.length) {
+      const fileName = refreshQueue.shift();
+      refreshActive++;
+      downloadIconToCache(fileName, { force: true })
+        .catch(() => {})
+        .then(() => {
+          refreshActive--;
+          pumpRefreshQueue();
+        });
+    }
+  }
+
   function registerProtocol(protocol) {
     if (!protocol) throw new Error('protocol module is required to register appicon://');
     ensureIconCacheSetup();
@@ -325,7 +370,12 @@ function createIconCacheManager(app, options = {}) {
         const localPath = path.join(iconsCacheDir, urlPath);
         try {
           const st = fs.statSync(localPath);
-          if (st.size > 200 && !isExpired(localPath)) return callback(localPath);
+          if (st.size > 200) {
+            // Serve what is on disk, then revalidate behind it. Blocking here on
+            // an expired file made a cached icon cost as much as a missing one.
+            if (isExpired(localPath)) refreshIconInBackground(urlPath);
+            return callback(localPath);
+          }
         } catch (_) {}
         downloadIconToCache(urlPath).then((result) => {
           if (result) return callback(result);

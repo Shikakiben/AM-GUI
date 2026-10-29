@@ -96,4 +96,54 @@ describe('icon download retries', () => {
       assert.strictEqual(attempts, 3, `${status} is temporary and must be retried`);
     }
   });
+
+  // A cached icon older than the TTL used to be revalidated before answering,
+  // so it cost the same as a missing one: measured 271-402 ms on disk versus
+  // 0-1 ms. The file must be served at once and refreshed behind it.
+  it('serves an expired icon from disk without waiting for the network', async () => {
+    const dir = path.join(tempDir, 'icons-cache');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'sample.png');
+    fs.writeFileSync(file, Buffer.alloc(600, 3));
+    const old = new Date(Date.now() - 40 * 24 * 3600 * 1000);
+    fs.utimesSync(file, old, old);
+
+    let fetchCalls = 0;
+    // A slow network: if the handler waited for this, the assertion below fails.
+    const request = makeManager(async () => {
+      fetchCalls += 1;
+      await new Promise((r) => setTimeout(r, 400));
+      return { status: 304, headers: { get: () => null } };
+    });
+
+    const started = Date.now();
+    const answered = await request();
+    const elapsed = Date.now() - started;
+
+    assert.strictEqual(answered, file, 'the file on disk must be served');
+    assert.ok(elapsed < 200, `served in ${elapsed} ms, the network must not be waited on`);
+    assert.strictEqual(fetchCalls, 1, 'a refresh must have been started in the background');
+
+    // A 304 refreshes the mtime, so the icon is not considered expired again.
+    await new Promise((r) => setTimeout(r, 600));
+    assert.ok(fs.statSync(file).mtimeMs > old.getTime(), 'the 304 must refresh the mtime');
+  });
+
+  it('does not touch the network for a fresh icon', async () => {
+    const dir = path.join(tempDir, 'icons-cache');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'sample.png');
+    fs.writeFileSync(file, Buffer.alloc(600, 3));
+
+    let fetchCalls = 0;
+    const request = makeManager(async () => {
+      fetchCalls += 1;
+      return { status: 200, headers: { get: () => null }, async arrayBuffer() { return Buffer.alloc(600).buffer; } };
+    });
+
+    const answered = await request();
+    assert.strictEqual(answered, file);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.strictEqual(fetchCalls, 0, 'a fresh icon needs no request at all');
+  });
 });
