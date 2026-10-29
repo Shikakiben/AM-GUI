@@ -19,6 +19,7 @@
 const DEFAULT_PROMPT_TIMEOUT_MS = 120000;
 const DEFAULT_RESOLVE_TIMEOUT_MS = 5000;
 const AUTH_RETRY_DELAY_MS = 30000;
+const DEFAULT_SEED_TIMEOUT_MS = 20000;
 
 // Accepts "host:port", "http://host:port" and "http://user:pass@host:port".
 function parseProxyUrl(raw) {
@@ -103,12 +104,20 @@ function createProxySupport(options = {}) {
   const getInitialCredentials = options.getInitialCredentials || null;
   // Supplies the credentials the desktop itself was configured with.
   const getSystemCredentials = options.getSystemCredentials || null;
+  // Clears Chromium's HTTP auth cache. Needed because Chromium caches whatever
+  // answer we gave it, even a wrong one: without this, a refused password is
+  // replayed for every later request and the prompt never comes back (measured).
+  const clearAuthCache = options.clearAuthCache || null;
+  // Called once the proxy accepts us, so the caller can retry what failed while
+  // the password was still missing (icons downloaded before it gave up).
+  const onAuthenticated = options.onAuthenticated || null;
   // Called when remembered credentials turn out to be refused, so the caller
   // can forget them instead of failing on every request.
   const onCredentialsRefused = options.onCredentialsRefused || null;
   const logger = options.logger || console;
   const promptTimeoutMs = options.promptTimeoutMs || DEFAULT_PROMPT_TIMEOUT_MS;
   const resolveTimeoutMs = options.resolveTimeoutMs || DEFAULT_RESOLVE_TIMEOUT_MS;
+  const seedTimeoutMs = options.seedTimeoutMs || DEFAULT_SEED_TIMEOUT_MS;
   const now = options.now || (() => Date.now());
 
   let credentials = null;      // session only, never persisted
@@ -118,7 +127,9 @@ function createProxySupport(options = {}) {
   let chromiumKnows = false;
   let storedLoaded = false;
   let pendingSeed = null;      // one authentication attempt at a time
-  let lastAttemptFailedAt = 0; // avoids a prompt storm when the user cancels
+  let lastAttemptFailedAt = 0; // download backoff, so icons do not hammer AM
+  let pausedUntil = 0;         // the dialog itself must stay closed until then
+  let refusedTyped = 0;        // consecutive wrong entries typed by the user
   let envConfigured = false;
   // Which credentials were already sent to which proxy, so a second challenge
   // means they were refused.
@@ -162,6 +173,35 @@ function createProxySupport(options = {}) {
     chromiumKnows = false;
     answered.clear();
     try { if (typeof onCredentialsRefused === 'function') onCredentialsRefused(); } catch (_) {}
+  }
+
+  // Two separate brakes, because they protect against different things:
+  //   - the dialog stays closed after a cancel or two wrong entries in a row;
+  //   - downloads back off after a failure, so a hundred icons do not each try
+  //     three times.
+  // Conflating them blocked the one correction the user is entitled to.
+  function dialogPaused() {
+    return !!pausedUntil && now() < pausedUntil;
+  }
+
+  function pauseDialog() {
+    pausedUntil = now() + AUTH_RETRY_DELAY_MS;
+  }
+
+  let notifiedAuthenticated = false;
+  function notifyAuthenticated() {
+    if (notifiedAuthenticated) return;
+    notifiedAuthenticated = true;
+    try { if (typeof onAuthenticated === 'function') onAuthenticated(); } catch (_) {}
+  }
+
+  function forgetChromiumCache() {
+    if (typeof clearAuthCache !== 'function') return Promise.resolve();
+    try {
+      return Promise.resolve(clearAuthCache()).catch(() => {});
+    } catch (_) {
+      return Promise.resolve();
+    }
   }
 
   async function resolveProxy(url) {
@@ -232,12 +272,31 @@ function createProxySupport(options = {}) {
         return resolve(false);
       }
       let done = false;
+      let challenges = 0;
+      // This request exists only to reach the proxy's challenge. It must never
+      // hold the queue: measured, it can stay silent for ever when Chromium
+      // keeps re-challenging, and then every later download waited on it.
+      const timer = setTimeout(() => {
+        logger.warn?.('[proxy] authentication request timed out');
+        try { request.abort(); } catch (_) {}
+        finish(false);
+      }, seedTimeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
       const finish = (ok) => {
         if (done) return;
         done = true;
+        clearTimeout(timer);
         resolve(ok);
       };
       request.on('login', (authInfo, callback) => {
+        challenges += 1;
+        // Chromium may re-challenge on the same request; answering more than
+        // twice means the answer is wrong, and looping helps nobody.
+        if (challenges > 2) {
+          try { request.abort(); } catch (_) {}
+          finish(false);
+          return;
+        }
         try {
           if (typeof onProxyChallenge === 'function') onProxyChallenge(authInfo);
         } catch (_) {}
@@ -246,7 +305,12 @@ function createProxySupport(options = {}) {
         const reuse = !!credentials;
         const ready = reuse ? Promise.resolve(credentials) : askOnce();
         ready.then((answer) => {
-          if (!answer) return callback(); // cancelled: Chromium reports the failure
+          if (!answer) {
+            // Cancelled: Chromium reports the failure, and the dialog must not
+            // reopen for the next icon in the queue.
+            if (!reuse) pauseDialog();
+            return callback();
+          }
           if (!reuse) {
             credentials = answer;
             credentialsRemembered = false; // typed now, not read from disk
@@ -279,6 +343,7 @@ function createProxySupport(options = {}) {
     if (credentials && chromiumKnows) return true;
     // A cancelled or refused answer must not reopen the window for every icon
     // that fails next: one prompt, then a pause.
+    if (dialogPaused()) return false;
     if (lastAttemptFailedAt && now() - lastAttemptFailedAt < AUTH_RETRY_DELAY_MS) return false;
     pendingSeed = (async () => {
       try {
@@ -286,16 +351,38 @@ function createProxySupport(options = {}) {
         // request failed with a 407, so a proxy is evidently involved. Asking
         // Chromium would add a resolution that can be slow or wrong.
         let ok = await seedOnce(url);
-        if (!ok) {
+        if (!ok && credentialsRemembered) {
           // A remembered password the proxy rejects is useless: forget it and
           // ask once, instead of failing silently on every download.
-          if (credentialsRemembered) {
-            forgetRemembered();
-            ok = await seedOnce(url);
+          forgetRemembered();
+          ok = await seedOnce(url);
+        }
+        if (!ok && !credentialsRemembered && !dialogPaused()) {
+          // The user just typed something the proxy refused. Give exactly one
+          // immediate chance to correct a typo; past that, back off, otherwise
+          // the dialog reopens in a loop. The cache must be cleared first, or
+          // Chromium silently replays the refused password instead of asking.
+          credentials = null;
+          chromiumKnows = false;
+          answered.clear();
+          await forgetChromiumCache();
+          ok = await seedOnce(url);
+        }
+        if (ok) {
+          chromiumKnows = true;
+          refusedTyped = 0;
+          pausedUntil = 0;
+          notifyAuthenticated();
+        } else {
+          lastAttemptFailedAt = now();
+          // A wrong password typed by the user must not be reused for ever:
+          // drop it so the next attempt (after the pause) asks again.
+          if (!credentialsRemembered) {
+            credentials = null;
+            chromiumKnows = false;
+            answered.clear();
           }
         }
-        if (ok) chromiumKnows = true;
-        else lastAttemptFailedAt = now();
         return ok;
       } catch (error) {
         logger.warn?.('[proxy] authentication attempt failed:', error?.message || error);
@@ -322,19 +409,46 @@ function createProxySupport(options = {}) {
       loadKnownCredentials();
       const key = `${authInfo.host || ''}:${authInfo.port || ''}`;
       // A second challenge from the same proxy with the same answer means the
-      // password was refused: ask again instead of looping on a wrong one.
+      // password was refused.
       const alreadyTried = credentials && answered.get(key) === credentials;
-      if (alreadyTried) forgetRemembered();
+      if (alreadyTried) {
+        refusedTyped += 1;
+        forgetRemembered();
+        // One wrong entry is normal: ask again straight away so the user can
+        // correct it. A second one in a row means prompting again will not
+        // help, so pause instead of reopening the window in a loop.
+        if (refusedTyped >= 2) {
+          credentials = null;
+          answered.clear();
+          pauseDialog();
+          forgetChromiumCache();
+          callback();
+          return;
+        }
+      }
       const reuse = !!(credentials && !alreadyTried);
-      const ready = reuse ? Promise.resolve(credentials) : askOnce();
+      // Paused after a cancel or two wrong entries: fail quietly. The download
+      // backoff is deliberately not consulted here, or the user would be left
+      // with no way to correct a single typo.
+      if (!reuse && dialogPaused()) {
+        callback();
+        return;
+      }
+      const ready = reuse
+        ? Promise.resolve(credentials)
+        : forgetChromiumCache().then(() => askOnce());
       ready.then((answer) => {
-        if (!answer) return callback();
+        if (!answer) {
+          pauseDialog(); // cancelled: do not insist
+          return callback();
+        }
         if (!reuse) {
           credentials = answer;
           credentialsRemembered = false;
         }
         chromiumKnows = true;
         answered.set(key, answer);
+        notifyAuthenticated();
         callback(answer.username, answer.password);
       });
     });

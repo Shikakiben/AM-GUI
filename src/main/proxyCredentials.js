@@ -1,9 +1,10 @@
 // Remembers a proxy password across restarts, if the user asks for it.
 //
 // The password is encrypted by the OS keyring through Electron's safeStorage
-// (libsecret on GNOME, KWallet on KDE). Nothing is written in clear: when no
-// keyring is available, saving is refused rather than downgraded to plain text,
-// and the user is simply asked again next time.
+// (libsecret on GNOME, KWallet on KDE) whenever that is available. When it is
+// not, the dialog still offers to remember it, but says so plainly and in red:
+// the password is then written in clear, in a 0600 file. That is the user's
+// decision to make, informed; the app must not decide silently for them.
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 
@@ -41,18 +42,27 @@ function createProxyCredentialStore(options = {}) {
   const logger = options.logger || console;
   const fsImpl = options.fs || fs;
 
-  // Only offered when the system can really encrypt: a file that merely looks
-  // obfuscated would give the user a false sense of safety.
+  // True when the system can really encrypt. Used to choose the warning shown
+  // next to the "remember" box, not to forbid saving.
   function canStore() {
     try {
-      return !!(safeStorage && typeof safeStorage.isEncryptionAvailable === 'function' && safeStorage.isEncryptionAvailable());
+      if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function') return false;
+      if (!safeStorage.isEncryptionAvailable()) return false;
+      // `basic_text` encrypts with a key baked into Chromium: it only looks
+      // encrypted, so it must never be presented as safe.
+      if (typeof safeStorage.getSelectedStorageBackend === 'function') {
+        try {
+          if (safeStorage.getSelectedStorageBackend() === 'basic_text') return false;
+        } catch (_) {}
+      }
+      return true;
     } catch (_) {
       return false;
     }
   }
 
   function load() {
-    if (!filePath || !canStore()) return null;
+    if (!filePath) return null;
     let raw;
     try {
       raw = fsImpl.readFileSync(filePath, 'utf8');
@@ -66,6 +76,13 @@ function createProxyCredentialStore(options = {}) {
       return null;
     }
     if (!data || typeof data.username !== 'string' || typeof data.secret !== 'string') return null;
+    // Written without a keyring, at the user's explicit request: read it back
+    // as-is. Guessing from the content would break on any password that happens
+    // to look like base64.
+    if (data.encrypted === false) {
+      return { username: data.username, password: data.secret };
+    }
+    if (!canStore()) return null;
     try {
       const password = safeStorage.decryptString(Buffer.from(data.secret, 'base64'));
       return { username: data.username, password };
@@ -76,12 +93,21 @@ function createProxyCredentialStore(options = {}) {
     }
   }
 
+  // Saves the credentials. Encrypted when the system can do it; otherwise in
+  // clear, at the user's explicit request (the dialog warns about it). The file
+  // is always 0600 and records which of the two was used, so reading back never
+  // depends on guessing.
   function save(credentials) {
     if (!credentials || !credentials.username || !filePath) return false;
-    if (!canStore()) return false;
+    const encrypt = canStore();
     try {
-      const secret = safeStorage.encryptString(credentials.password || '').toString('base64');
-      const body = JSON.stringify({ username: credentials.username, secret }, null, 2);
+      let body;
+      if (encrypt) {
+        const secret = safeStorage.encryptString(credentials.password || '').toString('base64');
+        body = JSON.stringify({ username: credentials.username, encrypted: true, secret }, null, 2);
+      } else {
+        body = JSON.stringify({ username: credentials.username, encrypted: false, secret: credentials.password || '' }, null, 2);
+      }
       const tmp = `${filePath}.tmp`;
       fsImpl.writeFileSync(tmp, body, { mode: 0o600 });
       fsImpl.renameSync(tmp, filePath);

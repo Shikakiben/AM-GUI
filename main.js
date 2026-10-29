@@ -245,8 +245,10 @@ function askProxyCredentials() {
         id,
         kind: 'proxy',
         host: currentProxyHost || '',
-        // The box only appears when the system can really encrypt it.
-        canRemember: proxyCredentialStore.canStore()
+        // The box is always offered; `encrypted` decides whether the label
+        // carries the "no encryption available" warning.
+        canRemember: true,
+        encrypted: proxyCredentialStore.canStore()
       });
     } catch (_) {
       finish(null);
@@ -261,7 +263,16 @@ const proxySupport = createProxySupport({
   // Read on first use: safeStorage is only readable once the app is ready.
   getInitialCredentials: () => proxyCredentialStore.load(),
   getSystemCredentials: () => readSystemCredentials(),
+  clearAuthCache: () => {
+    const ses = typeof session !== 'undefined' ? session.defaultSession : null;
+    if (ses && typeof ses.clearAuthCache === 'function') return ses.clearAuthCache();
+    return Promise.resolve();
+  },
   onCredentialsRefused: () => proxyCredentialStore.clear(),
+  onAuthenticated: () => {
+    // Retry what failed while the password was missing.
+    try { mainWindow?.webContents?.send('proxy-authenticated'); } catch (_) {}
+  },
   onProxyChallenge: (authInfo) => {
     currentProxyHost = [authInfo?.host, authInfo?.port].filter(Boolean).join(':');
   }

@@ -124,6 +124,7 @@
     "proxyAuth.title": "Proxy authentication",
     "proxyAuth.desc": "The proxy {host} requires a username and password.",
     "proxyAuth.remember": "Remember for next time (encrypted by the system keyring)",
+    "proxyAuth.rememberUnsafe": "Remember for next time (not recommended: no system encryption available, the password will be stored in clear)",
     "queue.removeBadge": "Remove from queue",
     "queue.removeBadgeAria": "Remove",
     "refresh.aria": "Refresh",

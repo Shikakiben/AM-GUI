@@ -28,7 +28,7 @@
           <div class="modal-desc">${desc}</div>
           ${withUser ? `<input type="text" id="passwordPromptUser" class="password-input" placeholder="${t('password.username')}" autocomplete="username" />` : ''}
           <input type="password" id="passwordPromptInput" class="password-input" placeholder="${t('password.placeholder')}" autocomplete="current-password" />
-          ${withRemember ? `<label class="password-remember"><input type="checkbox" id="passwordPromptRemember"> <span>${t('proxyAuth.remember')}</span></label>` : ''}
+          ${withRemember ? `<label class="password-remember${labels.encrypted === false ? ' password-remember-warning' : ''}"><input type="checkbox" id="passwordPromptRemember"> <span>${labels.encrypted === false ? t('proxyAuth.rememberUnsafe') : t('proxyAuth.remember')}</span></label>` : ''}
           <div id="passwordPromptError" class="password-error"></div>
           <div class="modal-actions">
             <button id="passwordPromptCancel" class="btn btn-soft-neutral" style="min-width:90px;">${t('password.cancel')}</button>

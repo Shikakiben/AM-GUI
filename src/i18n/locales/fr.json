@@ -124,6 +124,7 @@
     "proxyAuth.title": "Authentification du proxy",
     "proxyAuth.desc": "Le proxy {host} demande un nom d'utilisateur et un mot de passe.",
     "proxyAuth.remember": "Se souvenir pour la prochaine fois (chiffré par le trousseau du système)",
+    "proxyAuth.rememberUnsafe": "Se souvenir pour la prochaine fois (non recommandé : aucun chiffrement système disponible, le mot de passe sera enregistré en clair)",
     "queue.removeBadge": "Retirer de la file",
     "queue.removeBadgeAria": "Retirer",
     "refresh.aria": "Rafraîchir",

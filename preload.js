@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAppsCacheUpdated: (cb) => ipcRenderer.on('apps-cache-updated', () => cb && cb()),
   // Added for sudo password management
   onPasswordPrompt: (cb) => ipcRenderer.on('password-prompt', (e, data) => cb && cb(data)),
+  // The proxy accepted our credentials: whatever failed for lack of a password
+  // (icons, categories) can be retried now.
+  onProxyAuthenticated: (cb) => ipcRenderer.on('proxy-authenticated', () => cb && cb()),
   sendPassword: (payload) => ipcRenderer.send('password-response', payload),
   getSandboxInfo: (appName) => ipcRenderer.invoke('sandbox-info', appName),
   configureSandbox: (options) => ipcRenderer.invoke('sandbox-configure', options),

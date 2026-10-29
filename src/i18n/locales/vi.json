@@ -124,6 +124,7 @@
     "proxyAuth.title": "Xác thực proxy",
     "proxyAuth.desc": "Proxy {host} yêu cầu tên người dùng và mật khẩu.",
     "proxyAuth.remember": "Ghi nhớ cho lần sau (mã hóa bằng kho khóa hệ thống)",
+    "proxyAuth.rememberUnsafe": "Ghi nhớ cho lần sau (không khuyến nghị: không có mã hóa hệ thống, mật khẩu sẽ được lưu dạng văn bản thuần)",
     "queue.removeBadge": "Xoá khỏi hàng đợi",
     "queue.removeBadgeAria": "Xoá",
     "refresh.aria": "Làm mới",

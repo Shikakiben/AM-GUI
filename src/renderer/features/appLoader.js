@@ -7,6 +7,14 @@
   function init(opts) {
     _ = opts;
 
+    // Icons downloaded before the proxy password was known gave up. Once the
+    // proxy accepts us, draw the list again so they are requested once more.
+    if (typeof _.electronAPI().onProxyAuthenticated === 'function') {
+      _.electronAPI().onProxyAuthenticated(async () => {
+        try { await loadApps(); _.applySearch(); } catch (_) {}
+      });
+    }
+
     // Background cache refresh: reload apps when the main process finishes refreshing
     if (typeof _.electronAPI().onAppsCacheUpdated === 'function') {
       _.electronAPI().onAppsCacheUpdated(async () => {

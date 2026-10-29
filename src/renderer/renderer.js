@@ -168,6 +168,7 @@ if (window.electronAPI && window.electronAPI.onPasswordPrompt) {
     const answer = await window.ui.passwordPrompt.promptPassword(wantsUser ? {
       withUsername: true,
       withRemember: !!(data && data.canRemember),
+      encrypted: !(data && data.encrypted === false),
       title: t('proxyAuth.title'),
       desc: t('proxyAuth.desc', { host: (data && data.host) || '' }),
       username: (data && data.username) || ''

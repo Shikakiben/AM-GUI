@@ -1574,6 +1574,10 @@ body.pm-popup-open { overflow: hidden; }
 .password-modal .modal-actions { display:flex; gap:0.5em; justify-content:flex-end; }
 .password-modal .password-remember { display:flex; align-items:flex-start; gap:0.5em; margin:-0.25em 0 1em 0; font-size:0.9em; color:var(--text-secondary); cursor:pointer; }
 .password-modal .password-remember input { margin-top:0.15em; accent-color:var(--primary); flex-shrink:0; }
+/* No keyring on this machine: the password would be stored in clear. Said in
+   red, where the user cannot miss it. */
+.password-modal .password-remember-warning { color:#e5484d; font-weight:600; }
+.password-modal .password-remember-warning::before { content:'⚠'; flex-shrink:0; }
 
 /* Focus: inputs in modals (password, confirmations, etc.) */
 .password-modal .password-input:focus,

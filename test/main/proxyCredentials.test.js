@@ -57,19 +57,61 @@ describe('proxy credential store', () => {  it('saves and reads back a password,
     assert.strictEqual(mode, 0o600, `expected 0600, got ${mode.toString(8)}`);
   });
 
-  it('refuses to save when the system cannot encrypt', () => {
-    // No keyring: better to ask again next time than to store a password in
-    // a file that only looks protected.
+  it('saves in clear when the system cannot encrypt, if asked to', () => {
+    // The user's choice, made explicit by the red warning in the dialog: the
+    // app must obey instead of silently refusing.
     const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage({ available: false }), filePath: file });
-    assert.strictEqual(store.canStore(), false);
-    assert.strictEqual(store.save({ username: 'alice', password: 's3cret' }), false);
-    assert.strictEqual(fs.existsSync(file), false);
+    assert.strictEqual(store.canStore(), false, 'the caller needs to know there is no encryption');
+    assert.strictEqual(store.save({ username: 'alice', password: 's3cret' }), true);
+    assert.deepStrictEqual(store.load(), { username: 'alice', password: 's3cret' });
   });
 
-  it('refuses to save without safeStorage at all', () => {
+  it('marks a clear-text file as unencrypted', () => {
+    const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage({ available: false }), filePath: file });
+    store.save({ username: 'alice', password: 's3cret' });
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.strictEqual(data.encrypted, false);
+    assert.strictEqual(data.secret, 's3cret');
+  });
+
+  it('still restricts the clear-text file to its owner', () => {
+    const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage({ available: false }), filePath: file });
+    store.save({ username: 'alice', password: 's3cret' });
+    assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
+  });
+
+  it('treats Chromium basic_text as no encryption', () => {
+    // basic_text encrypts with a key baked into Chromium: it only looks
+    // encrypted, so the user must get the warning, not a false promise.
+    const safeStorage = fakeSafeStorage();
+    safeStorage.getSelectedStorageBackend = () => 'basic_text';
+    const store = createProxyCredentialStore({ safeStorage, filePath: file });
+    assert.strictEqual(store.canStore(), false);
+    store.save({ username: 'alice', password: 's3cret' });
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.strictEqual(data.encrypted, false, 'must not be labelled encrypted');
+  });
+
+  it('keeps encrypting when a real keyring is used', () => {
+    const safeStorage = fakeSafeStorage();
+    safeStorage.getSelectedStorageBackend = () => 'gnome_libsecret';
+    const store = createProxyCredentialStore({ safeStorage, filePath: file });
+    assert.strictEqual(store.canStore(), true);
+  });
+
+  it('marks an encrypted file as encrypted', () => {
+    const store = createProxyCredentialStore({ safeStorage: fakeSafeStorage(), filePath: file });
+    store.save({ username: 'alice', password: 's3cret' });
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.strictEqual(data.encrypted, true);
+    assert.ok(!data.secret.includes('s3cret'), 'the password must not appear in clear');
+  });
+
+  it('saves in clear when safeStorage is missing entirely', () => {
     const store = createProxyCredentialStore({ safeStorage: null, filePath: file });
     assert.strictEqual(store.canStore(), false);
-    assert.strictEqual(store.save({ username: 'a', password: 'b' }), false);
+    assert.strictEqual(store.save({ username: 'a', password: 'b' }), true);
+    assert.deepStrictEqual(store.load(), { username: 'a', password: 'b' });
   });
 
   it('returns null when nothing was saved', () => {

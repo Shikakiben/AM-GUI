@@ -124,6 +124,7 @@
     "proxyAuth.title": "Prijava na proksi",
     "proxyAuth.desc": "Proksi {host} zahteva korisničko ime i lozinku.",
     "proxyAuth.remember": "Zapamti za sledeći put (šifrovano sistemskim prstenom ključeva)",
+    "proxyAuth.rememberUnsafe": "Zapamti za sledeći put (ne preporučuje se: nema dostupnog sistemskog šifrovanja, lozinka će biti sačuvana u čistom tekstu)",
     "queue.removeBadge": "Obriši iz reda",
     "queue.removeBadgeAria": "Obriši",
     "refresh.aria": "Osveži",

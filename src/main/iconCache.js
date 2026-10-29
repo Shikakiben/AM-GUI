@@ -150,13 +150,16 @@ function createIconCacheManager(app, options = {}) {
       const maxAttempts = 3;
       let attempt = 0;
 
-      function onFail(reason) {
-        if (attempt < maxAttempts) {
+      function onFail(reason, options = {}) {
+        // A 407 means the proxy wants a password: repeating the same request
+        // cannot help, and it produced 97 requests in 40 s in a measured test.
+        const noRetry = options.noRetry === true;
+        if (attempt < maxAttempts && !noRetry) {
           const delay = 300 * Math.pow(2, attempt - 1);
           appendLog(`${fileName} will retry in ${delay}ms (reason: ${reason})`);
           setTimeout(tryDownload, delay);
         } else {
-          appendLog(`${fileName} failed after ${attempt} attempts (reason: ${reason})`);
+          appendLog(`${fileName} failed after ${attempt} attempt(s) (reason: ${reason})`);
           iconsMeta = iconsMeta || {};
           iconsMeta[fileName] = iconsMeta[fileName] || {};
           iconsMeta[fileName].lastError = String(reason);
@@ -200,7 +203,9 @@ function createIconCacheManager(app, options = {}) {
             }
             if (res.status !== 200) {
               appendLog(`${fileName} HTTP ${res.status}`);
-              return onFail(`http ${res.status}`);
+              // 407: the proxy is asking for a password. Retrying would only
+              // pile up identical requests.
+              return onFail(`http ${res.status}`, { noRetry: res.status === 407 });
             }
 
             const tmpPath = dest + '.tmp';

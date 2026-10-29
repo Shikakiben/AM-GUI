@@ -320,8 +320,54 @@ describe('proxy support', () => {
     assert.strictEqual(asked, 1, 'the renderer reuses the main process answer');
   });
 
-  it('leaves website logins alone', () => {
+  it('lets the user correct one wrong entry, then stops prompting', async () => {
+    // Measured before: a wrong password produced 97 proxy requests in 40 s,
+    // with the window coming back over and over. One retry is helpful, a loop
+    // is not.
     const handlers = {};
+    let asked = 0;
+    let clock = 1000;
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      askCredentials: async () => { asked += 1; return { username: 'alice', password: 'wrong' }; },
+      now: () => clock,
+      env: {}
+    });
+    support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
+
+    const challenge = () => new Promise((resolve) => {
+      handlers.login({ preventDefault() {} }, null, {}, { isProxy: true, host: 'proxy.corp', port: 3128 }, (u) => resolve(u || null));
+    });
+
+    assert.strictEqual(await challenge(), 'alice');
+    assert.strictEqual(asked, 1);
+    // The same wrong answer comes back: the proxy refuses it, so ask again.
+    assert.strictEqual(await challenge(), 'alice');
+    assert.strictEqual(asked, 2, 'one correction is allowed');
+    // Second refusal in a row: stop, the user needs a break.
+    assert.strictEqual(await challenge(), null, 'no more prompting, the request just fails');
+    assert.strictEqual(asked, 2, 'no prompt storm');
+  });
+
+  it('does not prompt again right after a cancellation', async () => {
+    const handlers = {};
+    let asked = 0;
+    const support = createProxySupport({
+      getSession: () => fakeSession('PROXY proxy.corp:3128'),
+      askCredentials: async () => { asked += 1; return null; },
+      env: {}
+    });
+    support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
+    const challenge = () => new Promise((resolve) => {
+      handlers.login({ preventDefault() {} }, null, {}, { isProxy: true, host: 'p', port: 1 }, (u) => resolve(u || null));
+    });
+    assert.strictEqual(await challenge(), null);
+    assert.strictEqual(asked, 1);
+    assert.strictEqual(await challenge(), null);
+    assert.strictEqual(asked, 1, 'a cancelled dialog must not reopen at once');
+  });
+
+  it('leaves website logins alone', () => {    const handlers = {};
     const support = createProxySupport({ getSession: () => fakeSession('DIRECT') });
     support.installLoginHandler({ on: (e, h) => { handlers[e] = h; } });
     let prevented = false;
