@@ -50,12 +50,66 @@ function createIconCacheManager(app, options = {}) {
     }
   }
 
-  function saveIconsMeta() {
+  // Writing this file costs ~3.4 ms and rewrites ~483 KB, and it was done
+  // synchronously once per downloaded icon. At the measured peak of 50-70
+  // icons/s that alone saturated the main process, which is also the thread
+  // serving appicon:// — so icons arrived late and the window stuttered.
+  // Coalesce the writes instead: the file is a cache, losing the last second
+  // of it on a crash costs nothing.
+  let metaSaveTimer = null;
+
+  function saveIconsMetaNow() {
     try {
       if (!iconsMetaPath) return;
       fs.writeFileSync(iconsMetaPath + '.tmp', JSON.stringify(iconsMeta || {}, null, 2));
       fs.renameSync(iconsMetaPath + '.tmp', iconsMetaPath);
     } catch (_) {}
+  }
+
+  function saveIconsMeta() {
+    if (metaSaveTimer) return;
+    metaSaveTimer = setTimeout(() => {
+      metaSaveTimer = null;
+      saveIconsMetaNow();
+    }, 1200);
+    if (typeof metaSaveTimer.unref === 'function') metaSaveTimer.unref();
+  }
+
+  function flushIconsMeta() {
+    if (metaSaveTimer) {
+      clearTimeout(metaSaveTimer);
+      metaSaveTimer = null;
+    }
+    saveIconsMetaNow();
+  }
+
+  try { app.on('before-quit', flushIconsMeta); } catch (_) {}
+
+  // Scanning the cache costs ~22.6 ms (3027 png, 33.5 MB). It ran after every
+  // single download, which is the other half of the main-process saturation.
+  // Track the total in memory and only scan when the limit is actually reached.
+  let cacheTotalBytes = null;
+
+  function measureCacheBytes() {
+    try {
+      ensureIconCacheSetup();
+      let total = 0;
+      for (const f of fs.readdirSync(iconsCacheDir)) {
+        if (!f.endsWith('.png') || f === path.basename(blankIconPath)) continue;
+        try { total += fs.statSync(path.join(iconsCacheDir, f)).size; } catch (_) {}
+      }
+      return total;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function maybePruneCache(addedBytes) {
+    if (cacheTotalBytes === null) cacheTotalBytes = measureCacheBytes();
+    cacheTotalBytes += addedBytes || 0;
+    if (cacheTotalBytes <= MAX_CACHE_SIZE_BYTES) return;
+    pruneCache();
+    cacheTotalBytes = measureCacheBytes();
   }
 
   function pruneCache() {
@@ -84,7 +138,8 @@ function createIconCacheManager(app, options = {}) {
         } catch (_) {}
         if (total <= MAX_CACHE_SIZE_BYTES) break;
       }
-      saveIconsMeta();
+      // Files were just deleted: persist that now rather than on the debounce.
+      saveIconsMetaNow();
     } catch (_) {}
   }
 
@@ -229,7 +284,7 @@ function createIconCacheManager(app, options = {}) {
               iconsMeta = iconsMeta || {};
               iconsMeta[fileName] = newMeta;
               saveIconsMeta();
-              pruneCache();
+              maybePruneCache(stat.size);
               appendLog(`${fileName} downloaded OK (${stat.size} bytes)`);
               return resolve(dest);
             } catch (e) {
