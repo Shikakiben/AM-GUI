@@ -115,6 +115,10 @@
       _.refreshAllSandboxBadges();
       _.scheduleSandboxStateSweep();
       _.prefetchPreloadImages();
+      // The list is drawn: clear the busy flag. Only the early-return branches
+      // above did it, so on the normal path `aria-busy` stayed "true" for ever
+      // and a screen reader announced "busy" on a list that was fully rendered.
+      _.doms().appsDiv?.setAttribute('aria-busy', 'false');
     }
 
     function applyAppGroupFiltering(bundleChildOf) {
